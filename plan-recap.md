@@ -133,11 +133,14 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 Fase 5 & 6 **ditunda** atas permintaan user. Sedang berjalan: **acceptance Fase 0 & 1**.
 
 **Pertanyaan terbuka untuk user:**
-- Perlu dijalankan container server uji di `localhost:2222` untuk server ke-2/ke-3 acceptance Fase 1?
 - Perlu fallback `MaxSessions` / opsi koneksi terpisah per tab?
 
 **Prosedur acceptance Fase 1** (AI bisa membantu langkah 4–5):
-1. ~~Koneksi ke server nyata~~ ✔ (server01). Buat 2 profil lagi (boleh container uji `localhost:2222` `dev`/`devpass`).
+1. ~~Koneksi ke server nyata~~ ✔ (server01). Buat 2 profil lagi ke container uji (sudah dijalankan 2026-09-30):
+   `uji-1` = `127.0.0.1:2222`, `uji-2` = `127.0.0.1:2223`, user `dev` / password `devpass` (sudo pakai password yang sama;
+   htop, vim, bash, terminfo sudah di-install). Stop: `docker stop myterm-sshd myterm-sshd2`; hapus: `docker rm -f ...`.
+   Kalau container dihapus lalu dibuat ulang, host key berubah → MyTerm akan MENOLAK koneksi (benar), hapus entry lama
+   di `D:	mpmyterm-devnfigknown_hosts`.
 2. Buka 3 tab, jalankan `htop` dan `vim` di masing-masing (cek warna, garis box, scroll).
 3. Resize window & split host tree → `stty size` / `htop` ikut berubah; coba zoom Ctrl++/Ctrl+-.
 4. Tutup semua tab (aplikasi tetap terbuka), tunggu >30 detik.
