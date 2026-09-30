@@ -13,7 +13,7 @@ import java.util.function.Supplier;
  * tema yang hanya punya satu mode tetap dipakai apa adanya meski mode yang diminta berbeda.
  * Menambah tema: tambah konstanta dengan {@link FlatLaf} per mode yang didukung.
  */
-public enum AppTheme {
+public enum AppTheme implements UiTheme {
     DEFAULT("default", "Default", FlatLightLaf::new, FlatDarkLaf::new),
     /** Hanya terang: tombol mode di menu bar nonaktif saat tema ini dipakai. */
     FLAT_ILLUSTRATION("flat-illustration", FlatIllustrationLaf.NAME, FlatIllustrationLaf::new, null);
@@ -62,7 +62,9 @@ public enum AppTheme {
     }
 
     /** Pasang tema ini. Panggil di EDT; window yang sudah tampil perlu {@link FlatLaf#updateUI()}. */
+    @Override
     public boolean install(ThemeMode wanted) {
+        FlatLaf.setGlobalExtraDefaults(null); // buang timpaan warna dari tema custom sebelumnya
         var laf = effectiveMode(wanted) == ThemeMode.LIGHT ? light.get() : dark.get();
         return FlatLaf.setup(laf);
     }
