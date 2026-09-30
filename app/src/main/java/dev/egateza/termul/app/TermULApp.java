@@ -6,6 +6,7 @@ import dev.egateza.termul.app.ssh.SwingHostKeyPrompt;
 import dev.egateza.termul.app.terminal.TerminalSettings;
 import dev.egateza.termul.app.ui.AppIcon;
 import dev.egateza.termul.app.ui.AppTheme;
+import dev.egateza.termul.app.ui.DialogSounds;
 import dev.egateza.termul.app.ui.Dialogs;
 import dev.egateza.termul.app.ui.IconSet;
 import dev.egateza.termul.app.ui.MainFrame;
@@ -79,6 +80,7 @@ public final class TermULApp {
         SwingUtilities.invokeLater(() -> {
             AppTheme.fromId(config.current().theme()).install(ThemeMode.fromId(config.current().themeMode()));
             AppIcon.use(IconSet.fromId(config.current().iconSet()));
+            DialogSounds.install();
             var ctx = new AppContext(paths, config, store, io, sshOps, sessions, new SshTerminalFactory(sessions),
                     new TerminalSettings(config.current().terminalFontSize()), vault, edits, sftpLinks);
             var frame = new MainFrame(ctx, () -> shutdown(io, sshOps, sessions, vault, edits, log));

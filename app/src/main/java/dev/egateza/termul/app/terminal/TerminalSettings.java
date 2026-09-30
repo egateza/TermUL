@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Pengaturan JediTerm: font monospace yang tersedia di Windows, tanpa bell.
+ * Pengaturan JediTerm: font monospace yang tersedia di Windows, bell bawaan sistem (BEL dari server).
  * Ukuran font bisa diubah (zoom); satu instance per tab supaya zoom tidak saling memengaruhi.
  */
 public final class TerminalSettings extends DefaultSettingsProvider {
@@ -71,7 +71,7 @@ public final class TerminalSettings extends DefaultSettingsProvider {
 
     @Override
     public boolean audibleBell() {
-        return false;
+        return true;
     }
 
     @Override
