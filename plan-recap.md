@@ -140,7 +140,7 @@ Fase 5 & 6 **ditunda** atas permintaan user. Sedang berjalan: **acceptance Fase 
    `uji-1` = `127.0.0.1:2222`, `uji-2` = `127.0.0.1:2223`, user `dev` / password `devpass` (sudo pakai password yang sama;
    htop, vim, bash, terminfo sudah di-install). Stop: `docker stop myterm-sshd myterm-sshd2`; hapus: `docker rm -f ...`.
    Kalau container dihapus lalu dibuat ulang, host key berubah → MyTerm akan MENOLAK koneksi (benar), hapus entry lama
-   di `D:	mpmyterm-devnfigknown_hosts`.
+   di `D:	mpmyterm-devconfigknown_hosts`.
 2. Buka 3 tab, jalankan `htop` dan `vim` di masing-masing (cek warna, garis box, scroll).
 3. Resize window & split host tree → `stty size` / `htop` ikut berubah; coba zoom Ctrl++/Ctrl+-.
 4. Tutup semua tab (aplikasi tetap terbuka), tunggu >30 detik.
