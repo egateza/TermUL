@@ -26,7 +26,8 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 ### Fase 0: Perencanaan
 - [x] Dokumentasi awal
 - [x] Keputusan D1 (nama & package)
-- [ ] Server uji `openssh-server` (manual, lihat `docs/SETUP.md`)
+- [~] Server uji `openssh-server` — container Docker sudah dipakai integration test; menunggu konfirmasi user apakah
+  `server01` (192.0.2.10) server uji/staging, atau jalankan container uji manual di `localhost:2222`
 
 ### Fase 1: Skeleton & terminal SSH pertama
 - [x] Maven multi-module + wrapper + enforcer
@@ -38,9 +39,11 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] `SshTtyConnector` + tab JediTerm
 - [x] Keep-alive + deteksi putus + reconnect
 
-### Fase 1: acceptance (manual, oleh user)
-- [ ] Connect ke 3 server di 3 tab, `htop` & `vim` tampil benar, resize berfungsi
-- [ ] Tutup tab tidak meninggalkan thread/koneksi bocor (cek VisualVM/jconsole)
+### Fase 1: acceptance (manual, oleh user) — boleh dikerjakan sekarang, tidak perlu menunggu fase lain
+- [~] Connect ke 3 server di 3 tab, `htop` & `vim` tampil benar, resize berfungsi
+  (sudah: 1 server, beberapa tab, login password + TOFU + inject sudo; belum: 3 server berbeda, htop/vim, resize)
+- [ ] Tutup tab tidak meninggalkan thread/koneksi bocor (thread dump `jcmd <pid> Thread.print` sebelum/sesudah;
+  log harus menunjukkan `Pemakai koneksi … dilepas (sisa: 0)` lalu `Menutup koneksi` setelah grace 30 detik)
 
 ### Fase 2: Vault & inject password
 - [x] ADR 0002 desain vault
@@ -79,10 +82,21 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [ ] Pengaturan font/tema
 - [ ] Profile Maven `package-win` (jlink + jpackage → .msi)
 
+### Tambahan dari uji manual user (setelah Fase 4)
+- [x] Auth "Default": coba key `~/.ssh`, lalu jatuh ke password (sebelumnya error kalau tidak ada key)
+- [x] Terminal tidak lagi terlihat hang setelah logout: banner Reconnect + Enter untuk reconnect
+- [x] Konfirmasi keluar: Ctrl+D di prompt kosong, `exit`/`logout` + Enter
+- [x] Konfirmasi tutup tab (sesi aktif/transfer berjalan) dan keluar aplikasi (daftar sesi/transfer/edit aktif)
+- [x] Zoom terminal per tab: Ctrl++ / Ctrl+- / Ctrl+0
+- [x] Log per shell (buka/tutup) dan jumlah pemakai koneksi bersama
+- [ ] (usulan, menunggu keputusan user) Fallback koneksi kedua kalau server menolak channel (`MaxSessions`, default 10),
+  atau opsi per profil "koneksi terpisah per tab"
+
 ## Log progres
 
 | Tanggal | Commit | Task |
 |---|---|---|
+| 2026-09-30 | `feat(ssh): log buka/tutup shell per tab dan jumlah pemakai koneksi bersama` | Logging koneksi bersama (pertanyaan user) |
 | 2026-09-30 | `feat(app): zoom terminal per tab` | Zoom terminal Ctrl++/Ctrl+-/Ctrl+0 (permintaan user) |
 | 2026-09-30 | `feat(app): konfirmasi saat menutup tab ... dan saat keluar aplikasi` | Konfirmasi tutup tab & keluar aplikasi (permintaan user) |
 | 2026-09-30 | `feat(app): konfirmasi sebelum keluar ...` | Konfirmasi logout + Enter untuk reconnect (permintaan user) |
@@ -114,7 +128,20 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 ## Langkah berikutnya
 
-**Status 2026-09-30:** Fase 1–4 selesai (kode + test). Fase 5 & 6 **ditunda** atas permintaan user, menunggu review.
+**Status 2026-09-30:** Fase 1–4 selesai (kode + test), plus perbaikan dari uji manual (lihat "Tambahan dari uji manual").
+Fase 5 & 6 **ditunda** atas permintaan user. Sedang berjalan: **acceptance Fase 0 & 1**.
+
+**Pertanyaan terbuka untuk user:**
+- `server01` (192.0.2.10) server uji/staging atau produksi? (menentukan item server uji Fase 0)
+- Perlu dijalankan container server uji di `localhost:2222` untuk server ke-2/ke-3 acceptance Fase 1?
+- Perlu fallback `MaxSessions` / opsi koneksi terpisah per tab?
+
+**Prosedur acceptance Fase 1** (AI bisa membantu langkah 4–5):
+1. Buat 3 profil (boleh: server01 + container uji `localhost:2222` `dev`/`devpass` + satu server lain).
+2. Buka 3 tab, jalankan `htop` dan `vim` di masing-masing (cek warna, garis box, scroll).
+3. Resize window & split host tree → `stty size` / `htop` ikut berubah; coba zoom Ctrl++/Ctrl+-.
+4. Tutup semua tab (aplikasi tetap terbuka), tunggu >30 detik.
+5. Thread dump: tidak ada `term-writer-*`, dan log `Menutup koneksi` untuk tiap profil. Lalu centang di sini + `docs/PLAN.md`.
 
 1. **Review oleh user** (urutan saran, per modul):
    - `core/` → `HostProfile`, `ProfileStore`, `config/EditorConfig`
@@ -152,6 +179,11 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - Jump host (ProxyJump) ditolak dengan pesan jelas; dijadwalkan Fase 6.
 - Password login/passphrase harus jadi `String` di batas API MINA — dicatat di `docs/SECURITY.md` bagian "Keterbatasan yang diketahui".
 - Integration test (`*IT`) butuh Docker Desktop menyala; tanpa Docker otomatis di-skip.
+- **Satu koneksi SSH per profil** dipakai bersama oleh semua tab/SFTP/edit (requirement N5); tiap tab = channel shell
+  sendiri. Konsekuensi: koneksi putus → semua tab profil itu putus; OpenSSH `MaxSessions` default 10 channel per koneksi.
+- JediTerm memanggil `TtyConnector.close()` sendiri setelah stream EOF → penutupan oleh user memakai `closeByUser()`.
+- VS Code: kalau muncul `ClassNotFoundException MyTermApp`, folder `target/classes` terhapus → `mvnw.cmd install -DskipTests`
+  atau *Java: Force Java Compilation (Full)*. Extension Oracle Java + Red Hat Java terpasang bersamaan bisa bentrok.
 
 ## Cara menjalankan (dev)
 
@@ -161,5 +193,9 @@ mvnw.cmd verify                                  # + integration test (butuh Doc
 mvnw.cmd -pl app exec:java                       # jalankan app (data asli di %APPDATA%\MyTerm)
 mvnw.cmd -pl app exec:java -Dmyterm.home=D:\tmp\myterm-dev   # data dev terpisah
 ```
+
+Dari VS Code: `.vscode/launch.json` (tidak di-commit) konfigurasi `MyTermApp`, `projectName: myterm-app`,
+`vmArgs: --enable-native-access=ALL-UNNAMED -Dmyterm.home=D:\\tmp\\myterm-dev`, lalu F5.
+Log aplikasi dev: `D:\tmp\myterm-dev\config\logs\myterm.log`.
 
 Server uji cepat: lihat `docs/SETUP.md` (container `lscr.io/linuxserver/openssh-server`, port 2222, user `dev`/`devpass`).
