@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>dev.egateza.myterm</groupId>
+        <artifactId>myterm-parent</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>myterm-app</artifactId>
+    <name>MyTerm :: app</name>
+    <description>Swing UI, wiring, main()</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>dev.egateza.myterm</groupId>
+            <artifactId>myterm-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.egateza.myterm</groupId>
+            <artifactId>myterm-vault</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.egateza.myterm</groupId>
+            <artifactId>myterm-ssh</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.egateza.myterm</groupId>
+            <artifactId>myterm-terminal</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.egateza.myterm</groupId>
+            <artifactId>myterm-sftp</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.jetbrains.jediterm</groupId>
+            <artifactId>jediterm-ui</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.formdev</groupId>
+            <artifactId>flatlaf</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.formdev</groupId>
+            <artifactId>flatlaf-extras</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+        </dependency>
+    </dependencies>
+</project>

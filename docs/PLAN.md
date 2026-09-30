@@ -11,7 +11,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [ ] Siapkan VM/container uji `openssh-server` (lihat `SETUP.md`)
 
 ## Fase 1: Skeleton & terminal SSH pertama (±2 minggu)
-- [ ] Maven multi-module (`core`, `vault`, `ssh`, `terminal`, `sftp`, `app`): parent POM dengan `dependencyManagement`/`pluginManagement`, Maven Wrapper, enforcer (Java 25, Maven ≥ 3.9)
+- [x] Maven multi-module (`core`, `vault`, `ssh`, `terminal`, `sftp`, `app`): parent POM dengan `dependencyManagement`/`pluginManagement`, Maven Wrapper, enforcer (Java 25, Maven ≥ 3.9)
 - [ ] Main window FlatLaf: split host tree | tab area
 - [ ] `HostProfile` record + `ProfileStore` (JSON, atomic write)
 - [ ] Dialog tambah/edit profil

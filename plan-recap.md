@@ -28,7 +28,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [ ] Server uji `openssh-server` (manual, lihat `docs/SETUP.md`)
 
 ### Fase 1: Skeleton & terminal SSH pertama
-- [ ] Maven multi-module + wrapper + enforcer
+- [x] Maven multi-module + wrapper + enforcer
 - [ ] Main window FlatLaf (host tree | tab area)
 - [ ] `HostProfile` + `ProfileStore` (JSON, atomic write)
 - [ ] Dialog tambah/edit profil
@@ -44,11 +44,12 @@ Belum dimulai. Lihat `docs/PLAN.md`.
 
 | Tanggal | Commit | Task |
 |---|---|---|
+| 2026-09-30 | `build: tambah skeleton Maven multi-module, wrapper, dan enforcer` | Maven multi-module[^|]* |
 | 2026-09-30 | `docs: tambah dokumentasi perencanaan awal (Fase 0)` | Dokumentasi awal |
 
 ## Langkah berikutnya
 
-- Buat skeleton Maven multi-module (Fase 1, task 1).
+- Main window FlatLaf + HostProfile/ProfileStore (Fase 1, task 2–3).
 
 ## Catatan / blocker
 
