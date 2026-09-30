@@ -42,7 +42,7 @@ class RemoteEditSessionTest {
     private RemoteEditSession open(String name, String content) throws Exception {
         Files.writeString(fx.remoteRoot.resolve(name), content);
         return RemoteEditSession.open(fx.files, cache, fx.profile.id(), "/" + name,
-                RemoteEditSession.sftpUploader(fx.files));
+                RemoteEditSession.SFTP_UPLOADER);
     }
 
     @Test
@@ -127,16 +127,17 @@ class RemoteEditSessionTest {
     void direktoriDanFileHilangDitolak() throws Exception {
         Files.createDirectories(fx.remoteRoot.resolve("dir"));
         assertThatThrownBy(() -> RemoteEditSession.open(fx.files, cache, fx.profile.id(), "/dir",
-                RemoteEditSession.sftpUploader(fx.files))).hasMessageContaining("Bukan file");
+                RemoteEditSession.SFTP_UPLOADER)).hasMessageContaining("Bukan file");
         assertThatThrownBy(() -> RemoteEditSession.open(fx.files, cache, fx.profile.id(), "/nope",
-                RemoteEditSession.sftpUploader(fx.files))).isInstanceOf(RemoteFileException.class);
+                RemoteEditSession.SFTP_UPLOADER)).isInstanceOf(RemoteFileException.class);
     }
 
     @Test
     void uploadGagalMenjadiNeedsAttention() throws Exception {
         var failing = new RemoteEditSession.Uploader() {
             @Override
-            public void upload(Path local, String remotePath) throws RemoteFileException {
+            public void upload(dev.egateza.myterm.sftp.RemoteFileService files, Path local, String remotePath)
+                    throws RemoteFileException {
                 throw new RemoteFileException("akses ditolak");
             }
         };

@@ -68,7 +68,7 @@ public final class RemoteEditSession {
     /** Strategi upload (default: SFTP atomic; Fase 5: sudo). */
     @FunctionalInterface
     public interface Uploader {
-        void upload(Path local, String remotePath) throws RemoteFileException;
+        void upload(RemoteFileService files, Path local, String remotePath) throws RemoteFileException;
     }
 
     private record Baseline(long size, Instant modified) {
@@ -81,7 +81,7 @@ public final class RemoteEditSession {
         }
     }
 
-    private final RemoteFileService files;
+    private volatile RemoteFileService files;
     private final String remotePath;
     private final Path localFile;
     private final EditCache cache;
@@ -134,8 +134,15 @@ public final class RemoteEditSession {
     }
 
     /** Upload default: SFTP atomic, mode file dipertahankan. */
-    public static Uploader sftpUploader(RemoteFileService files) {
-        return (local, remote) -> files.upload(local, remote, null, TransferListener.NONE);
+    public static final Uploader SFTP_UPLOADER = (files, local, remote) -> files.upload(local, remote, null, TransferListener.NONE);
+
+    /** Memakai koneksi SFTP baru (mis. setelah reconnect) untuk sync berikutnya. */
+    public void rebind(RemoteFileService newFiles) {
+        this.files = Objects.requireNonNull(newFiles);
+    }
+
+    public RemoteFileService files() {
+        return files;
     }
 
     public String remotePath() {
@@ -212,7 +219,7 @@ public final class RemoteEditSession {
                 setState(State.NEEDS_ATTENTION, "Konflik: file di server berubah");
                 return new SyncResult.Conflict(current);
             }
-            uploader.upload(localFile, remotePath);
+            uploader.upload(files, localFile, remotePath);
             baseline = Baseline.of(files.stat(remotePath));
             syncedHash = sha256(content);
             lastUpload = Instant.now();

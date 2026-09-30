@@ -82,6 +82,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 | Tanggal | Commit | Task |
 |---|---|---|
+| 2026-09-30 | `refactor(sftp): RemoteEditSession bisa rebind ke koneksi SFTP baru untuk retry setelah reconnect` | Refactor Uploader + rebind |
 | 2026-09-30 | `feat(sftp): tambah EditWatcher dengan WatchService dan debounce per file` | EditWatcher (WatchService + debounce) |
 | 2026-09-30 | `feat(sftp): tambah RemoteEditSession dengan cache aman, hash compare, deteksi konflik, dan guard line ending` | RemoteEditSession + EditCache + LineEndings |
 | 2026-09-30 | `feat: tambah konfigurasi editor lokal per ekstensi (config.json) dan launcher editor Windows` | Konfigurasi editor per ekstensi |
@@ -106,7 +107,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 ## Langkah berikutnya
 
-- EditManager di app: double-click file di panel SFTP → buka di editor, auto-upload saat save, dialog konflik (overwrite/diff/batal) & CRLF, lalu EditTracker.
+- EditManager di app: buka file dari panel SFTP, auto-upload saat save, dialog konflik & CRLF, EditTracker.
 
 ## Catatan / blocker
 
