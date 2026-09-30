@@ -20,24 +20,27 @@ class TerminalMenuStateTest {
         assertThat(s.tabActions()).isTrue();
         assertThat(s.sftp()).isTrue();
         assertThat(s.inject()).isTrue();
+        assertThat(s.split()).isTrue();
     }
 
     @Test
-    void tabWithoutSessionKeepsOnlyTabActions() {
+    void tabWithoutSessionKeepsOnlyTabActionsAndSplit() {
         var s = TerminalMenuState.of(true, false, false);
 
         assertThat(s.tabActions()).isTrue();
         assertThat(s.sftp()).isFalse();
         assertThat(s.inject()).isFalse();
+        assertThat(s.split()).isTrue(); // panel baru membuka koneksinya sendiri
     }
 
     @Test
-    void sftpOnlyTabKeepsTabActionsButHasNoSftpToggleOrInject() {
+    void sftpOnlyTabKeepsTabActionsButHasNoSftpToggleInjectOrSplit() {
         var s = TerminalMenuState.of(true, false, true, false);
 
         assertThat(s.tabActions()).isTrue();
         assertThat(s.sftp()).isFalse();
         assertThat(s.inject()).isFalse();
+        assertThat(s.split()).isFalse();
     }
 
     @Test
