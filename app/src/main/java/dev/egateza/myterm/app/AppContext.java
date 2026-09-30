@@ -4,6 +4,7 @@ import dev.egateza.myterm.app.terminal.TerminalSettings;
 import dev.egateza.myterm.app.vault.VaultGate;
 import dev.egateza.myterm.core.AppPaths;
 import dev.egateza.myterm.core.profile.ProfileStore;
+import dev.egateza.myterm.ssh.SessionManager;
 import dev.egateza.myterm.terminal.SshTerminalFactory;
 import java.util.concurrent.ExecutorService;
 
@@ -14,5 +15,6 @@ import java.util.concurrent.ExecutorService;
  * @param sshOps     executor untuk operasi SSH blocking (connect, exec, SFTP)
  */
 public record AppContext(AppPaths paths, ProfileStore profiles, ExecutorService io, ExecutorService sshOps,
-                         SshTerminalFactory terminals, TerminalSettings terminalSettings, VaultGate vault) {
+                         SessionManager sessions, SshTerminalFactory terminals, TerminalSettings terminalSettings,
+                         VaultGate vault) {
 }

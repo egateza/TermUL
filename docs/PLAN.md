@@ -33,7 +33,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 ## Fase 3: Panel SFTP (±2 minggu)
 - [x] `RemoteFileService` di atas `SftpClient` (memakai connection handle yang sama)
-- [ ] Panel: list dir, navigasi, sort, refresh, tampilan mode/owner/size/mtime
+- [x] Panel: list dir, navigasi, sort, refresh, tampilan mode/owner/size/mtime
 - [ ] Upload/download + drag & drop dari Explorer + progress/cancel
 - [ ] Rename, mkdir, delete (konfirmasi), chmod
 

@@ -52,7 +52,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 ### Fase 3: Panel SFTP
 - [x] `RemoteFileService` di atas `SftpClient` (connection handle yang sama)
-- [ ] Panel: list dir, navigasi, sort, refresh, mode/owner/size/mtime
+- [x] Panel: list dir, navigasi, sort, refresh, mode/owner/size/mtime
 - [~] Upload/download + drag & drop + progress/cancel (service + test selesai, UI belum)
 - [~] Rename, mkdir, delete (konfirmasi), chmod (service + test selesai, UI belum)
 
@@ -81,6 +81,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 | Tanggal | Commit | Task |
 |---|---|---|
+| 2026-09-30 | `feat(app): tambah panel SFTP (browse, sort, refresh) per tab dan perbaiki shortcut agar jalan saat fokus di terminal` | Panel SFTP browse + dispatcher shortcut |
 | 2026-09-30 | `feat(sftp): tambah RemoteFileService dengan upload atomic, progress/cancel, dan integration test OpenSSH` | RemoteFileService (SFTP) |
 | 2026-09-30 | `feat(app): tambah hotkey Ctrl+Shift+P/Ctrl+Shift+R untuk inject password sudo/root dari vault` | Hotkey inject sudo/root |
 | 2026-09-30 | `feat(app): tambah field password login/passphrase/sudo/root di dialog profil yang disimpan ke vault` | Field secret di dialog profil |
@@ -100,7 +101,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 ## Langkah berikutnya
 
-- Panel SFTP di app: list dir, navigasi, sort, refresh, kolom mode/owner/size/mtime; lalu toolbar upload/download/rename/mkdir/delete/chmod.
+- Toolbar SFTP: upload/download (+ drag & drop Explorer, progress/cancel), rename, mkdir, delete, chmod.
 
 ## Catatan / blocker
 

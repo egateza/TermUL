@@ -1,6 +1,7 @@
 package dev.egateza.myterm.app.ui;
 
 import dev.egateza.myterm.app.AppContext;
+import dev.egateza.myterm.app.sftp.SftpPanel;
 import dev.egateza.myterm.app.terminal.TerminalTab;
 import dev.egateza.myterm.app.ui.tree.HostTreePanel;
 import java.awt.Color;
@@ -95,27 +96,38 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     }
 
     /**
-     * Hotkey inject password: Ctrl+Shift+P (sudo), Ctrl+Shift+R (root). Ditangkap sebelum JediTerm
-     * supaya tidak ikut terkirim ke remote.
+     * Shortcut aplikasi (Ctrl+Shift+…, Ctrl+F5) ditangkap sebelum JediTerm, supaya tetap jalan saat
+     * fokus di terminal dan tidak ikut terkirim ke remote. Shortcut shell biasa (Ctrl+F, Ctrl+N, ...)
+     * tidak disentuh.
      */
     private boolean dispatchHotkey(KeyEvent e) {
-        if (e.getID() != KeyEvent.KEY_PRESSED || !e.isControlDown() || !e.isShiftDown() || e.isAltDown()) {
+        if (e.getID() != KeyEvent.KEY_PRESSED || !e.isControlDown() || e.isAltDown()) {
             return false;
         }
-        SecretType type = switch (e.getKeyCode()) {
-            case KeyEvent.VK_P -> SecretType.SUDO_PASSWORD;
-            case KeyEvent.VK_R -> SecretType.ROOT_PASSWORD;
-            default -> null;
-        };
-        if (type == null || e.getComponent() == null || SwingUtilities.getWindowAncestor(e.getComponent()) != this) {
+        boolean appCombo = e.isShiftDown() || e.getKeyCode() == KeyEvent.VK_F5;
+        if (!appCombo || e.getComponent() == null || SwingUtilities.getWindowAncestor(e.getComponent()) != this) {
             return false;
         }
-        var tab = currentTab();
-        if (tab.isEmpty()) {
+        JMenuItem item = findAccelerator(getJMenuBar(), KeyStroke.getKeyStrokeForEvent(e));
+        if (item == null || !item.isEnabled()) {
             return false;
         }
-        tab.get().injectSecret(type, ctx.vault());
+        item.doClick(0);
+        e.consume();
         return true;
+    }
+
+    private static JMenuItem findAccelerator(JMenuBar bar, KeyStroke ks) {
+        for (int i = 0; i < bar.getMenuCount(); i++) {
+            var menu = bar.getMenu(i);
+            for (int j = 0; j < menu.getItemCount(); j++) {
+                var item = menu.getItem(j);
+                if (item != null && ks.equals(item.getAccelerator())) {
+                    return item;
+                }
+            }
+        }
+        return null;
     }
 
     @Override
@@ -152,11 +164,12 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                 () -> currentTab().ifPresent(TerminalTab::reconnect)));
         terminal.add(menuItem("Tutup tab", KeyStroke.getKeyStroke(KeyEvent.VK_W, ctrlShift),
                 () -> closeTab(tabs.getSelectedIndex())));
+        terminal.add(menuItem("Panel SFTP", KeyStroke.getKeyStroke(KeyEvent.VK_F, ctrlShift),
+                () -> currentTab().ifPresent(TerminalTab::toggleSftp)));
         terminal.addSeparator();
-        // tanpa accelerator: hotkey ditangani dispatchHotkey supaya tidak ditelan terminal
-        terminal.add(menuItem("Inject password sudo   (Ctrl+Shift+P)", null,
+        terminal.add(menuItem("Inject password sudo", KeyStroke.getKeyStroke(KeyEvent.VK_P, ctrlShift),
                 () -> currentTab().ifPresent(t -> t.injectSecret(SecretType.SUDO_PASSWORD, ctx.vault()))));
-        terminal.add(menuItem("Inject password root   (Ctrl+Shift+R)", null,
+        terminal.add(menuItem("Inject password root", KeyStroke.getKeyStroke(KeyEvent.VK_R, ctrlShift),
                 () -> currentTab().ifPresent(t -> t.injectSecret(SecretType.ROOT_PASSWORD, ctx.vault()))));
         bar.add(terminal);
         bar.add(buildVaultMenu());
@@ -263,7 +276,8 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
     @Override
     public void open(HostProfile profile) {
-        var tab = new TerminalTab(profile, ctx.terminals(), ctx.sshOps(), ctx.terminalSettings());
+        var tab = new TerminalTab(profile, ctx.terminals(), ctx.sshOps(), ctx.terminalSettings(),
+                p -> new SftpPanel(p, ctx.sessions(), ctx.sshOps()));
         tabs.addTab(tabTitle(profile), tab);
         int index = tabs.indexOfComponent(tab);
         tabs.setToolTipTextAt(index, profile.address());

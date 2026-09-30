@@ -59,7 +59,7 @@ public final class MyTermApp {
 
         SwingUtilities.invokeLater(() -> {
             FlatDarkLaf.setup();
-            var ctx = new AppContext(paths, store, io, sshOps, new SshTerminalFactory(sessions),
+            var ctx = new AppContext(paths, store, io, sshOps, sessions, new SshTerminalFactory(sessions),
                     new TerminalSettings(14f), vault);
             var frame = new MainFrame(ctx, () -> shutdown(io, sshOps, sessions, vault, log));
             frameRef.set(frame);

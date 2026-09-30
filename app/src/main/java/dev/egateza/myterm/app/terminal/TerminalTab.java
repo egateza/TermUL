@@ -1,6 +1,7 @@
 package dev.egateza.myterm.app.terminal;
 
 import com.jediterm.terminal.ui.JediTermWidget;
+import dev.egateza.myterm.app.sftp.SftpPanel;
 import dev.egateza.myterm.app.ui.Dialogs;
 import dev.egateza.myterm.app.ui.UiAsync;
 import dev.egateza.myterm.app.vault.VaultGate;
@@ -16,11 +17,13 @@ import java.awt.Color;
 import java.awt.FlowLayout;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.function.Function;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.swing.JSplitPane;
 import javax.swing.JTextArea;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
@@ -44,15 +47,47 @@ public final class TerminalTab extends JPanel {
     private SshTtyConnector connector;   // hanya diakses di EDT
     private CompletableFuture<SshTtyConnector> pending; // hanya diakses di EDT
     private boolean disposed;            // hanya diakses di EDT
+    private final JPanel content = new JPanel(new BorderLayout()); // banner + terminal
+    private final Function<HostProfile, SftpPanel> sftpFactory;
+    private SftpPanel sftp;              // dibuat saat pertama kali dibuka
+    private JSplitPane split;
+    private int sftpDivider = 380;
 
-    public TerminalTab(HostProfile profile, SshTerminalFactory factory, Executor sshOps, TerminalSettings settings) {
+    public TerminalTab(HostProfile profile, SshTerminalFactory factory, Executor sshOps, TerminalSettings settings,
+                       Function<HostProfile, SftpPanel> sftpFactory) {
         super(new BorderLayout());
         this.profile = profile;
         this.factory = factory;
         this.sshOps = sshOps;
         this.settings = settings;
-        add(banner, BorderLayout.NORTH);
+        this.sftpFactory = sftpFactory;
+        content.add(banner, BorderLayout.NORTH);
         banner.setVisible(false);
+        add(content, BorderLayout.CENTER);
+    }
+
+    /** Menampilkan/menyembunyikan panel SFTP di kiri terminal (koneksi SSH yang sama). */
+    public void toggleSftp() {
+        if (split != null) {
+            sftpDivider = split.getDividerLocation();
+            remove(split);
+            split.remove(content);
+            split = null;
+            add(content, BorderLayout.CENTER);
+            focusTerminal();
+        } else {
+            if (sftp == null) {
+                sftp = sftpFactory.apply(profile);
+            }
+            remove(content);
+            split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, sftp, content);
+            split.setContinuousLayout(true);
+            split.setDividerLocation(sftpDivider);
+            add(split, BorderLayout.CENTER);
+            sftp.connect();
+        }
+        revalidate();
+        repaint();
     }
 
     public HostProfile profile() {
@@ -198,6 +233,9 @@ public final class TerminalTab extends JPanel {
     public void dispose() {
         disposed = true;
         disposeTerminal();
+        if (sftp != null) {
+            sftp.dispose();
+        }
     }
 
     private void disposeTerminal() {
@@ -212,14 +250,14 @@ public final class TerminalTab extends JPanel {
     }
 
     private void showCenter(java.awt.Component c) {
-        var layout = (BorderLayout) getLayout();
+        var layout = (BorderLayout) content.getLayout();
         var old = layout.getLayoutComponent(BorderLayout.CENTER);
         if (old != null) {
-            remove(old);
+            content.remove(old);
         }
-        add(c, BorderLayout.CENTER);
-        revalidate();
-        repaint();
+        content.add(c, BorderLayout.CENTER);
+        content.revalidate();
+        content.repaint();
     }
 
     private static JLabel centerMessage(String text) {
