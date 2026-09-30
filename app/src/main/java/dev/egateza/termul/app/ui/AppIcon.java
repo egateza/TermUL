@@ -12,6 +12,8 @@ import javax.swing.UIManager;
  * Tambah ikon: unduh SVG ke folder tersebut, lalu tambahkan konstanta di sini.
  */
 public enum AppIcon {
+    ANGLES_LEFT("angles-left"),
+    ANGLES_RIGHT("angles-right"),
     ARROW_UP("arrow-up"),
     BROOM("broom"),
     DOWNLOAD("download"),

@@ -102,6 +102,8 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
   reconnect/batal. Di menu **hanya** Host baru, Grup baru, dan Tentang TermUL (keputusan user: menu lain tanpa ikon). Warna dibaca dari `UIManager` saat digambar → siap untuk dark/light theme.
   Tambah ikon: unduh SVG ke `app/src/main/resources/dev/egateza/termul/app/icons/fa/` (viewBox dibuat persegi) +
   konstanta di `AppIcon` (permintaan user)
+- [x] Tombol laci (« / ») di strip tipis kiri untuk buka/tutup panel host; lebar terakhir diingat selama aplikasi
+  jalan, Ctrl+F (cari host) membuka panel kalau tertutup. Bukan checkbox menu (permintaan user)
 - [ ] (usulan, menunggu keputusan user) Fallback koneksi kedua kalau server menolak channel (`MaxSessions`, default 10),
   atau opsi per profil "koneksi terpisah per tab"
 
@@ -109,6 +111,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 | Tanggal | Commit | Task |
 |---|---|---|
+| 2026-09-30 | `feat(app): tombol laci untuk buka/tutup panel host` | Buka/tutup panel host (permintaan user) |
 | 2026-09-30 | `refactor(app): ikon menu hanya untuk host/grup baru dan Tentang` | Kurangi ikon menu (permintaan user) |
 | 2026-09-30 | `feat(app): ikon Font Awesome Free di menu, toolbar SFTP, dan host tree` | Ikon Font Awesome (permintaan user) |
 | 2026-09-30 | `refactor: rename aplikasi MyTerm menjadi TermUL` | Rename ke TermUL + migrasi folder data (permintaan user) |

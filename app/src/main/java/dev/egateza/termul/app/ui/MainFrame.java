@@ -33,6 +33,8 @@ import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.util.concurrent.ExecutorService;
+import javax.swing.BorderFactory;
+import javax.swing.JButton;
 import javax.swing.JCheckBoxMenuItem;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -46,6 +48,7 @@ import javax.swing.JTabbedPane;
 import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
 import javax.swing.WindowConstants;
 
 /** Window utama: host tree di kiri, tab terminal di kanan. */
@@ -66,6 +69,9 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private final JSplitPane logSplit;
     private final JCheckBoxMenuItem showLog = new JCheckBoxMenuItem("Tampilkan log");
     private int logHeight = 220; // EDT
+    private final JSplitPane hostSplit;
+    private final JButton hostToggle = new JButton();
+    private int hostWidth = 260; // EDT
 
     public MainFrame(AppContext ctx, Runnable onExit) {
         super("TermUL");
@@ -96,10 +102,21 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         welcome.setFont(welcome.getFont().deriveFont(Font.PLAIN, welcome.getFont().getSize2D() + 2));
         updateCenter();
 
-        var split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, hostTree, center);
-        split.setDividerLocation(260);
-        split.setContinuousLayout(true);
+        hostSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, hostTree, center);
+        hostSplit.setDividerLocation(hostWidth);
+        hostSplit.setContinuousLayout(true);
         hostTree.setMinimumSize(new Dimension(160, 100));
+        // strip tipis di kiri dengan tombol laci; tetap terlihat saat panel host disembunyikan
+        hostToggle.putClientProperty("JButton.buttonType", "toolBarButton");
+        hostToggle.setFocusable(false);
+        hostToggle.addActionListener(e -> setHostPanelVisible(!hostTree.isVisible()));
+        updateHostToggle();
+        var rail = new JPanel(new BorderLayout());
+        rail.add(hostToggle, BorderLayout.NORTH);
+        rail.setBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, UIManager.getColor("Component.borderColor")));
+        var split = new JPanel(new BorderLayout());
+        split.add(rail, BorderLayout.WEST);
+        split.add(hostSplit, BorderLayout.CENTER);
         // panel log di bawah; disembunyikan dengan setVisible supaya tab terminal tidak di-reparent
         logPanel = new LogPanel(LogBuffer.global(), ctx.paths().logDir(), io, () -> setLogVisible(false));
         logPanel.setVisible(false);
@@ -180,7 +197,10 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                 () -> newHost(hostTree.selectedGroup())));
         file.add(menuItem(AppIcon.FOLDER_PLUS, "Grup baru...", null, () -> newGroup(hostTree.selectedGroup())));
         file.add(menuItem(null, "Cari host", KeyStroke.getKeyStroke(KeyEvent.VK_F, InputEvent.CTRL_DOWN_MASK),
-                hostTree::focusSearch));
+                () -> {
+                    setHostPanelVisible(true);
+                    hostTree.focusSearch();
+                }));
         file.addSeparator();
         file.add(menuItem(null, "Keluar", null, this::exit));
         bar.add(file);
@@ -235,6 +255,32 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                         + "\n\nIkon: Font Awesome Free 7.3.1 (CC BY 4.0), fontawesome.com")));
         bar.add(help);
         return bar;
+    }
+
+    /** Buka/tutup panel host di kiri (tombol laci), dengan lebar terakhir yang dipakai. EDT. */
+    private void setHostPanelVisible(boolean visible) {
+        if (visible == hostTree.isVisible()) {
+            return;
+        }
+        if (!visible) {
+            hostWidth = Math.max(160, hostSplit.getDividerLocation());
+            var owner = KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
+            if (owner != null && SwingUtilities.isDescendingFrom(owner, hostTree)) {
+                currentTab().ifPresent(TerminalTab::focusTerminal);
+            }
+        }
+        hostTree.setVisible(visible);
+        if (visible) {
+            hostSplit.setDividerLocation(hostWidth);
+        }
+        hostSplit.revalidate();
+        updateHostToggle();
+    }
+
+    private void updateHostToggle() {
+        boolean open = hostTree.isVisible();
+        hostToggle.setIcon((open ? AppIcon.ANGLES_LEFT : AppIcon.ANGLES_RIGHT).icon(12));
+        hostToggle.setToolTipText(open ? "Sembunyikan panel host" : "Tampilkan panel host");
     }
 
     /** Tampilkan/sembunyikan panel log di bawah, dengan tinggi terakhir yang dipakai. EDT. */
