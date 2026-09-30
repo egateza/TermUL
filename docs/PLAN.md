@@ -23,7 +23,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 **Acceptance**: bisa connect ke 3 server berbeda di 3 tab, menjalankan `htop` dan `vim` dengan tampilan benar, dan resize window berfungsi. Menutup tab tidak meninggalkan thread atau koneksi yang bocor (dicek dengan jconsole/VisualVM).
 
 ## Fase 2: Vault & inject password (±1 minggu)
-- [ ] Putuskan desain vault (ADR 0002)
+- [x] Putuskan desain vault (ADR 0002)
 - [ ] `CredentialVault` + implementasi + unit test (round-trip, tamper detection GCM)
 - [ ] Field secret di dialog profil (login, sudo, root)
 - [ ] Auth password dari vault
