@@ -90,3 +90,21 @@ mvnw.cmd install -DskipTests                # install modul ke local repo
 mvnw.cmd -pl app exec:java                  # jalankan aplikasi (setelah install)
 mvnw.cmd -pl app -am -Ppackage-win package  # jlink + jpackage → .msi (butuh WiX)
 ```
+
+## Ikon aplikasi (Font Awesome + Material Symbols)
+
+Setiap ikon (`AppIcon`) tersedia di dua set yang bisa dipilih user di **Pengaturan → Set ikon**:
+Font Awesome Free 7.3.1 (CC BY 4.0) dan Material Symbols Rounded (Apache 2.0, repo resmi Google, commit dikunci).
+SVG ada di `app/src/main/resources/dev/egateza/termul/app/icons/{fa,material}/`, sumbernya dicatat di `icons.properties`.
+Jangan edit manual, pakai tool (JDK 25, dari root project, butuh internet):
+
+```bash
+java tools/AddIcon.java TERMINAL terminal terminal    # tambah/ganti: NAMA  nama-fontawesome  nama_material
+java tools/AddIcon.java FOLDER regular/folder folder  # gaya regular Font Awesome (default solid)
+java tools/AddIcon.java --remove TERMINAL             # hapus
+java tools/AddIcon.java --all                         # unduh ulang semua dari icons.properties
+```
+
+Cari nama ikon di https://fontawesome.com/search?ic=free dan https://fonts.google.com/icons. Tool mengunduh kedua SVG,
+membuat `viewBox` persegi, lalu memperbarui `icons.properties` dan daftar konstanta di `AppIcon.java`. Pakai di kode:
+`AppIcon.TERMINAL.icon()`. `AppIconTest` gagal kalau ada ikon yang hanya punya satu set.

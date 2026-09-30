@@ -41,6 +41,11 @@ import javax.swing.JLabel;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
+import javax.swing.JRadioButtonMenuItem;
+import javax.swing.ButtonGroup;
+import java.awt.Window;
+import java.util.Arrays;
+import java.util.stream.Collectors;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JSplitPane;
@@ -238,6 +243,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                 EditorSettingsDialog.show(this, ctx.config().current().editors()).ifPresent(editors ->
                         mutate("Gagal menyimpan pengaturan", () ->
                                 ctx.config().save(ctx.config().current().withEditors(editors))))));
+        settings.add(buildIconSetMenu());
         bar.add(settings);
 
         var help = new JMenu("Bantuan");
@@ -252,7 +258,8 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         help.add(menuItem(AppIcon.INFO, "Tentang TermUL", null, () -> Dialogs.info(this, "Tentang TermUL",
                 "TermUL (Terminal Utility) — SSH client pribadi\n\nJava " + Runtime.version()
                         + "\nFolder log: " + ctx.paths().logDir()
-                        + "\n\nIkon: Font Awesome Free 7.3.1 (CC BY 4.0), fontawesome.com")));
+                        + "\n\nIkon:\n" + Arrays.stream(IconSet.values())
+                                .map(s -> "  • " + s.attribution()).collect(Collectors.joining("\n")))));
         bar.add(help);
         return bar;
     }
@@ -281,6 +288,29 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         boolean open = hostTree.isVisible();
         hostToggle.setIcon((open ? AppIcon.ANGLES_LEFT : AppIcon.ANGLES_RIGHT).icon(12));
         hostToggle.setToolTipText(open ? "Sembunyikan panel host" : "Tampilkan panel host");
+    }
+
+    /** Submenu pilihan set ikon; ganti langsung terlihat (repaint) dan disimpan di config.json. */
+    private JMenu buildIconSetMenu() {
+        var menu = new JMenu("Set ikon");
+        var group = new ButtonGroup();
+        for (IconSet set : IconSet.values()) {
+            var item = new JRadioButtonMenuItem(set.label(), set == AppIcon.current());
+            item.addActionListener(e -> {
+                if (set == AppIcon.current()) {
+                    return;
+                }
+                AppIcon.use(set);
+                for (Window w : Window.getWindows()) {
+                    w.repaint();
+                }
+                mutate("Gagal menyimpan pengaturan", () ->
+                        ctx.config().save(ctx.config().current().withIconSet(set.id())));
+            });
+            group.add(item);
+            menu.add(item);
+        }
+        return menu;
     }
 
     /** Tampilkan/sembunyikan panel log di bawah, dengan tinggi terakhir yang dipakai. EDT. */

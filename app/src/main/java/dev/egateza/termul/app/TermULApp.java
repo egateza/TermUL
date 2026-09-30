@@ -5,7 +5,9 @@ import dev.egateza.termul.app.edit.EditManager;
 import dev.egateza.termul.app.ssh.SwingCredentialProvider;
 import dev.egateza.termul.app.ssh.SwingHostKeyPrompt;
 import dev.egateza.termul.app.terminal.TerminalSettings;
+import dev.egateza.termul.app.ui.AppIcon;
 import dev.egateza.termul.app.ui.Dialogs;
+import dev.egateza.termul.app.ui.IconSet;
 import dev.egateza.termul.app.ui.MainFrame;
 import dev.egateza.termul.app.ui.UiAsync;
 import dev.egateza.termul.app.vault.VaultCredentialProvider;
@@ -73,6 +75,7 @@ public final class TermULApp {
 
         SwingUtilities.invokeLater(() -> {
             FlatDarkLaf.setup();
+            AppIcon.use(IconSet.fromId(config.current().iconSet()));
             var ctx = new AppContext(paths, config, store, io, sshOps, sessions, new SshTerminalFactory(sessions),
                     new TerminalSettings(config.current().terminalFontSize()), vault, edits);
             var frame = new MainFrame(ctx, () -> shutdown(io, sshOps, sessions, vault, edits, log));
