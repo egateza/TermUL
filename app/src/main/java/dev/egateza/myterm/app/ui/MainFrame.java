@@ -4,11 +4,14 @@ import dev.egateza.myterm.app.AppContext;
 import dev.egateza.myterm.app.terminal.TerminalTab;
 import dev.egateza.myterm.app.ui.tree.HostTreePanel;
 import java.awt.Color;
+import java.util.EnumSet;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.BiConsumer;
 import dev.egateza.myterm.core.profile.HostProfile;
 import dev.egateza.myterm.core.profile.ProfileSnapshot;
 import dev.egateza.myterm.core.profile.ProfileStore;
+import dev.egateza.myterm.vault.SecretType;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.Font;
@@ -231,14 +234,47 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
     @Override
     public void newHost(String group) {
-        ProfileDialog.create(this, group, store.snapshot())
-                .ifPresent(p -> mutate("Gagal menyimpan profil", () -> store.save(p)));
+        ProfileDialog.create(this, group, store.snapshot()).ifPresent(this::saveProfile);
     }
 
     @Override
     public void edit(HostProfile profile) {
-        ProfileDialog.edit(this, profile, store.snapshot())
-                .ifPresent(p -> mutate("Gagal menyimpan profil", () -> store.save(p)));
+        // baca metadata vault (disk I/O) di luar EDT, lalu buka dialog
+        UiAsync.run(io, () -> storedSecrets(profile), stored ->
+                        ProfileDialog.edit(this, profile, store.snapshot(), stored).ifPresent(this::saveProfile),
+                err -> Dialogs.error(this, "Gagal membaca vault", err));
+    }
+
+    private Set<SecretType> storedSecrets(HostProfile profile) {
+        var result = EnumSet.noneOf(SecretType.class);
+        for (SecretType t : SecretType.values()) {
+            if (ctx.vault().vault().has(profile.id(), t)) {
+                result.add(t);
+            }
+        }
+        return result;
+    }
+
+    private void saveProfile(ProfileDialog.Result result) {
+        mutate("Gagal menyimpan profil", () -> store.save(result.profile()));
+        if (result.secrets().isEmpty()) {
+            return;
+        }
+        UiAsync.run(ctx.sshOps(), () -> {
+            if (!ctx.vault().ensureUnlocked()) {
+                SecretChange.discardAll(result.secrets());
+                return false;
+            }
+            SecretChange.applyAll(ctx.vault().vault(), result.profile().id(), result.secrets());
+            return true;
+        }, saved -> {
+            if (!saved) {
+                Dialogs.info(this, "Vault", "Vault tidak dibuka: password tidak disimpan (profil tetap tersimpan).");
+            }
+        }, err -> {
+            SecretChange.discardAll(result.secrets());
+            Dialogs.error(this, "Gagal menyimpan password ke vault", err);
+        });
     }
 
     @Override
@@ -250,6 +286,11 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     public void delete(HostProfile profile) {
         if (Dialogs.confirm(this, "Hapus profil", "Hapus profil '" + profile.name() + "'?")) {
             mutate("Gagal menghapus profil", () -> store.delete(profile.id()));
+            UiAsync.run(ctx.sshOps(), () -> {
+                if (!storedSecrets(profile).isEmpty() && ctx.vault().ensureUnlocked()) {
+                    ctx.vault().vault().removeProfile(profile.id());
+                }
+            }, err -> Dialogs.error(this, "Gagal menghapus password dari vault", err));
         }
     }
 

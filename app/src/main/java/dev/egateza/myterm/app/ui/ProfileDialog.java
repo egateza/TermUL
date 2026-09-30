@@ -4,6 +4,7 @@ import dev.egateza.myterm.core.profile.AuthMethod;
 import dev.egateza.myterm.core.profile.EnvironmentTag;
 import dev.egateza.myterm.core.profile.HostProfile;
 import dev.egateza.myterm.core.profile.ProfileSnapshot;
+import dev.egateza.myterm.vault.SecretType;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.FlowLayout;
@@ -13,8 +14,11 @@ import java.awt.Insets;
 import java.awt.Window;
 import java.awt.event.KeyEvent;
 import java.nio.file.Path;
+import java.util.EnumMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListCellRenderer;
@@ -27,6 +31,7 @@ import javax.swing.JFileChooser;
 import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JPanel;
+import javax.swing.JPasswordField;
 import javax.swing.JScrollPane;
 import javax.swing.JSpinner;
 import javax.swing.JTextArea;
@@ -59,11 +64,24 @@ public final class ProfileDialog extends JDialog {
     private final JTextField initialDir = new JTextField(24);
     private final JTextArea notes = new JTextArea(3, 24);
     private final JCheckBox autoSudo = new JCheckBox("Auto-inject password sudo (dengan guard)");
-    private HostProfile result;
+    private final Map<SecretType, JPasswordField> secretFields = new EnumMap<>(SecretType.class);
+    private final Map<SecretType, JCheckBox> clearBoxes = new EnumMap<>(SecretType.class);
+    private final Set<SecretType> storedSecrets;
+    private Result result;
 
-    private ProfileDialog(Window owner, String title, HostProfile initial, String defaultGroup, ProfileSnapshot snapshot) {
+    /** Hasil dialog: profil + perubahan secret (secret di dalamnya wajib dipakai atau di-discard). */
+    public record Result(HostProfile profile, Map<SecretType, SecretChange> secrets) {
+    }
+
+    private ProfileDialog(Window owner, String title, HostProfile initial, String defaultGroup, ProfileSnapshot snapshot,
+                          Set<SecretType> storedSecrets) {
         super(owner, title, ModalityType.APPLICATION_MODAL);
         this.id = initial == null ? UUID.randomUUID() : initial.id();
+        this.storedSecrets = Set.copyOf(storedSecrets);
+        for (SecretType type : SecretType.values()) {
+            secretFields.put(type, new JPasswordField(20));
+            clearBoxes.put(type, new JCheckBox("Hapus"));
+        }
 
         group.setEditable(true);
         group.addItem("");
@@ -101,19 +119,20 @@ public final class ProfileDialog extends JDialog {
     }
 
     /** Menampilkan dialog profil baru. */
-    public static Optional<HostProfile> create(Component parent, String group, ProfileSnapshot snapshot) {
-        return show(parent, "Host baru", null, group, snapshot);
+    public static Optional<Result> create(Component parent, String group, ProfileSnapshot snapshot) {
+        return show(parent, "Host baru", null, group, snapshot, Set.of());
     }
 
-    /** Menampilkan dialog edit profil. */
-    public static Optional<HostProfile> edit(Component parent, HostProfile profile, ProfileSnapshot snapshot) {
-        return show(parent, "Edit host: " + profile.name(), profile, profile.group(), snapshot);
+    /** Menampilkan dialog edit profil. {@code storedSecrets} = secret yang sudah ada di vault. */
+    public static Optional<Result> edit(Component parent, HostProfile profile, ProfileSnapshot snapshot,
+                                        Set<SecretType> storedSecrets) {
+        return show(parent, "Edit host: " + profile.name(), profile, profile.group(), snapshot, storedSecrets);
     }
 
-    private static Optional<HostProfile> show(Component parent, String title, HostProfile initial, String group,
-                                              ProfileSnapshot snapshot) {
+    private static Optional<Result> show(Component parent, String title, HostProfile initial, String group,
+                                         ProfileSnapshot snapshot, Set<SecretType> storedSecrets) {
         Window owner = parent instanceof Window w ? w : javax.swing.SwingUtilities.getWindowAncestor(parent);
-        var dialog = new ProfileDialog(owner, title, initial, group, snapshot);
+        var dialog = new ProfileDialog(owner, title, initial, group, snapshot, storedSecrets);
         dialog.setVisible(true);
         return Optional.ofNullable(dialog.result);
     }
@@ -171,11 +190,12 @@ public final class ProfileDialog extends JDialog {
                     "Auto-inject password sudo di host produksi berisiko (prompt spoofing).\nTetap aktifkan?")) {
                 return;
             }
-            result = new HostProfile(id, name.getText(), Objects.toString(group.getSelectedItem(), ""),
+            var profile = new HostProfile(id, name.getText(), Objects.toString(group.getSelectedItem(), ""),
                     host.getText(), (Integer) port.getValue(), username.getText(),
                     (AuthMethod) auth.getSelectedItem(), keyPath.getText(),
                     jump == null || jump.profile() == null ? null : jump.profile().id(),
                     env, initialDir.getText(), notes.getText(), autoSudo.isSelected());
+            result = new Result(profile, collectSecretChanges());
             dispose();
         } catch (IllegalArgumentException e) {
             Dialogs.error(this, "Data profil tidak valid", e.getMessage());
@@ -203,8 +223,63 @@ public final class ProfileDialog extends JDialog {
         row = addRow(form, row, "Environment", environment);
         row = addRow(form, row, "Direktori awal", initialDir);
         row = addRow(form, row, "Catatan", new JScrollPane(notes));
-        addRow(form, row, "", autoSudo);
+        row = addRow(form, row, "", autoSudo);
+
+        var header = new JLabel("Secret (terenkripsi di vault; kosong = tidak diubah)");
+        header.setBorder(BorderFactory.createEmptyBorder(10, 0, 2, 0));
+        header.setFont(header.getFont().deriveFont(java.awt.Font.BOLD));
+        var hc = new GridBagConstraints();
+        hc.gridx = 0;
+        hc.gridy = row++;
+        hc.gridwidth = 2;
+        hc.anchor = GridBagConstraints.LINE_START;
+        form.add(header, hc);
+        for (SecretType type : SecretType.values()) {
+            var field = secretFields.get(type);
+            var clear = clearBoxes.get(type);
+            field.putClientProperty("JTextField.placeholderText",
+                    storedSecrets.contains(type) ? "•••••• (tersimpan)" : "(belum ada)");
+            clear.setEnabled(storedSecrets.contains(type));
+            clear.addActionListener(e -> field.setEnabled(!clear.isSelected()));
+            var panel = new JPanel(new BorderLayout(6, 0));
+            panel.add(field, BorderLayout.CENTER);
+            panel.add(clear, BorderLayout.EAST);
+            row = addRow(form, row, secretLabel(type), panel);
+        }
         return form;
+    }
+
+    private static String secretLabel(SecretType type) {
+        return switch (type) {
+            case LOGIN_PASSWORD -> "Password login";
+            case KEY_PASSPHRASE -> "Passphrase key";
+            case SUDO_PASSWORD -> "Password sudo";
+            case ROOT_PASSWORD -> "Password root (su)";
+        };
+    }
+
+    private Map<SecretType, SecretChange> collectSecretChanges() {
+        var changes = new EnumMap<SecretType, SecretChange>(SecretType.class);
+        for (SecretType type : SecretType.values()) {
+            var field = secretFields.get(type);
+            if (clearBoxes.get(type).isSelected()) {
+                changes.put(type, new SecretChange.Clear());
+            } else if (field.getDocument().getLength() > 0) {
+                changes.put(type, new SecretChange.Set(field.getPassword()));
+            }
+        }
+        clearSecretFields();
+        return changes;
+    }
+
+    private void clearSecretFields() {
+        secretFields.values().forEach(f -> f.setText(""));
+    }
+
+    @Override
+    public void dispose() {
+        clearSecretFields();
+        super.dispose();
     }
 
     private static int addRow(JPanel form, int row, String label, JComponent field) {
