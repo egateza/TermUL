@@ -72,7 +72,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private final KeyEventDispatcher hotkeys = this::dispatchHotkey;
     private final LogPanel logPanel;
     private final JSplitPane logSplit;
-    private final JCheckBoxMenuItem showLog = new JCheckBoxMenuItem("Tampilkan log");
+    private final JCheckBoxMenuItem showLog = new JCheckBoxMenuItem(I18n.t("main.menu.help.showLog"));
     private int logHeight = 220; // EDT
     private int logDividerSize; // EDT
     // item menu Terminal yang bergantung pada tab/sesi aktif (lihat updateTerminalMenu)
@@ -119,7 +119,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         });
 
         tabs.putClientProperty("JTabbedPane.tabClosable", true);
-        tabs.putClientProperty("JTabbedPane.tabCloseToolTipText", "Tutup tab");
+        tabs.putClientProperty("JTabbedPane.tabCloseToolTipText", I18n.t("main.tab.close"));
         tabs.putClientProperty("JTabbedPane.tabCloseCallback",
                 (BiConsumer<JTabbedPane, Integer>) (t, index) -> closeTab(index));
         tabs.addChangeListener(e -> {
@@ -250,43 +250,43 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
     private JMenuBar buildMenu() {
         var bar = new JMenuBar();
-        var file = new JMenu("File");
-        file.add(menuItem(AppIcon.SERVER, "Host baru...", KeyStroke.getKeyStroke(KeyEvent.VK_N, InputEvent.CTRL_DOWN_MASK),
+        var file = new JMenu(I18n.t("main.menu.file"));
+        file.add(menuItem(AppIcon.SERVER, I18n.t("main.menu.file.newHost"), KeyStroke.getKeyStroke(KeyEvent.VK_N, InputEvent.CTRL_DOWN_MASK),
                 () -> newHost(hostTree.selectedGroup())));
-        file.add(menuItem(AppIcon.FOLDER_PLUS, "Grup baru...", null, () -> newGroup(hostTree.selectedGroup())));
-        file.add(menuItem(null, "Cari host", KeyStroke.getKeyStroke(KeyEvent.VK_F, InputEvent.CTRL_DOWN_MASK),
+        file.add(menuItem(AppIcon.FOLDER_PLUS, I18n.t("main.menu.file.newGroup"), null, () -> newGroup(hostTree.selectedGroup())));
+        file.add(menuItem(null, I18n.t("main.menu.file.findHost"), KeyStroke.getKeyStroke(KeyEvent.VK_F, InputEvent.CTRL_DOWN_MASK),
                 () -> {
                     showHostList();
                     SwingUtilities.invokeLater(hostTree::focusSearch);
                 }));
         file.addSeparator();
-        file.add(menuItem(null, "Keluar", null, this::exit));
+        file.add(menuItem(null, I18n.t("main.menu.file.exit"), null, this::exit));
         bar.add(file);
 
-        var terminal = new JMenu("Terminal");
+        var terminal = new JMenu(I18n.t("main.menu.terminal"));
         int ctrlShift = InputEvent.CTRL_DOWN_MASK | InputEvent.SHIFT_DOWN_MASK;
-        terminal.add(miDuplicate = menuItem(null, "Duplikat tab", KeyStroke.getKeyStroke(KeyEvent.VK_T, ctrlShift),
+        terminal.add(miDuplicate = menuItem(null, I18n.t("main.menu.terminal.duplicate"), KeyStroke.getKeyStroke(KeyEvent.VK_T, ctrlShift),
                 () -> currentTab().ifPresent(t -> openTab(t.profile(), t.isSftpOnly()))));
-        terminal.add(miReconnect = menuItem(null, "Reconnect", KeyStroke.getKeyStroke(KeyEvent.VK_F5, InputEvent.CTRL_DOWN_MASK),
+        terminal.add(miReconnect = menuItem(null, I18n.t("main.menu.terminal.reconnect"), KeyStroke.getKeyStroke(KeyEvent.VK_F5, InputEvent.CTRL_DOWN_MASK),
                 () -> currentTab().ifPresent(TerminalTab::reconnect)));
-        terminal.add(miCloseTab = menuItem(null, "Tutup tab", KeyStroke.getKeyStroke(KeyEvent.VK_W, ctrlShift),
+        terminal.add(miCloseTab = menuItem(null, I18n.t("main.tab.close"), KeyStroke.getKeyStroke(KeyEvent.VK_W, ctrlShift),
                 () -> closeTab(tabs.getSelectedIndex())));
-        terminal.add(miSftp = menuItem(null, "Panel SFTP", KeyStroke.getKeyStroke(KeyEvent.VK_F, ctrlShift),
+        terminal.add(miSftp = menuItem(null, I18n.t("main.menu.terminal.sftp"), KeyStroke.getKeyStroke(KeyEvent.VK_F, ctrlShift),
                 () -> currentTab().ifPresent(TerminalTab::toggleSftp)));
         terminal.addSeparator();
-        terminal.add(miZoomIn = menuItem(null, "Zoom in", KeyStroke.getKeyStroke(KeyEvent.VK_EQUALS, InputEvent.CTRL_DOWN_MASK),
+        terminal.add(miZoomIn = menuItem(null, I18n.t("main.menu.terminal.zoomIn"), KeyStroke.getKeyStroke(KeyEvent.VK_EQUALS, InputEvent.CTRL_DOWN_MASK),
                 () -> currentTab().ifPresent(t -> t.zoom(1))));
-        terminal.add(miZoomOut = menuItem(null, "Zoom out", KeyStroke.getKeyStroke(KeyEvent.VK_MINUS, InputEvent.CTRL_DOWN_MASK),
+        terminal.add(miZoomOut = menuItem(null, I18n.t("main.menu.terminal.zoomOut"), KeyStroke.getKeyStroke(KeyEvent.VK_MINUS, InputEvent.CTRL_DOWN_MASK),
                 () -> currentTab().ifPresent(t -> t.zoom(-1))));
-        terminal.add(miZoomReset = menuItem(null, "Ukuran font default", KeyStroke.getKeyStroke(KeyEvent.VK_0, InputEvent.CTRL_DOWN_MASK),
+        terminal.add(miZoomReset = menuItem(null, I18n.t("main.menu.terminal.zoomReset"), KeyStroke.getKeyStroke(KeyEvent.VK_0, InputEvent.CTRL_DOWN_MASK),
                 () -> currentTab().ifPresent(t -> t.zoom(0))));
         terminal.addSeparator();
-        terminal.add(menuItem(null, "File yang sedang diedit...", KeyStroke.getKeyStroke(KeyEvent.VK_E, ctrlShift),
+        terminal.add(menuItem(null, I18n.t("main.menu.terminal.editTracker"), KeyStroke.getKeyStroke(KeyEvent.VK_E, ctrlShift),
                 this::showEditTracker));
         terminal.addSeparator();
-        terminal.add(miInjectSudo = menuItem(null, "Inject password sudo", KeyStroke.getKeyStroke(KeyEvent.VK_P, ctrlShift),
+        terminal.add(miInjectSudo = menuItem(null, I18n.t("main.menu.terminal.injectSudo"), KeyStroke.getKeyStroke(KeyEvent.VK_P, ctrlShift),
                 () -> currentTab().ifPresent(t -> t.injectSecret(SecretType.SUDO_PASSWORD, ctx.vault()))));
-        terminal.add(miInjectRoot = menuItem(null, "Inject password root", KeyStroke.getKeyStroke(KeyEvent.VK_R, ctrlShift),
+        terminal.add(miInjectRoot = menuItem(null, I18n.t("main.menu.terminal.injectRoot"), KeyStroke.getKeyStroke(KeyEvent.VK_R, ctrlShift),
                 () -> currentTab().ifPresent(t -> t.injectSecret(SecretType.ROOT_PASSWORD, ctx.vault()))));
         terminal.addMenuListener(new javax.swing.event.MenuListener() {
             @Override
@@ -307,7 +307,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         bar.add(buildVaultMenu());
 
         var settings = new JMenu(I18n.t("menu.settings"));
-        settings.add(menuItem(null, "Editor lokal...", null, this::configureEditors));
+        settings.add(menuItem(null, I18n.t("main.menu.settings.editors"), null, this::configureEditors));
         settings.add(buildHostPanelMenu());
         settings.add(buildThemeMenu());
         settings.add(buildLanguageMenu());
@@ -322,20 +322,20 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         bar.add(modeToggle);
         updateModeToggle();
 
-        var help = new JMenu("Bantuan");
+        var help = new JMenu(I18n.t("main.menu.help"));
         showLog.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_L, ctrlShift));
-        showLog.setToolTipText("Log aplikasi di bagian bawah window (sama dengan isi file log)");
+        showLog.setToolTipText(I18n.t("main.menu.help.showLog.tooltip"));
         showLog.addActionListener(e -> setLogVisible(showLog.isSelected()));
         help.add(showLog);
-        help.add(menuItem(null, "Buka folder log", null,
+        help.add(menuItem(null, I18n.t("main.menu.help.openLogDir"), null,
                 () -> UiAsync.run(io, () -> LogPanel.openFolder(ctx.paths().logDir()),
-                        err -> Dialogs.error(this, "Gagal membuka folder log", err))));
+                        err -> Dialogs.error(this, I18n.t("main.error.openLogDir"), err))));
         help.addSeparator();
-        help.add(menuItem(AppIcon.INFO, "Tentang TermUL", null, () -> Dialogs.info(this, "Tentang TermUL",
-                "TermUL (Terminal Utility) — SSH client pribadi\n\nJava " + Runtime.version()
-                        + "\nFolder log: " + ctx.paths().logDir()
-                        + "\n\nIkon:\n" + Arrays.stream(IconSet.values())
-                                .map(s -> "  • " + s.attribution()).collect(Collectors.joining("\n")))));
+        help.add(menuItem(AppIcon.INFO, I18n.t("main.menu.help.about"), null, () -> Dialogs.info(this,
+                I18n.t("main.about.title"),
+                I18n.t("main.about.text", Runtime.version().toString(), ctx.paths().logDir().toString(), Arrays.stream(IconSet.values())
+                        .map(s -> "  • " + s.attribution())
+                        .collect(Collectors.joining("\n"))))));
         bar.add(help);
         return bar;
     }
@@ -371,9 +371,9 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             body.add(hostSplit, BorderLayout.CENTER);
             updateHostToggle();
         }
-        welcome.setText("<html><center><b>TermUL</b><br><br>Double-click host untuk membuka terminal.<br>"
-                + "Ctrl+N: host baru &nbsp; Ctrl+F: cari host"
-                + (floatingMode() ? "<br><br>Klik tombol &raquo; di tepi kiri untuk menampilkan daftar host." : "")
+        welcome.setText("<html><center><b>TermUL</b><br><br>" + I18n.t("main.welcome.open") + "<br>"
+                + I18n.t("main.welcome.shortcuts")
+                + (floatingMode() ? "<br><br>" + I18n.t("main.welcome.floatingHint") : "")
                 + "</center></html>");
         body.revalidate();
         body.repaint();
@@ -422,8 +422,8 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         record Mode(String id, String label) {
         }
         for (var mode : new Mode[] {
-                new Mode(AppConfig.HOST_DOCKED, "Panel di samping (tetap)"),
-                new Mode(AppConfig.HOST_FLOATING, "Tombol melayang (hemat ruang)")}) {
+                new Mode(AppConfig.HOST_DOCKED, I18n.t("main.menu.hostPanel.docked")),
+                new Mode(AppConfig.HOST_FLOATING, I18n.t("main.menu.hostPanel.floating"))}) {
             var item = new JRadioButtonMenuItem(mode.label(), mode.id().equals(config.hostPanelMode()));
             item.addActionListener(e -> {
                 if (mode.id().equals(hostMode)) {
@@ -437,11 +437,11 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             menu.add(item);
         }
         menu.addSeparator();
-        var opacity = new JMenu("Transparansi tombol melayang");
-        opacity.setToolTipText("Tombol kembali solid saat kursor berada di atasnya");
+        var opacity = new JMenu(I18n.t("main.menu.hostPanel.opacity"));
+        opacity.setToolTipText(I18n.t("main.menu.hostPanel.opacity.tooltip"));
         var levels = new ButtonGroup();
         for (int percent : new int[] {100, 70, 40, 20}) {
-            var item = new JRadioButtonMenuItem(percent == 100 ? "Solid (100%)" : percent + "%",
+            var item = new JRadioButtonMenuItem(percent == 100 ? I18n.t("main.menu.hostPanel.opacity.solid") : percent + "%",
                     percent == config.hostButtonOpacity());
             item.addActionListener(e -> {
                 drawer.setOpacity(percent);
@@ -487,7 +487,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         var group = new ButtonGroup();
         for (AppTheme t : AppTheme.values()) {
             var item = new JRadioButtonMenuItem(t.label(), t == theme);
-            item.setToolTipText("Mode: " + t.modes().stream().map(ThemeMode::label).collect(Collectors.joining(", ")));
+            item.setToolTipText(I18n.t("main.menu.theme.modes", t.modes().stream().map(ThemeMode::label).collect(Collectors.joining(", "))));
             item.addActionListener(e -> {
                 if (t != theme) {
                     applyTheme(t, wantedMode);
@@ -529,13 +529,13 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         modeToggle.setText(mode == ThemeMode.DARK ? "☀" : "☾");
         modeToggle.setEnabled(both);
         modeToggle.setToolTipText(both
-                ? "Ganti ke mode " + mode.other().label().toLowerCase(java.util.Locale.ROOT)
-                : "Tema " + theme.label() + " hanya punya mode " + mode.label().toLowerCase(java.util.Locale.ROOT));
+                ? I18n.t("main.modeToggle.switch", mode.other().label().toLowerCase(java.util.Locale.ROOT))
+                : I18n.t("main.modeToggle.single", theme.label(), mode.label().toLowerCase(java.util.Locale.ROOT)));
     }
 
     /** Submenu pilihan set ikon; ganti langsung terlihat (repaint) dan disimpan di config.json. */
     private JMenu buildIconSetMenu() {
-        var menu = new JMenu("Set ikon");
+        var menu = new JMenu(I18n.t("main.menu.settings.iconSet"));
         var group = new ButtonGroup();
         for (IconSet set : IconSet.values()) {
             var item = new JRadioButtonMenuItem(set.label(), set == AppIcon.current());
@@ -578,15 +578,14 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
     private JMenu buildVaultMenu() {
         var gate = ctx.vault();
-        var menu = new JMenu("Vault");
-        menu.add(menuItem(null, "Buka vault...", null, () -> ctx.sshOps().execute(gate::ensureUnlocked)));
-        menu.add(menuItem(null, "Kunci vault", null, () -> ctx.sshOps().execute(gate::lock)));
-        menu.add(menuItem(null, "Ganti master password...", null,
+        var menu = new JMenu(I18n.t("main.menu.vault"));
+        menu.add(menuItem(null, I18n.t("main.menu.vault.unlock"), null, () -> ctx.sshOps().execute(gate::ensureUnlocked)));
+        menu.add(menuItem(null, I18n.t("main.menu.vault.lock"), null, () -> ctx.sshOps().execute(gate::lock)));
+        menu.add(menuItem(null, I18n.t("main.menu.vault.changePassword"), null,
                 () -> ctx.sshOps().execute(gate::changeMasterPasswordInteractive)));
         menu.addSeparator();
-        var remember = new JCheckBoxMenuItem("Ingat di PC ini (Windows DPAPI)");
-        remember.setToolTipText("Vault terbuka otomatis dengan login Windows. Lebih nyaman, "
-                + "tapi malware yang berjalan sebagai user Anda bisa ikut membukanya.");
+        var remember = new JCheckBoxMenuItem(I18n.t("main.menu.vault.remember"));
+        remember.setToolTipText(I18n.t("main.menu.vault.remember.tooltip"));
         remember.addActionListener(e -> {
             boolean wanted = remember.isSelected();
             UiAsync.run(ctx.sshOps(), () -> {
@@ -597,7 +596,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                 return true;
             }, ok -> remember.setSelected(ok ? wanted : !wanted), err -> {
                 remember.setSelected(!wanted);
-                Dialogs.error(this, "Vault", err);
+                Dialogs.error(this, I18n.t("main.vault.title"), err);
             });
         });
         menu.addMenuListener(new javax.swing.event.MenuListener() {
@@ -634,7 +633,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             }
         }, os -> os.ifPresentOrElse(detected -> {
             updateTabIcons(profileId, detected);
-            mutate("Gagal menyimpan info OS", () -> store.snapshot().find(profileId)
+            mutate(I18n.t("main.error.saveOsInfo"), () -> store.snapshot().find(profileId)
                     .filter(current -> !detected.equals(current.os()))
                     .ifPresent(current -> store.save(current.withOs(detected))));
         }, () -> osDetected.remove(profileId)), err -> osDetected.remove(profileId));
@@ -669,11 +668,11 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         }
         if (tabs.getComponentAt(index) instanceof TerminalTab tab && (tab.isSessionActive() || tab.activeTransfers() > 0)) {
             String transfers = tab.activeTransfers() > 0
-                    ? "\n\nMasih ada " + tab.activeTransfers() + " transfer SFTP yang akan dibatalkan." : "";
+                    ? I18n.t("main.tab.close.transfers", String.valueOf(tab.activeTransfers())) : "";
             tabs.setSelectedIndex(index);
             boolean yes = JOptionPane.showConfirmDialog(this,
-                    "Akhiri sesi ke " + tab.profile().name() + " (" + tab.profile().address() + ")?" + transfers,
-                    "Tutup tab", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE) == JOptionPane.YES_OPTION;
+                    I18n.t("main.tab.close.confirm", tab.profile().name(), tab.profile().address()) + transfers,
+                    I18n.t("main.tab.close"), JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE) == JOptionPane.YES_OPTION;
             if (!yes) {
                 tab.focusTerminal();
                 return;
@@ -697,17 +696,18 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         for (int i = 0; i < tabs.getTabCount(); i++) {
             if (tabs.getComponentAt(i) instanceof TerminalTab tab) {
                 if (tab.isSessionActive()) {
-                    items.add("Sesi terminal: " + tab.profile().name() + " (" + tab.profile().address() + ")");
+                    items.add(I18n.t("main.active.session", tab.profile().name(), tab.profile().address()));
                 }
                 if (tab.activeTransfers() > 0) {
-                    items.add("Transfer SFTP berjalan di " + tab.profile().name() + ": " + tab.activeTransfers());
+                    items.add(I18n.t("main.active.transfers", tab.profile().name(), String.valueOf(tab.activeTransfers())));
                 }
             }
         }
         for (var edit : ctx.edits().entries()) {
             var state = edit.session().state();
-            String status = state == RemoteEditSession.State.EDITING ? "tersinkron" : "BELUM TERSINKRON";
-            items.add("File diedit (" + status + "): " + edit.profile().name() + ":" + edit.session().remotePath());
+            String status = I18n.t(state == RemoteEditSession.State.EDITING
+                    ? "main.active.edit.synced" : "main.active.edit.unsynced");
+            items.add(I18n.t("main.active.edit", status, edit.profile().name(), String.valueOf(edit.session().remotePath())));
         }
         return items;
     }
@@ -845,7 +845,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         // baca metadata vault (disk I/O) di luar EDT, lalu buka dialog
         UiAsync.run(io, () -> storedSecrets(profile), stored ->
                         ProfileDialog.edit(this, profile, store.snapshot(), stored).ifPresent(this::saveProfile),
-                err -> Dialogs.error(this, "Gagal membaca vault", err));
+                err -> Dialogs.error(this, I18n.t("main.error.readVault"), err));
     }
 
     private Set<SecretType> storedSecrets(HostProfile profile) {
@@ -859,7 +859,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     }
 
     private void saveProfile(ProfileDialog.Result result) {
-        mutate("Gagal menyimpan profil", () -> store.save(result.profile()));
+        mutate(I18n.t("main.error.saveProfile"), () -> store.save(result.profile()));
         if (result.secrets().isEmpty()) {
             return;
         }
@@ -872,53 +872,53 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             return true;
         }, saved -> {
             if (!saved) {
-                Dialogs.info(this, "Vault", "Vault tidak dibuka: password tidak disimpan (profil tetap tersimpan).");
+                Dialogs.info(this, I18n.t("main.vault.title"), I18n.t("main.vault.notUnlocked"));
             }
         }, err -> {
             SecretChange.discardAll(result.secrets());
-            Dialogs.error(this, "Gagal menyimpan password ke vault", err);
+            Dialogs.error(this, I18n.t("main.error.saveSecret"), err);
         });
     }
 
     @Override
     public void duplicate(HostProfile profile) {
-        mutate("Gagal menduplikat profil", () -> store.save(profile.duplicate()));
+        mutate(I18n.t("main.error.duplicateProfile"), () -> store.save(profile.duplicate()));
     }
 
     @Override
     public void delete(HostProfile profile) {
-        if (Dialogs.confirm(this, "Hapus profil", "Hapus profil '" + profile.name() + "'?")) {
-            mutate("Gagal menghapus profil", () -> store.delete(profile.id()));
+        if (Dialogs.confirm(this, I18n.t("main.profile.delete.title"), I18n.t("main.profile.delete.confirm", profile.name()))) {
+            mutate(I18n.t("main.error.deleteProfile"), () -> store.delete(profile.id()));
             UiAsync.run(ctx.sshOps(), () -> {
                 if (!storedSecrets(profile).isEmpty() && ctx.vault().ensureUnlocked()) {
                     ctx.vault().vault().removeProfile(profile.id());
                 }
-            }, err -> Dialogs.error(this, "Gagal menghapus password dari vault", err));
+            }, err -> Dialogs.error(this, I18n.t("main.error.deleteSecret"), err));
         }
     }
 
     @Override
     public void newGroup(String parent) {
-        String name = Dialogs.input(this, "Grup baru",
-                parent.isEmpty() ? "Nama grup:" : "Nama subgrup di '" + parent + "':", "");
+        String name = Dialogs.input(this, I18n.t("main.group.new.title"),
+                parent.isEmpty() ? I18n.t("main.group.new.name") : I18n.t("main.group.new.subName", parent), "");
         if (name != null) {
             String path = parent.isEmpty() ? name : parent + "/" + name;
-            mutate("Gagal membuat grup", () -> store.addGroup(path));
+            mutate(I18n.t("main.error.createGroup"), () -> store.addGroup(path));
         }
     }
 
     @Override
     public void renameGroup(String group) {
-        String target = Dialogs.input(this, "Rename grup", "Path grup baru (pisahkan dengan '/'):", group);
+        String target = Dialogs.input(this, I18n.t("main.group.rename.title"), I18n.t("main.group.rename.prompt"), group);
         if (target != null && !target.equals(group)) {
-            mutate("Gagal rename grup", () -> store.renameGroup(group, target));
+            mutate(I18n.t("main.error.renameGroup"), () -> store.renameGroup(group, target));
         }
     }
 
     @Override
     public void deleteGroup(String group) {
-        if (Dialogs.confirm(this, "Hapus grup", "Hapus grup '" + group + "' (harus kosong)?")) {
-            mutate("Gagal menghapus grup", () -> store.deleteGroup(group));
+        if (Dialogs.confirm(this, I18n.t("main.group.delete.title"), I18n.t("main.group.delete.confirm", group))) {
+            mutate(I18n.t("main.error.deleteGroup"), () -> store.deleteGroup(group));
         }
     }
 }

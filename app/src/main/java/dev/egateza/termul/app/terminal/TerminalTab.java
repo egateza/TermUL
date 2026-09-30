@@ -1,5 +1,6 @@
 package dev.egateza.termul.app.terminal;
 
+import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.app.sftp.SftpPanel;
 import dev.egateza.termul.app.ui.AppIcon;
 import dev.egateza.termul.app.ui.Dialogs;
@@ -172,7 +173,7 @@ public final class TerminalTab extends JPanel {
         }
         hideBanner();
         gate.set(TerminalState.CONNECTING);
-        showCenter(centerMessage("Menghubungkan ke " + profile.address() + " ..."));
+        showCenter(centerMessage(I18n.t("tab.connecting", profile.address())));
         stateListener.run();
         pending = UiAsync.run(sshOps,
                 () -> {
@@ -224,7 +225,7 @@ public final class TerminalTab extends JPanel {
             links.restoreSftp(profile);
         } catch (RemoteFileException e) {
             tty.close();
-            throw new SshConnectException("Terminal tersambung tetapi SFTP gagal dibuka: " + e.getMessage(), e);
+            throw new SshConnectException(I18n.t("tab.error.sftpOpen", e.getMessage()), e);
         }
         return tty;
     }
@@ -264,7 +265,7 @@ public final class TerminalTab extends JPanel {
         }
         log.info("Connect ke {} gagal: {}", profile.address(), error.getMessage());
         String message = error instanceof SshConnectException ? error.getMessage()
-                : "Kesalahan tak terduga: " + error;
+                : I18n.t("tab.error.unexpected", String.valueOf(error));
         var text = new JTextArea(message);
         text.setEditable(false);
         text.setLineWrap(true);
@@ -277,7 +278,7 @@ public final class TerminalTab extends JPanel {
         var panel = new JPanel(new BorderLayout());
         panel.add(new JScrollPane(text), BorderLayout.CENTER);
         var buttons = new JPanel(new FlowLayout(FlowLayout.CENTER));
-        var retry = new JButton("Coba lagi", AppIcon.RECONNECT.icon());
+        var retry = new JButton(I18n.t("tab.retry"), AppIcon.RECONNECT.icon());
         retry.addActionListener(e -> connect());
         buttons.add(retry);
         panel.add(buttons, BorderLayout.SOUTH);
@@ -297,7 +298,7 @@ public final class TerminalTab extends JPanel {
         }
         gate.set(TerminalState.DOWN);
         sessionEnded = true;
-        showBanner("Sesi ke " + profile.address() + " berakhir. Tekan Enter atau klik Reconnect untuk membuka lagi.");
+        showBanner(I18n.t("tab.sessionEnded", profile.address()));
     }
 
     private boolean sessionEnded; // EDT
@@ -305,7 +306,7 @@ public final class TerminalTab extends JPanel {
 
     /** Koneksi terminal putus: sambung ulang shell dan SFTP bersama. */
     private void startAutoReconnect() {
-        startReconnect(this::openSession, this::onConnected, "terminal dan SFTP");
+        startReconnect(this::openSession, this::onConnected, I18n.t("tab.reconnect.what.both"));
     }
 
     /** Koneksi SFTP putus pada tab "SFTP saja": buka lagi kanalnya. */
@@ -313,7 +314,7 @@ public final class TerminalTab extends JPanel {
         startReconnect(() -> {
             links.restoreSftp(profile);
             if (sftp.isChannelDead()) {
-                throw new java.io.IOException("Kanal SFTP belum bisa dibuka");
+                throw new java.io.IOException(I18n.t("tab.error.sftpChannel"));
             }
             return Boolean.TRUE;
         }, ok -> {
@@ -341,15 +342,15 @@ public final class TerminalTab extends JPanel {
         gate.set(TerminalState.RECONNECTING);
         stateListener.run();
         log.info("Koneksi ke {} terputus, menyambung ulang {}", address, what);
-        showBanner("Koneksi ke " + address + " terputus. Menyambung ulang " + what + " ...", null, null);
+        showBanner(I18n.t("tab.reconnect.lost", address, what), null, null);
         sshOps.execute(() -> r.run(attempt, new Reconnector.Listener<T>() {
             @Override
             public void attempting(int n) {
                 SwingUtilities.invokeLater(() -> {
                     if (reconnector == r) {
                         showBanner(n == 1
-                                ? "Koneksi ke " + address + " terputus. Menyambung ulang " + what + " ..."
-                                : "Menyambung ulang " + what + " ke " + address + " (percobaan " + n + ") ...", null, null);
+                                ? I18n.t("tab.reconnect.lost", address, what)
+                                : I18n.t("tab.reconnect.attempt", what, address, String.valueOf(n)), null, null);
                     }
                 });
             }
@@ -358,8 +359,8 @@ public final class TerminalTab extends JPanel {
             public void waiting(int secondsLeft, Exception lastError) {
                 SwingUtilities.invokeLater(() -> {
                     if (reconnector == r) {
-                        showBanner("Gagal menyambung ulang: " + lastError.getMessage()
-                                + ". Mencoba lagi dalam " + secondsLeft + " dtk", "Reconnect (" + secondsLeft + " dtk)",
+                        showBanner(I18n.t("tab.reconnect.failedRetry", lastError.getMessage(), String.valueOf(secondsLeft)),
+                                I18n.t("tab.reconnect.buttonWait", String.valueOf(secondsLeft)),
                                 r::skipWait);
                     }
                 });
@@ -395,8 +396,8 @@ public final class TerminalTab extends JPanel {
                     gate.set(TerminalState.DOWN);
                     sessionEnded = true;
                     stateListener.run();
-                    showBanner("Gagal menyambung ulang ke " + address + ": " + lastError.getMessage()
-                            + ". Klik Reconnect untuk mencoba lagi.", "Reconnect", TerminalTab.this::reconnect);
+                    showBanner(I18n.t("tab.reconnect.gaveUp", address, lastError.getMessage()),
+                            I18n.t("tab.reconnect"), TerminalTab.this::reconnect);
                 });
             }
         }));
@@ -505,8 +506,8 @@ public final class TerminalTab extends JPanel {
 
     private boolean confirmExit() {
         boolean yes = JOptionPane.showConfirmDialog(this,
-                "Anda akan keluar dari sesi " + profile.address() + ". Lanjutkan?",
-                "Keluar dari sesi", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE) == JOptionPane.YES_OPTION;
+                I18n.t("tab.exit.confirm", profile.address()),
+                I18n.t("tab.exit.title"), JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE) == JOptionPane.YES_OPTION;
         focusTerminal();
         return yes;
     }
@@ -527,7 +528,7 @@ public final class TerminalTab extends JPanel {
     }
 
     private void showBanner(String text) {
-        showBanner(text, "Reconnect", this::reconnect);
+        showBanner(text, I18n.t("tab.reconnect"), this::reconnect);
     }
 
     /** @param buttonText null = tanpa tombol (sedang mencoba) */
@@ -597,12 +598,11 @@ public final class TerminalTab extends JPanel {
         }, result -> {
             if (result == InjectResult.MISSING) {
                 String what = type == SecretType.ROOT_PASSWORD ? "root" : "sudo";
-                Dialogs.info(this, "Inject password",
-                        "Password " + what + " untuk " + profile.name() + " belum disimpan di vault.\n"
-                                + "Isi lewat Edit host (F2).");
+                Dialogs.info(this, I18n.t("tab.inject.title"),
+                        I18n.t("tab.inject.missing", what, profile.name()));
             }
             focusTerminal();
-        }, err -> Dialogs.error(this, "Inject password gagal", err));
+        }, err -> Dialogs.error(this, I18n.t("tab.inject.failed"), err));
     }
 
     private enum InjectResult { SENT, MISSING, CANCELLED }

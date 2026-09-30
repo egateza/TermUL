@@ -1,18 +1,19 @@
 package dev.egateza.termul.app.ui;
 
+import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.core.config.AppConfig;
 
 /** Mode terang/gelap sebuah {@link AppTheme}. Disimpan di {@code config.json} sebagai {@link #id}. */
 public enum ThemeMode {
-    LIGHT(AppConfig.MODE_LIGHT, "Terang"),
-    DARK(AppConfig.MODE_DARK, "Gelap");
+    LIGHT(AppConfig.MODE_LIGHT, "theme.mode.light"),
+    DARK(AppConfig.MODE_DARK, "theme.mode.dark");
 
     private final String id;
-    private final String label;
+    private final String labelKey;
 
-    ThemeMode(String id, String label) {
+    ThemeMode(String id, String labelKey) {
         this.id = id;
-        this.label = label;
+        this.labelKey = labelKey;
     }
 
     public String id() {
@@ -20,7 +21,7 @@ public enum ThemeMode {
     }
 
     public String label() {
-        return label;
+        return I18n.t(labelKey);
     }
 
     public ThemeMode other() {

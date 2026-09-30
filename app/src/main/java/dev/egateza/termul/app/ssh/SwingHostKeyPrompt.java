@@ -1,5 +1,6 @@
 package dev.egateza.termul.app.ssh;
 
+import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.app.ui.Edt;
 import dev.egateza.termul.ssh.hostkey.HostKeyInfo;
 import dev.egateza.termul.ssh.hostkey.HostKeyPrompt;
@@ -22,17 +23,9 @@ public final class SwingHostKeyPrompt implements HostKeyPrompt {
     public boolean confirmUnknownHost(HostKeyInfo info) {
         var accepted = new AtomicBoolean();
         Edt.runAndWait(() -> {
-            String message = """
-                    Host %s belum pernah dikenal.
-
-                    Tipe key:     %s
-                    Fingerprint:  %s
-
-                    Cocokkan fingerprint ini dengan server (mis. `ssh-keygen -lf /etc/ssh/ssh_host_*_key.pub`)
-                    sebelum melanjutkan. Percayai host ini dan simpan ke known_hosts?"""
-                    .formatted(info.hostLabel(), info.algorithm(), info.fingerprint());
-            Object[] options = {"Percaya & sambungkan", "Batal"};
-            int choice = JOptionPane.showOptionDialog(parent.get(), message, "Host baru: " + info.hostLabel(),
+            String message = I18n.t("ssh.hostkey.message", info.hostLabel(), info.algorithm(), info.fingerprint());
+            Object[] options = {I18n.t("ssh.hostkey.trust"), I18n.t("common.cancel")};
+            int choice = JOptionPane.showOptionDialog(parent.get(), message, I18n.t("ssh.hostkey.title", info.hostLabel()),
                     JOptionPane.DEFAULT_OPTION, JOptionPane.WARNING_MESSAGE, null, options, options[1]);
             accepted.set(choice == 0);
         });

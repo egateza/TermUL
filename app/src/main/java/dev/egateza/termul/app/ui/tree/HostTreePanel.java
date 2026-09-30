@@ -1,5 +1,6 @@
 package dev.egateza.termul.app.ui.tree;
 
+import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.app.ui.AppIcon;
 import dev.egateza.termul.app.ui.EnvColors;
 import dev.egateza.termul.app.ui.OsIcons;
@@ -68,7 +69,7 @@ public final class HostTreePanel extends JPanel {
         super(new BorderLayout());
         this.actions = actions;
 
-        search.putClientProperty("JTextField.placeholderText", "Cari host...");
+        search.putClientProperty("JTextField.placeholderText", I18n.t("tree.search.placeholder"));
         search.putClientProperty("JTextField.showClearButton", true);
         search.getDocument().addDocumentListener(new DocumentListener() {
             @Override
@@ -231,23 +232,23 @@ public final class HostTreePanel extends JPanel {
         var menu = new JPopupMenu();
         switch (target) {
             case HostProfile p -> {
-                menu.add(item(null, "Buka terminal", () -> actions.open(p)));
-                menu.add(item(null, "Buka SFTP saja", () -> actions.openSftp(p)));
+                menu.add(item(null, I18n.t("tree.menu.openTerminal"), () -> actions.open(p)));
+                menu.add(item(null, I18n.t("tree.menu.openSftp"), () -> actions.openSftp(p)));
                 menu.addSeparator();
-                menu.add(item(null, "Edit...", () -> actions.edit(p)));
-                menu.add(item(null, "Duplikat", () -> actions.duplicate(p)));
-                menu.add(item(null, "Hapus...", () -> actions.delete(p)));
+                menu.add(item(null, I18n.t("tree.menu.edit"), () -> actions.edit(p)));
+                menu.add(item(null, I18n.t("tree.menu.duplicate"), () -> actions.duplicate(p)));
+                menu.add(item(null, I18n.t("tree.menu.delete"), () -> actions.delete(p)));
             }
             case GroupNode g -> {
-                menu.add(item(AppIcon.SERVER, "Host baru di grup ini...", () -> actions.newHost(g.path())));
-                menu.add(item(AppIcon.FOLDER_PLUS, "Subgrup baru...", () -> actions.newGroup(g.path())));
+                menu.add(item(AppIcon.SERVER, I18n.t("tree.menu.newHostInGroup"), () -> actions.newHost(g.path())));
+                menu.add(item(AppIcon.FOLDER_PLUS, I18n.t("tree.menu.newSubgroup"), () -> actions.newGroup(g.path())));
                 menu.addSeparator();
-                menu.add(item(null, "Rename grup...", () -> actions.renameGroup(g.path())));
-                menu.add(item(null, "Hapus grup...", () -> actions.deleteGroup(g.path())));
+                menu.add(item(null, I18n.t("tree.menu.renameGroup"), () -> actions.renameGroup(g.path())));
+                menu.add(item(null, I18n.t("tree.menu.deleteGroup"), () -> actions.deleteGroup(g.path())));
             }
             case null, default -> {
-                menu.add(item(AppIcon.SERVER, "Host baru...", () -> actions.newHost("")));
-                menu.add(item(AppIcon.FOLDER_PLUS, "Grup baru...", () -> actions.newGroup("")));
+                menu.add(item(AppIcon.SERVER, I18n.t("tree.menu.newHost"), () -> actions.newHost("")));
+                menu.add(item(AppIcon.FOLDER_PLUS, I18n.t("tree.menu.newGroup"), () -> actions.newGroup("")));
             }
         }
         return menu;

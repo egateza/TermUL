@@ -1,6 +1,7 @@
 package dev.egateza.termul.app.edit;
 
 import dev.egateza.termul.app.edit.EditManager.Entry;
+import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.app.sftp.Formats;
 import dev.egateza.termul.sftp.edit.RemoteEditSession.State;
 import java.awt.BorderLayout;
@@ -30,7 +31,7 @@ public final class EditTrackerDialog extends JDialog {
     private final JTable table = new JTable(model);
 
     public EditTrackerDialog(Window owner, EditManager manager) {
-        super(owner, "File yang sedang diedit", ModalityType.MODELESS);
+        super(owner, I18n.t("edit.tracker.title"), ModalityType.MODELESS);
         this.manager = manager;
         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         table.setFillsViewportHeight(true);
@@ -51,16 +52,16 @@ public final class EditTrackerDialog extends JDialog {
         }
 
         var buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        buttons.add(button("Buka lagi di editor", manager::reopenEditor));
-        buttons.add(button("Upload / coba lagi", manager::retry));
-        buttons.add(button("Buka folder cache", e -> {
+        buttons.add(button(I18n.t("edit.tracker.reopen"), manager::reopenEditor));
+        buttons.add(button(I18n.t("edit.tracker.retry"), manager::retry));
+        buttons.add(button(I18n.t("edit.tracker.openCache"), e -> {
             try {
                 Desktop.getDesktop().open(e.session().localFile().getParent().toFile());
             } catch (IOException | UnsupportedOperationException ex) {
-                dev.egateza.termul.app.ui.Dialogs.error(this, "Buka folder", ex.getMessage());
+                dev.egateza.termul.app.ui.Dialogs.error(this, I18n.t("edit.tracker.openFolderTitle"), ex.getMessage());
             }
         }));
-        buttons.add(button("Selesai (tutup sesi)", e -> manager.close(e)));
+        buttons.add(button(I18n.t("edit.tracker.finish"), e -> manager.close(e)));
 
         getContentPane().add(new JScrollPane(table), BorderLayout.CENTER);
         getContentPane().add(buttons, BorderLayout.SOUTH);
@@ -87,7 +88,8 @@ public final class EditTrackerDialog extends JDialog {
     }
 
     private static final class Model extends AbstractTableModel {
-        private static final String[] COLUMNS = {"Host", "File remote", "Status", "Pesan", "Upload terakhir"};
+        private static final String[] COLUMNS = {"edit.tracker.col.host", "edit.tracker.col.file", "edit.tracker.col.status",
+                "edit.tracker.col.message", "edit.tracker.col.lastUpload"};
         private List<Entry> entries = List.of();
 
         void setEntries(List<Entry> list) {
@@ -107,7 +109,7 @@ public final class EditTrackerDialog extends JDialog {
 
         @Override
         public String getColumnName(int c) {
-            return COLUMNS[c];
+            return I18n.t(COLUMNS[c]);
         }
 
         @Override
@@ -118,11 +120,11 @@ public final class EditTrackerDialog extends JDialog {
                 case 0 -> e.profile().name();
                 case 1 -> s.remotePath();
                 case 2 -> switch (s.state()) {
-                    case OPENING -> "Membuka";
-                    case EDITING -> "Tersinkron";
-                    case UPLOADING -> "Mengupload";
-                    case NEEDS_ATTENTION -> "Perlu perhatian";
-                    case CLOSED -> "Ditutup";
+                    case OPENING -> I18n.t("edit.tracker.state.opening");
+                    case EDITING -> I18n.t("edit.tracker.state.synced");
+                    case UPLOADING -> I18n.t("edit.tracker.state.uploading");
+                    case NEEDS_ATTENTION -> I18n.t("edit.tracker.state.attention");
+                    case CLOSED -> I18n.t("edit.tracker.state.closed");
                 };
                 case 3 -> s.lastMessage();
                 case 4 -> s.lastUpload() == null ? "-" : Formats.time(s.lastUpload());

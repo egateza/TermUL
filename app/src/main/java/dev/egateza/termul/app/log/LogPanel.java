@@ -1,5 +1,6 @@
 package dev.egateza.termul.app.log;
 
+import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.app.ui.AppIcon;
 import dev.egateza.termul.app.ui.Dialogs;
 import dev.egateza.termul.app.ui.UiAsync;
@@ -38,7 +39,7 @@ public final class LogPanel extends JPanel {
 
     private final LogBuffer buffer;
     private final JTextPane text = new JTextPane();
-    private final JCheckBox autoScroll = new JCheckBox("Auto-scroll", true);
+    private final JCheckBox autoScroll = new JCheckBox(I18n.t("logpanel.autoScroll"), true);
     private final SimpleAttributeSet normal = new SimpleAttributeSet();
     private final SimpleAttributeSet warning = new SimpleAttributeSet();
     private final Timer timer = new Timer(POLL_MS, e -> {
@@ -63,20 +64,20 @@ public final class LogPanel extends JPanel {
         Color red = UIManager.getColor("Actions.Red");
         StyleConstants.setForeground(warning, red != null ? red : new Color(0xE0, 0x55, 0x55));
 
-        var clear = new JButton("Bersihkan", AppIcon.BROOM.icon());
-        clear.setToolTipText("Kosongkan tampilan (file log tidak dihapus)");
+        var clear = new JButton(I18n.t("logpanel.clear"), AppIcon.BROOM.icon());
+        clear.setToolTipText(I18n.t("logpanel.clear.tooltip"));
         clear.addActionListener(e -> text.setText(""));
-        var openDir = new JButton("Buka folder log", AppIcon.FOLDER_OPEN.icon());
+        var openDir = new JButton(I18n.t("logpanel.openFolder"), AppIcon.FOLDER_OPEN.icon());
         openDir.setToolTipText(logDir.toString());
         openDir.addActionListener(e -> UiAsync.run(io, () -> openFolder(logDir),
-                err -> Dialogs.error(this, "Gagal membuka folder log", err)));
+                err -> Dialogs.error(this, I18n.t("logpanel.error.openFolder"), err)));
         var close = new JButton(AppIcon.XMARK.icon());
-        close.setToolTipText("Sembunyikan panel log");
+        close.setToolTipText(I18n.t("logpanel.hide.tooltip"));
         close.addActionListener(e -> onClose.run());
 
         var bar = new JToolBar();
         bar.setFloatable(false);
-        bar.add(new JLabel(" Log aplikasi "));
+        bar.add(new JLabel(" " + I18n.t("logpanel.title") + " "));
         bar.addSeparator();
         bar.add(autoScroll);
         bar.add(clear);
@@ -97,7 +98,7 @@ public final class LogPanel extends JPanel {
             Files.createDirectories(dir);
             Desktop.getDesktop().open(dir.toFile());
         } catch (java.io.IOException e) {
-            throw new java.io.UncheckedIOException("Folder log tidak bisa dibuka: " + dir, e);
+            throw new java.io.UncheckedIOException(I18n.t("logpanel.error.folderUnavailable", dir.toString()), e);
         }
     }
 
@@ -123,7 +124,7 @@ public final class LogPanel extends JPanel {
         try {
             long skipped = fresh.getFirst().seq() - lastSeq - 1;
             if (lastSeq > 0 && skipped > 0) {
-                doc.insertString(doc.getLength(), "… " + skipped + " baris log terlewat (lihat file log)\n", warning);
+                doc.insertString(doc.getLength(), I18n.t("logpanel.skipped", String.valueOf(skipped)) + "\n", warning);
             }
             for (var entry : fresh) {
                 doc.insertString(doc.getLength(), entry.text() + "\n", entry.warning() ? warning : normal);

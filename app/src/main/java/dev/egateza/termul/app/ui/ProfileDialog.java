@@ -1,5 +1,6 @@
 package dev.egateza.termul.app.ui;
 
+import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.core.profile.AuthMethod;
 import dev.egateza.termul.core.profile.EnvironmentTag;
 import dev.egateza.termul.core.profile.HostProfile;
@@ -47,7 +48,7 @@ public final class ProfileDialog extends JDialog {
     private record JumpChoice(HostProfile profile) {
         @Override
         public String toString() {
-            return profile == null ? "(tanpa jump host)" : profile.name() + "  —  " + profile.address();
+            return profile == null ? I18n.t("profile.jump.none") : profile.name() + "  —  " + profile.address();
         }
     }
 
@@ -65,7 +66,7 @@ public final class ProfileDialog extends JDialog {
     private final JComboBox<EnvironmentTag> environment = new JComboBox<>(EnvironmentTag.values());
     private final JTextField initialDir = new JTextField(24);
     private final JTextArea notes = new JTextArea(3, 24);
-    private final JCheckBox autoSudo = new JCheckBox("Auto-inject password sudo (dengan guard)");
+    private final JCheckBox autoSudo = new JCheckBox(I18n.t("profile.field.autoSudo"));
     private final Map<SecretType, JPasswordField> secretFields = new EnumMap<>(SecretType.class);
     private final Map<SecretType, JCheckBox> clearBoxes = new EnumMap<>(SecretType.class);
     private final Set<SecretType> storedSecrets;
@@ -83,7 +84,7 @@ public final class ProfileDialog extends JDialog {
         this.storedSecrets = Set.copyOf(storedSecrets);
         for (SecretType type : SecretType.values()) {
             secretFields.put(type, new JPasswordField(20));
-            clearBoxes.put(type, new JCheckBox("Hapus"));
+            clearBoxes.put(type, new JCheckBox(I18n.t("profile.secret.clear")));
         }
 
         group.setEditable(true);
@@ -94,9 +95,9 @@ public final class ProfileDialog extends JDialog {
                 .filter(p -> !p.id().equals(id))
                 .forEach(p -> jumpHost.addItem(new JumpChoice(p)));
         auth.setRenderer(labelRenderer(v -> switch ((AuthMethod) v) {
-            case KEY -> "Private key";
-            case AGENT -> "Default (key ~/.ssh, lalu password)";
-            case PASSWORD -> "Password";
+            case KEY -> I18n.t("profile.auth.key");
+            case AGENT -> I18n.t("profile.auth.agent");
+            case PASSWORD -> I18n.t("profile.auth.password");
         }));
         environment.setRenderer(labelRenderer(v -> EnvColors.label((EnvironmentTag) v)));
         notes.setLineWrap(true);
@@ -123,13 +124,13 @@ public final class ProfileDialog extends JDialog {
 
     /** Menampilkan dialog profil baru. */
     public static Optional<Result> create(Component parent, String group, ProfileSnapshot snapshot) {
-        return show(parent, "Host baru", null, group, snapshot, Set.of());
+        return show(parent, I18n.t("profile.title.new"), null, group, snapshot, Set.of());
     }
 
     /** Menampilkan dialog edit profil. {@code storedSecrets} = secret yang sudah ada di vault. */
     public static Optional<Result> edit(Component parent, HostProfile profile, ProfileSnapshot snapshot,
                                         Set<SecretType> storedSecrets) {
-        return show(parent, "Edit host: " + profile.name(), profile, profile.group(), snapshot, storedSecrets);
+        return show(parent, I18n.t("profile.title.edit", profile.name()), profile, profile.group(), snapshot, storedSecrets);
     }
 
     private static Optional<Result> show(Component parent, String title, HostProfile initial, String group,
@@ -170,15 +171,15 @@ public final class ProfileDialog extends JDialog {
         browseKey.setEnabled(key);
         boolean prod = environment.getSelectedItem() == EnvironmentTag.PROD;
         autoSudo.setToolTipText(prod
-                ? "Tidak disarankan untuk host produksi: gunakan hotkey Ctrl+Shift+P."
-                : "Password dikirim otomatis hanya setelah Anda menjalankan sudo/su (lihat docs/SECURITY.md).");
+                ? I18n.t("profile.autoSudo.tooltip.prod")
+                : I18n.t("profile.autoSudo.tooltip"));
     }
 
     private void chooseKey() {
         var chooser = new JFileChooser(keyPath.getText().isBlank()
                 ? Path.of(System.getProperty("user.home"), ".ssh").toFile()
                 : Path.of(keyPath.getText()).toFile());
-        chooser.setDialogTitle("Pilih private key");
+        chooser.setDialogTitle(I18n.t("profile.key.chooserTitle"));
         chooser.setFileHidingEnabled(false);
         if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
             keyPath.setText(chooser.getSelectedFile().getAbsolutePath());
@@ -189,8 +190,8 @@ public final class ProfileDialog extends JDialog {
         try {
             var jump = (JumpChoice) jumpHost.getSelectedItem();
             var env = (EnvironmentTag) environment.getSelectedItem();
-            if (autoSudo.isSelected() && env == EnvironmentTag.PROD && !Dialogs.confirm(this, "Auto-sudo di produksi",
-                    "Auto-inject password sudo di host produksi berisiko (prompt spoofing).\nTetap aktifkan?")) {
+            if (autoSudo.isSelected() && env == EnvironmentTag.PROD && !Dialogs.confirm(this,
+                    I18n.t("profile.autoSudo.prodTitle"), I18n.t("profile.autoSudo.prodConfirm"))) {
                 return;
             }
             var profile = new HostProfile(id, name.getText(), Objects.toString(group.getSelectedItem(), ""),
@@ -201,7 +202,7 @@ public final class ProfileDialog extends JDialog {
             result = new Result(profile, collectSecretChanges());
             dispose();
         } catch (IllegalArgumentException e) {
-            Dialogs.error(this, "Data profil tidak valid", e.getMessage());
+            Dialogs.error(this, I18n.t("profile.error.invalid"), e.getMessage());
         }
     }
 
@@ -209,26 +210,26 @@ public final class ProfileDialog extends JDialog {
         var form = new JPanel(new GridBagLayout());
         form.setBorder(BorderFactory.createEmptyBorder(12, 12, 6, 12));
         int row = 0;
-        row = addRow(form, row, "Nama", name);
-        row = addRow(form, row, "Grup", group);
-        row = addRow(form, row, "Host", host);
+        row = addRow(form, row, I18n.t("profile.field.name"), name);
+        row = addRow(form, row, I18n.t("profile.field.group"), group);
+        row = addRow(form, row, I18n.t("profile.field.host"), host);
         var portUser = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         portUser.add(port);
-        portUser.add(new JLabel("   Username  "));
+        portUser.add(new JLabel(I18n.t("profile.field.username")));
         portUser.add(username);
-        row = addRow(form, row, "Port", portUser);
-        row = addRow(form, row, "Autentikasi", auth);
+        row = addRow(form, row, I18n.t("profile.field.port"), portUser);
+        row = addRow(form, row, I18n.t("profile.field.auth"), auth);
         var keyPanel = new JPanel(new BorderLayout(4, 0));
         keyPanel.add(keyPath, BorderLayout.CENTER);
         keyPanel.add(browseKey, BorderLayout.EAST);
-        row = addRow(form, row, "Private key", keyPanel);
-        row = addRow(form, row, "Jump host", jumpHost);
-        row = addRow(form, row, "Environment", environment);
-        row = addRow(form, row, "Direktori awal", initialDir);
-        row = addRow(form, row, "Catatan", new JScrollPane(notes));
+        row = addRow(form, row, I18n.t("profile.field.privateKey"), keyPanel);
+        row = addRow(form, row, I18n.t("profile.field.jumpHost"), jumpHost);
+        row = addRow(form, row, I18n.t("profile.field.environment"), environment);
+        row = addRow(form, row, I18n.t("profile.field.initialDir"), initialDir);
+        row = addRow(form, row, I18n.t("profile.field.notes"), new JScrollPane(notes));
         row = addRow(form, row, "", autoSudo);
 
-        var header = new JLabel("Secret (terenkripsi di vault; kosong = tidak diubah)");
+        var header = new JLabel(I18n.t("profile.secret.header"));
         header.setBorder(BorderFactory.createEmptyBorder(10, 0, 2, 0));
         header.setFont(header.getFont().deriveFont(java.awt.Font.BOLD));
         var hc = new GridBagConstraints();
@@ -241,7 +242,7 @@ public final class ProfileDialog extends JDialog {
             var field = secretFields.get(type);
             var clear = clearBoxes.get(type);
             field.putClientProperty("JTextField.placeholderText",
-                    storedSecrets.contains(type) ? "•••••• (tersimpan)" : "(belum ada)");
+                    storedSecrets.contains(type) ? I18n.t("profile.secret.stored") : I18n.t("profile.secret.none"));
             clear.setEnabled(storedSecrets.contains(type));
             clear.addActionListener(e -> field.setEnabled(!clear.isSelected()));
             var panel = new JPanel(new BorderLayout(6, 0));
@@ -254,10 +255,10 @@ public final class ProfileDialog extends JDialog {
 
     private static String secretLabel(SecretType type) {
         return switch (type) {
-            case LOGIN_PASSWORD -> "Password login";
-            case KEY_PASSPHRASE -> "Passphrase key";
-            case SUDO_PASSWORD -> "Password sudo";
-            case ROOT_PASSWORD -> "Password root (su)";
+            case LOGIN_PASSWORD -> I18n.t("profile.secret.loginPassword");
+            case KEY_PASSPHRASE -> I18n.t("profile.secret.keyPassphrase");
+            case SUDO_PASSWORD -> I18n.t("profile.secret.sudoPassword");
+            case ROOT_PASSWORD -> I18n.t("profile.secret.rootPassword");
         };
     }
 
@@ -303,8 +304,8 @@ public final class ProfileDialog extends JDialog {
     }
 
     private JComponent buildButtons() {
-        var ok = new JButton("Simpan");
-        var cancel = new JButton("Batal");
+        var ok = new JButton(I18n.t("common.save"));
+        var cancel = new JButton(I18n.t("common.cancel"));
         ok.addActionListener(e -> onSave());
         cancel.addActionListener(e -> dispose());
         getRootPane().setDefaultButton(ok);

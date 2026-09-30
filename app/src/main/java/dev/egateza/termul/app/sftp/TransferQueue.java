@@ -1,5 +1,6 @@
 package dev.egateza.termul.app.sftp;
 
+import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.app.ui.AppIcon;
 import dev.egateza.termul.sftp.RemoteFileException;
 import dev.egateza.termul.sftp.TransferListener;
@@ -36,7 +37,7 @@ public final class TransferQueue extends JPanel {
     private final ExecutorService worker;
     private final JProgressBar bar = new JProgressBar(0, 1000);
     private final JLabel label = new JLabel();
-    private final JButton cancel = new JButton("Batal", AppIcon.XMARK.icon());
+    private final JButton cancel = new JButton(I18n.t("transfer.cancel"), AppIcon.XMARK.icon());
     private final AtomicInteger queued = new AtomicInteger();
     private volatile AtomicBoolean currentCancel = new AtomicBoolean();
 
@@ -69,7 +70,7 @@ public final class TransferQueue extends JPanel {
             var cancelFlag = new AtomicBoolean();
             currentCancel = cancelFlag;
             SwingUtilities.invokeLater(() -> {
-                label.setText(title + (queued.get() > 1 ? "  (+" + (queued.get() - 1) + " antre)" : ""));
+                label.setText(queued.get() > 1 ? I18n.t("transfer.label", title, String.valueOf(queued.get() - 1)) : title);
                 bar.setValue(0);
                 bar.setString("0%");
                 cancel.setEnabled(true);

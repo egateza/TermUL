@@ -1,5 +1,6 @@
 package dev.egateza.termul.app.ssh;
 
+import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.app.ui.Edt;
 import dev.egateza.termul.core.profile.HostProfile;
 import dev.egateza.termul.ssh.auth.CredentialProvider;
@@ -24,16 +25,16 @@ public final class SwingCredentialProvider implements CredentialProvider {
 
     @Override
     public char[] password(HostProfile profile, int attempt) {
-        String msg = attempt > 1 ? "Password ditolak. Password untuk " + profile.address() + ":"
-                : "Password untuk " + profile.address() + ":";
-        return ask("Login SSH", msg);
+        String msg = attempt > 1 ? I18n.t("ssh.password.rejected", profile.address())
+                : I18n.t("ssh.password.prompt", profile.address());
+        return ask(I18n.t("ssh.password.title"), msg);
     }
 
     @Override
     public char[] keyPassphrase(HostProfile profile, Path keyFile, int attempt) {
-        String msg = attempt > 1 ? "Passphrase salah. Passphrase untuk " + keyFile.getFileName() + ":"
-                : "Passphrase untuk key " + keyFile.getFileName() + ":";
-        return ask("Passphrase private key", msg);
+        String msg = attempt > 1 ? I18n.t("ssh.passphrase.rejected", String.valueOf(keyFile.getFileName()))
+                : I18n.t("ssh.passphrase.prompt", String.valueOf(keyFile.getFileName()));
+        return ask(I18n.t("ssh.passphrase.title"), msg);
     }
 
     private char[] ask(String title, String message) {

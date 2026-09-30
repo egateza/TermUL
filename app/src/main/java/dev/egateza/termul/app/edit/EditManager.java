@@ -1,5 +1,6 @@
 package dev.egateza.termul.app.edit;
 
+import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.app.ui.Dialogs;
 import dev.egateza.termul.app.ui.Edt;
 import dev.egateza.termul.app.sftp.ActivityBar.Level;
@@ -137,7 +138,7 @@ public final class EditManager implements AutoCloseable {
             try {
                 Entry entry = entries.get(key);
                 if (entry == null) {
-                    activity(profile, Level.INFO, "Mengunduh " + remotePath + " untuk diedit ...");
+                    activity(profile, Level.INFO, I18n.t("edit.activity.downloading", remotePath));
                     SftpConnection link = links.acquire(profile);
                     RemoteEditSession session;
                     try {
@@ -160,8 +161,8 @@ public final class EditManager implements AutoCloseable {
                 entry.template = template;
                 launchEditor(entry);
             } catch (Exception e) {
-                activity(profile, Level.ERROR, "Gagal membuka " + remotePath + ": " + e.getMessage());
-                showError("Gagal membuka " + remotePath, e);
+                activity(profile, Level.ERROR, I18n.t("edit.activity.openFailed", remotePath, e.getMessage()));
+                showError(I18n.t("edit.error.openFailed", remotePath), e);
             }
         });
     }
@@ -172,7 +173,7 @@ public final class EditManager implements AutoCloseable {
             try {
                 launchEditor(entry);
             } catch (IOException e) {
-                showError("Editor gagal dijalankan", e);
+                showError(I18n.t("edit.error.editorLaunch"), e);
             }
         });
     }
@@ -209,15 +210,15 @@ public final class EditManager implements AutoCloseable {
     private void publishState(HostProfile profile, RemoteEditSession s) {
         String path = s.remotePath();
         switch (s.state()) {
-            case UPLOADING -> activity(profile, Level.INFO, "Mengupload " + path + " ...");
+            case UPLOADING -> activity(profile, Level.INFO, I18n.t("edit.activity.uploading", path));
             case EDITING -> {
                 if ("Tersinkron".equals(s.lastMessage())) {
-                    activity(profile, Level.SUCCESS, path + " berhasil diupload");
+                    activity(profile, Level.SUCCESS, I18n.t("edit.activity.uploaded", path));
                 } else if ("Dibuka".equals(s.lastMessage())) {
-                    activity(profile, Level.INFO, path + " dibuka di editor; perubahan diupload otomatis saat disimpan");
+                    activity(profile, Level.INFO, I18n.t("edit.activity.opened", path));
                 }
             }
-            case NEEDS_ATTENTION -> activity(profile, Level.WARN, path + ": " + s.lastMessage());
+            case NEEDS_ATTENTION -> activity(profile, Level.WARN, I18n.t("edit.activity.attention", path, s.lastMessage()));
             case OPENING, CLOSED -> { }
         }
     }
@@ -245,9 +246,8 @@ public final class EditManager implements AutoCloseable {
             return true;
         } catch (RemoteFileException e) {
             log.warn("Upload {} ditunda, tidak tersambung: {}", entry.session.remotePath(), e.getMessage());
-            activity(entry.profile, Level.ERROR, "Upload " + entry.session.remotePath() + " ditunda: " + e.getMessage());
-            showError("Upload " + entry.session.remotePath() + " belum bisa dilakukan (perubahan tetap tersimpan "
-                    + "lokal, coba lagi dari daftar file yang diedit)", e);
+            activity(entry.profile, Level.ERROR, I18n.t("edit.activity.uploadDeferred", entry.session.remotePath(), e.getMessage()));
+            showError(I18n.t("edit.error.uploadDeferred", entry.session.remotePath()), e);
             return false;
         }
     }
@@ -277,19 +277,17 @@ public final class EditManager implements AutoCloseable {
                 return;
             }
             log.warn("Upload {} gagal: {}", session.remotePath(), e.getMessage());
-            activity(entry.profile, Level.ERROR, "Upload " + session.remotePath() + " gagal: " + e.getMessage());
-            showError("Upload " + session.remotePath() + " gagal (perubahan tetap tersimpan lokal, "
-                    + "coba lagi dari daftar file yang diedit)", e);
+            activity(entry.profile, Level.ERROR, I18n.t("edit.activity.uploadFailed", session.remotePath(), e.getMessage()));
+            showError(I18n.t("edit.error.uploadFailed", session.remotePath()), e);
         }
     }
 
     private void handleConflict(Entry entry, SyncOptions options) {
         var session = entry.session;
         while (true) {
-            Object[] choices = {"Timpa file server", "Lihat diff", "Batal"};
-            int choice = ask("Konflik: " + session.remotePath(),
-                    "File di server sudah berubah sejak Anda membukanya.\n"
-                            + "Menimpa akan menghapus perubahan orang lain di server.", choices);
+            Object[] choices = {I18n.t("edit.conflict.overwrite"), I18n.t("edit.conflict.diff"), I18n.t("edit.common.cancel")};
+            int choice = ask(I18n.t("edit.conflict.title", session.remotePath()),
+                    I18n.t("edit.conflict.message"), choices);
             switch (choice) {
                 case 0 -> {
                     syncInteractive(entry, new SyncOptions(true, options.lineEndings()));
@@ -304,10 +302,9 @@ public final class EditManager implements AutoCloseable {
     }
 
     private void handleLineEnding(Entry entry, SyncOptions options) {
-        Object[] choices = {"Konversi ke LF & upload", "Upload apa adanya (CRLF)", "Batal"};
-        int choice = ask("Line ending berubah: " + entry.session.remotePath(),
-                "Editor menyimpan file dengan line ending Windows (CRLF), sedangkan file asli memakai LF.\n"
-                        + "CRLF bisa merusak script shell/config di Linux.", choices);
+        Object[] choices = {I18n.t("edit.lineEnding.convert"), I18n.t("edit.lineEnding.keep"), I18n.t("edit.common.cancel")};
+        int choice = ask(I18n.t("edit.lineEnding.title", entry.session.remotePath()),
+                I18n.t("edit.lineEnding.message"), choices);
         LineEndingPolicy policy = switch (choice) {
             case 0 -> LineEndingPolicy.CONVERT_TO_LF;
             case 1 -> LineEndingPolicy.KEEP;
@@ -331,7 +328,7 @@ public final class EditManager implements AutoCloseable {
                 launcher.launch(remoteCopy);
             }
         } catch (IOException e) {
-            showError("Diff gagal", e);
+            showError(I18n.t("edit.error.diffFailed"), e);
         }
     }
 
@@ -345,7 +342,7 @@ public final class EditManager implements AutoCloseable {
         cleanupDiffCopy(session.localFile());
         links.release(entry.profile);
         if (!removed) {
-            showInfo("Perubahan " + session.remotePath() + " belum ter-upload dan disimpan di:\n" + session.localFile());
+            showInfo(I18n.t("edit.info.unsynced", session.remotePath(), session.localFile().toString()));
         }
         fireChanged();
     }
@@ -370,7 +367,7 @@ public final class EditManager implements AutoCloseable {
     }
 
     private void showInfo(String message) {
-        SwingUtilities.invokeLater(() -> Dialogs.info(parent.get(), "Edit remote", message));
+        SwingUtilities.invokeLater(() -> Dialogs.info(parent.get(), I18n.t("edit.info.title"), message));
     }
 
     private void fireChanged() {

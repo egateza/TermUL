@@ -1,5 +1,6 @@
 package dev.egateza.termul.app.ui;
 
+import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.core.profile.OsInfo;
 import java.awt.BasicStroke;
 import java.awt.Color;
@@ -133,7 +134,7 @@ public final class OsIcons {
 
     /** Teks tooltip OS. */
     public static String label(OsInfo os) {
-        return os == null ? "OS belum terdeteksi (connect sekali untuk mendeteksi)" : os.label();
+        return os == null ? I18n.t("os.undetected") : os.label();
     }
 
     /** Ikon dari logo raster (multi-resolusi). */

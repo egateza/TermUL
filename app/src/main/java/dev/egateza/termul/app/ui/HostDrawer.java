@@ -1,5 +1,6 @@
 package dev.egateza.termul.app.ui;
 
+import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.core.config.AppConfig;
 import java.awt.AWTEvent;
 import java.awt.AlphaComposite;
@@ -286,7 +287,7 @@ public final class HostDrawer {
 
         void setOpen(boolean open) {
             this.open = open;
-            setToolTipText(open ? "Sembunyikan daftar host" : "Tampilkan daftar host");
+            setToolTipText(I18n.t(open ? "drawer.hide" : "drawer.show"));
             repaint();
         }
 

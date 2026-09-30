@@ -1,5 +1,6 @@
 package dev.egateza.termul.app.edit;
 
+import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.app.ui.Dialogs;
 import dev.egateza.termul.core.config.EditorConfig;
 import dev.egateza.termul.core.config.EditorConfig.NamedEditor;
@@ -47,11 +48,11 @@ public final class EditorSettingsDialog {
         table.getColumnModel().getColumn(1).setPreferredWidth(110);
         table.getColumnModel().getColumn(2).setPreferredWidth(330);
 
-        var add = new JButton("Tambah...");
-        var edit = new JButton("Ubah...");
-        var up = new JButton("Naik");
-        var remove = new JButton("Hapus");
-        var down = new JButton("Turun");
+        var add = new JButton(I18n.t("edit.settings.add"));
+        var edit = new JButton(I18n.t("edit.settings.change"));
+        var up = new JButton(I18n.t("edit.settings.up"));
+        var remove = new JButton(I18n.t("edit.settings.remove"));
+        var down = new JButton(I18n.t("edit.settings.down"));
         Runnable refreshButtons = () -> {
             int row = table.getSelectedRow();
             edit.setEnabled(row >= 0);
@@ -109,22 +110,20 @@ public final class EditorSettingsDialog {
 
         var body = new JPanel(new BorderLayout(8, 6));
         body.setBorder(BorderFactory.createEmptyBorder(10, 10, 6, 10));
-        body.add(new JLabel("<html>Editor untuk sebuah file adalah yang <b>pertama</b> dengan mask cocok "
-                + "(<code>*.*</code> = semua file). Semua editor juga muncul di klik kanan &rarr; Edit dengan.</html>"),
+        body.add(new JLabel(I18n.t("edit.settings.intro")),
                 BorderLayout.NORTH);
         var scroll = new JScrollPane(table);
         scroll.setPreferredSize(new Dimension(560, 260));
         body.add(scroll, BorderLayout.CENTER);
         body.add(side, BorderLayout.EAST);
-        body.add(new JLabel("<html><small>Pakai mode \"wait\" (mis. <code>code --wait</code>) supaya sesi edit "
-                + "otomatis selesai saat file ditutup di editor.</small></html>"), BorderLayout.SOUTH);
+        body.add(new JLabel(I18n.t("edit.settings.waitHint")), BorderLayout.SOUTH);
 
         var window = parent == null ? null : SwingUtilities.getWindowAncestor(parent);
         var dialog = new JDialog(window == null && parent instanceof java.awt.Window w ? w : window,
-                "Pengaturan editor", java.awt.Dialog.ModalityType.APPLICATION_MODAL);
+                I18n.t("edit.settings.title"), java.awt.Dialog.ModalityType.APPLICATION_MODAL);
         var result = new EditorConfig[1];
-        var ok = new JButton("OK");
-        var cancel = new JButton("Batal");
+        var ok = new JButton(I18n.t("edit.settings.ok"));
+        var cancel = new JButton(I18n.t("edit.settings.cancel"));
         ok.addActionListener(e -> {
             result[0] = new EditorConfig(current.defaultCommand(), java.util.Map.of(), editors);
             dialog.dispose();
@@ -148,8 +147,8 @@ public final class EditorSettingsDialog {
     /** Pengaturan lama (default + per ekstensi) dijadikan daftar editor: ekstensi dulu, default terakhir. */
     static List<NamedEditor> fromLegacy(EditorConfig legacy) {
         var list = new ArrayList<NamedEditor>();
-        legacy.byExtension().forEach((ext, cmd) -> list.add(new NamedEditor("Editor ." + ext, "*." + ext, cmd)));
-        list.add(new NamedEditor("Default", NamedEditor.ALL, legacy.defaultCommand()));
+        legacy.byExtension().forEach((ext, cmd) -> list.add(new NamedEditor(I18n.t("edit.settings.legacyName", ext), "*." + ext, cmd)));
+        list.add(new NamedEditor(I18n.t("edit.settings.legacyDefault"), NamedEditor.ALL, legacy.defaultCommand()));
         return list;
     }
 
@@ -169,12 +168,12 @@ public final class EditorSettingsDialog {
         var name = new JTextField(existing == null ? "" : existing.name());
         var command = new JTextField(existing == null ? "" : existing.command(), 34);
         var mask = new JTextField(existing == null ? NamedEditor.ALL : existing.mask());
-        var browse = new JButton("Pilih...");
+        var browse = new JButton(I18n.t("edit.form.browse"));
         browse.addActionListener(e -> {
             var chooser = new JFileChooser();
-            chooser.setDialogTitle("Pilih program editor");
+            chooser.setDialogTitle(I18n.t("edit.form.chooseTitle"));
             chooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter(
-                    "Program (*.exe, *.cmd, *.bat)", "exe", "cmd", "bat"));
+                    I18n.t("edit.form.programFilter"), "exe", "cmd", "bat"));
             if (chooser.showOpenDialog(parent) == JFileChooser.APPROVE_OPTION) {
                 command.setText("\"" + chooser.getSelectedFile().getAbsolutePath() + "\" "
                         + EditorConfig.FILE_PLACEHOLDER);
@@ -185,7 +184,7 @@ public final class EditorSettingsDialog {
                 }
             }
         });
-        var notepad = new JButton("Pakai Notepad bawaan Windows");
+        var notepad = new JButton(I18n.t("edit.form.notepad"));
         notepad.addActionListener(e -> {
             command.setText("notepad " + EditorConfig.FILE_PLACEHOLDER);
             if (name.getText().isBlank()) {
@@ -193,9 +192,9 @@ public final class EditorSettingsDialog {
             }
         });
 
-        var editorSection = section("Editor");
-        row(editorSection, 0, "Nama:", name, null);
-        row(editorSection, 1, "Program:", command, browse);
+        var editorSection = section(I18n.t("edit.form.section.editor"));
+        row(editorSection, 0, I18n.t("edit.form.name"), name, null);
+        row(editorSection, 1, I18n.t("edit.form.program"), command, browse);
         var g = new GridBagConstraints();
         g.gridx = 1;
         g.gridy = 2;
@@ -204,12 +203,10 @@ public final class EditorSettingsDialog {
         editorSection.add(notepad, g);
         g.gridy = 3;
         g.insets = new Insets(0, 3, 3, 3);
-        editorSection.add(new JLabel("<html><small>Command lengkap dengan argumen; <code>{file}</code> = path "
-                + "file (kosong &rarr; di akhir).<br>Pakai mode wait (mis. <code>--wait</code>) supaya sesi edit "
-                + "selesai saat file ditutup.</small></html>"), g);
+        editorSection.add(new JLabel(I18n.t("edit.form.commandHint")), g);
 
-        var autoSection = section("Pemilihan otomatis");
-        var hint = new JLabel("Pakai editor ini untuk file berikut:");
+        var autoSection = section(I18n.t("edit.form.section.auto"));
+        var hint = new JLabel(I18n.t("edit.form.maskLabel"));
         var ag = new GridBagConstraints();
         ag.gridx = 0;
         ag.gridy = 0;
@@ -221,8 +218,7 @@ public final class EditorSettingsDialog {
         ag.weightx = 1;
         autoSection.add(mask, ag);
         ag.gridy = 2;
-        autoSection.add(new JLabel("<html><small>Pisahkan dengan <code>;</code>, mis. <code>*.sql;*.txt</code>. "
-                + "<code>*.*</code> = semua file.</small></html>"), ag);
+        autoSection.add(new JLabel(I18n.t("edit.form.maskHint")), ag);
 
         var form = new JPanel(new BorderLayout(0, 8));
         form.add(editorSection, BorderLayout.NORTH);
@@ -231,7 +227,7 @@ public final class EditorSettingsDialog {
 
         while (true) {
             int choice = JOptionPane.showConfirmDialog(parent, form,
-                    existing == null ? "Tambah editor" : "Ubah editor", JOptionPane.OK_CANCEL_OPTION,
+                    existing == null ? I18n.t("edit.form.addTitle") : I18n.t("edit.form.editTitle"), JOptionPane.OK_CANCEL_OPTION,
                     JOptionPane.PLAIN_MESSAGE);
             if (choice != JOptionPane.OK_OPTION) {
                 return Optional.empty();
@@ -240,12 +236,12 @@ public final class EditorSettingsDialog {
                 var editor = new NamedEditor(name.getText(), mask.getText(), command.getText());
                 boolean taken = all.stream().anyMatch(o -> o != existing && o.name().equalsIgnoreCase(editor.name()));
                 if (taken) {
-                    Dialogs.error(parent, "Pengaturan editor", "Nama '" + editor.name() + "' sudah dipakai.");
+                    Dialogs.error(parent, I18n.t("edit.settings.title"), I18n.t("edit.form.nameTaken", editor.name()));
                     continue;
                 }
                 return Optional.of(editor);
             } catch (IllegalArgumentException e) {
-                Dialogs.error(parent, "Pengaturan editor", e.getMessage());
+                Dialogs.error(parent, I18n.t("edit.settings.title"), e.getMessage());
             }
         }
     }
@@ -277,7 +273,7 @@ public final class EditorSettingsDialog {
     }
 
     private static final class EditorTableModel extends AbstractTableModel {
-        private static final String[] COLUMNS = {"Editor", "Mask", "Command"};
+        private static final String[] COLUMNS = {"edit.settings.col.editor", "edit.settings.col.mask", "edit.settings.col.command"};
         private final List<NamedEditor> editors;
 
         EditorTableModel(List<NamedEditor> editors) {
@@ -296,7 +292,7 @@ public final class EditorSettingsDialog {
 
         @Override
         public String getColumnName(int column) {
-            return COLUMNS[column];
+            return I18n.t(COLUMNS[column]);
         }
 
         @Override

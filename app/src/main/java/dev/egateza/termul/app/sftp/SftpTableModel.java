@@ -1,5 +1,6 @@
 package dev.egateza.termul.app.sftp;
 
+import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.sftp.RemoteEntry;
 import java.util.Comparator;
 import java.util.List;
@@ -15,7 +16,8 @@ public final class SftpTableModel extends AbstractTableModel {
     public static final int COL_OWNER = 4;
     public static final int COL_GROUP = 5;
 
-    private static final String[] COLUMNS = {"Nama", "Ukuran", "Diubah", "Mode", "Owner", "Group"};
+    private static final String[] COLUMN_KEYS = {"sftp.column.name", "sftp.column.size", "sftp.column.modified",
+            "sftp.column.mode", "sftp.column.owner", "sftp.column.group"};
 
     private List<RemoteEntry> entries = List.of();
 
@@ -39,12 +41,12 @@ public final class SftpTableModel extends AbstractTableModel {
 
     @Override
     public int getColumnCount() {
-        return COLUMNS.length;
+        return COLUMN_KEYS.length;
     }
 
     @Override
     public String getColumnName(int column) {
-        return COLUMNS[column];
+        return I18n.t(COLUMN_KEYS[column]);
     }
 
     /** Nilai mentah per kolom: sorting memakai comparator di {@link #comparator(int)}. */

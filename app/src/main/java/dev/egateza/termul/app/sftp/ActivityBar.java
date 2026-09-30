@@ -1,5 +1,6 @@
 package dev.egateza.termul.app.sftp;
 
+import dev.egateza.termul.app.i18n.I18n;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
@@ -54,7 +55,7 @@ public final class ActivityBar extends JPanel {
     public ActivityBar() {
         super(new BorderLayout(6, 0));
         setBorder(BorderFactory.createEmptyBorder(2, 6, 2, 6));
-        label.setToolTipText("Klik untuk melihat riwayat aktivitas");
+        label.setToolTipText(I18n.t("activity.tooltip"));
         label.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
         label.addMouseListener(new MouseAdapter() {
             @Override
@@ -107,12 +108,12 @@ public final class ActivityBar extends JPanel {
         List<Entry> entries = new ArrayList<>(history);
         entries.forEach(e -> model.addElement(e.text()));
         if (entries.isEmpty()) {
-            model.addElement("Belum ada aktivitas.");
+            model.addElement(I18n.t("activity.empty"));
         }
         var list = new JList<>(model);
         var scroll = new JScrollPane(list);
         scroll.setPreferredSize(new Dimension(Math.max(420, getWidth() - 12), 220));
-        var popup = new JPopupMenu("Riwayat aktivitas");
+        var popup = new JPopupMenu(I18n.t("activity.history"));
         popup.add(scroll);
         popup.show(this, 0, -scroll.getPreferredSize().height - 4);
     }

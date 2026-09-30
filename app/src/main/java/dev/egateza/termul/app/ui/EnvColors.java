@@ -1,5 +1,6 @@
 package dev.egateza.termul.app.ui;
 
+import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.core.profile.EnvironmentTag;
 import java.awt.Color;
 
@@ -21,9 +22,9 @@ public final class EnvColors {
 
     public static String label(EnvironmentTag tag) {
         return switch (tag) {
-            case PROD -> "Produksi";
-            case STAGING -> "Staging";
-            case DEV -> "Dev";
+            case PROD -> I18n.t("common.env.prod");
+            case STAGING -> I18n.t("common.env.staging");
+            case DEV -> I18n.t("common.env.dev");
             case NONE -> "-";
         };
     }

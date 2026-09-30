@@ -1,5 +1,6 @@
 package dev.egateza.termul.app.edit;
 
+import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.core.config.EditorConfig;
 import java.io.File;
 import java.io.IOException;
@@ -39,7 +40,7 @@ public final class EditorLauncher {
         try {
             return pb.start();
         } catch (IOException e) {
-            throw new IOException("Editor tidak bisa dijalankan (" + command.getFirst() + "). Cek pengaturan editor.", e);
+            throw new IOException(I18n.t("edit.launcher.failed", command.getFirst()), e);
         }
     }
 

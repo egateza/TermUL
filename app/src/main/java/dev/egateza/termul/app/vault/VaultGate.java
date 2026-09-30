@@ -1,5 +1,6 @@
 package dev.egateza.termul.app.vault;
 
+import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.app.ui.Edt;
 import dev.egateza.termul.vault.CredentialVault;
 import dev.egateza.termul.vault.Secrets;
@@ -77,9 +78,9 @@ public final class VaultGate implements AutoCloseable {
                 log.info("Vault dibuka dengan key DPAPI");
                 return true;
             }
-            String message = "Master password vault:";
+            String message = I18n.t("vault.unlock.prompt");
             for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-                char[] pw = askPasswords("Buka vault", new String[] {message})[0];
+                char[] pw = askPasswords(I18n.t("vault.unlock.title"), new String[] {message})[0];
                 if (pw == null) {
                     return false;
                 }
@@ -88,10 +89,10 @@ public final class VaultGate implements AutoCloseable {
                     log.info("Vault dibuka");
                     return true;
                 } catch (VaultException.WrongPassword e) {
-                    message = "Master password salah. Coba lagi (" + attempt + "/" + MAX_ATTEMPTS + "):";
+                    message = I18n.t("vault.unlock.wrong", String.valueOf(attempt), String.valueOf(MAX_ATTEMPTS));
                 }
             }
-            showError("Vault", "Terlalu banyak percobaan. Vault tetap terkunci.");
+            showError(I18n.t("vault.title"), I18n.t("vault.unlock.tooMany"));
             return false;
         }
     }
@@ -99,15 +100,14 @@ public final class VaultGate implements AutoCloseable {
     private boolean createInteractive() {
         var confirm = new AtomicReference<Boolean>(false);
         Edt.runAndWait(() -> confirm.set(JOptionPane.showConfirmDialog(parent.get(),
-                "Vault belum ada. Buat vault baru untuk menyimpan password secara terenkripsi?\n"
-                        + "Anda akan diminta membuat master password (minimal 8 karakter).\n"
-                        + "Master password yang hilang TIDAK bisa dipulihkan.",
-                "Buat vault", JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE) == JOptionPane.OK_OPTION));
+                I18n.t("vault.create.confirm"),
+                I18n.t("vault.create.title"), JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE) == JOptionPane.OK_OPTION));
         if (!confirm.get()) {
             return false;
         }
         while (true) {
-            char[][] pws = askPasswords("Buat vault", new String[] {"Master password baru:", "Ulangi master password:"});
+            char[][] pws = askPasswords(I18n.t("vault.create.title"),
+                    new String[] {I18n.t("vault.create.password"), I18n.t("vault.create.repeat")});
             char[] first = pws[0];
             char[] second = pws[1];
             if (first == null || second == null) {
@@ -119,22 +119,22 @@ public final class VaultGate implements AutoCloseable {
             Secrets.zero(second);
             if (!same) {
                 Secrets.zero(first);
-                showError("Buat vault", "Kedua password tidak sama.");
+                showError(I18n.t("vault.create.title"), I18n.t("vault.create.mismatch"));
                 continue;
             }
             try {
                 vault.create(first);
                 return true;
             } catch (VaultException e) {
-                showError("Buat vault", e.getMessage());
+                showError(I18n.t("vault.create.title"), e.getMessage());
             }
         }
     }
 
     /** Mengganti master password secara interaktif. Panggil di luar EDT. */
     public void changeMasterPasswordInteractive() {
-        char[][] pws = askPasswords("Ganti master password",
-                new String[] {"Master password lama:", "Master password baru:", "Ulangi password baru:"});
+        char[][] pws = askPasswords(I18n.t("vault.change.title"),
+                new String[] {I18n.t("vault.change.old"), I18n.t("vault.change.new"), I18n.t("vault.change.repeat")});
         if (pws[0] == null || pws[1] == null || pws[2] == null) {
             for (char[] p : pws) {
                 Secrets.zero(p);
@@ -146,14 +146,14 @@ public final class VaultGate implements AutoCloseable {
         if (!same) {
             Secrets.zero(pws[0]);
             Secrets.zero(pws[1]);
-            showError("Ganti master password", "Password baru tidak sama.");
+            showError(I18n.t("vault.change.title"), I18n.t("vault.change.mismatch"));
             return;
         }
         try {
             vault.changeMasterPassword(pws[0], pws[1]);
-            showInfo("Ganti master password", "Master password berhasil diganti.");
+            showInfo(I18n.t("vault.change.title"), I18n.t("vault.change.success"));
         } catch (VaultException e) {
-            showError("Ganti master password", e.getMessage());
+            showError(I18n.t("vault.change.title"), e.getMessage());
         }
     }
 

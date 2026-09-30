@@ -1,5 +1,6 @@
 package dev.egateza.termul.app.sftp;
 
+import dev.egateza.termul.app.i18n.I18n;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -35,7 +36,7 @@ public final class Formats {
     public static int parseMode(String text) {
         String s = text.strip();
         if (!s.matches("[0-7]{3,4}")) {
-            throw new IllegalArgumentException("Mode harus angka oktal 3–4 digit, mis. 644 atau 0755");
+            throw new IllegalArgumentException(I18n.t("sftp.chmod.invalidMode"));
         }
         return Integer.parseInt(s, 8);
     }
