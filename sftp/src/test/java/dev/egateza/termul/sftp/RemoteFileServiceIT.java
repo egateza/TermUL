@@ -1,6 +1,7 @@
 package dev.egateza.termul.sftp;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.egateza.termul.core.profile.AuthMethod;
 import dev.egateza.termul.core.profile.EnvironmentTag;
@@ -98,6 +99,36 @@ class RemoteFileServiceIT {
     }
 
     @Test
+    void uploadMenolakFileRootWalauDirektorinyaWritable() throws Exception {
+        String target = home + "/root.conf";
+        root("printf 'asli\\n' > " + target + " && chown root:root " + target + " && chmod 644 " + target);
+        Path v2 = Files.writeString(tmp.resolve("v2"), "diubah\n");
+
+        assertThatThrownBy(() -> files.upload(v2, target, null, TransferListener.NONE))
+                .isInstanceOf(RemoteFileException.class)
+                .hasMessageContaining("tidak bisa ditulis");
+
+        assertThat(root("cat " + target)).isEqualTo("asli\n");
+        assertThat(root("stat -c '%U %a' " + target)).isEqualTo("root 644\n");
+        assertThat(files.list(home)).extracting(RemoteEntry::name).containsExactly("root.conf"); // tanpa sisa temp
+    }
+
+    @Test
+    void uploadMenolakFileRootWalauGroupWritable() throws Exception {
+        String target = home + "/shared.conf";
+        root("printf 'asli\\n' > " + target + " && chown root:1000 " + target + " && chmod 664 " + target);
+        Path v2 = Files.writeString(tmp.resolve("v2"), "diubah\n");
+
+        assertThatThrownBy(() -> files.upload(v2, target, null, TransferListener.NONE))
+                .isInstanceOf(RemoteFileException.class)
+                .hasMessageContaining("bukan user login");
+
+        assertThat(root("cat " + target)).isEqualTo("asli\n");
+        assertThat(root("stat -c '%u:%g %a' " + target)).isEqualTo("0:1000 664\n");
+        assertThat(files.list(home)).extracting(RemoteEntry::name).containsExactly("shared.conf");
+    }
+
+    @Test
     void listMenampilkanOwnerDanGroup() throws Exception {
         files.mkdir(home + "/d");
         var entries = files.list(home);
@@ -107,5 +138,14 @@ class RemoteFileServiceIT {
             assertThat(e.owner()).isEqualTo(OpenSshContainer.USER);
             assertThat(e.modeString()).startsWith("rwx");
         });
+    }
+
+    /** Menjalankan command sebagai root di container (setup/verifikasi test, di luar aplikasi). */
+    private static String root(String command) throws Exception {
+        var result = SSHD.execInContainer("sh", "-c", command);
+        if (result.getExitCode() != 0) {
+            throw new IllegalStateException(command + " gagal: " + result.getStderr());
+        }
+        return result.getStdout();
     }
 }

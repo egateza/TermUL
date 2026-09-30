@@ -72,13 +72,15 @@ public final class RemoteFileService implements AutoCloseable {
     }
 
     /**
-     * Apakah user login bisa menulis file ini ({@code test -w} di server: memperhitungkan group dan ACL).
+     * Apakah file ini bisa ditimpa user login tanpa sudo: bisa ditulis ({@code test -w}, memperhitungkan group
+     * dan ACL) <b>dan</b> dimiliki user login ({@code test -O}; kalau tidak, {@link #upload} akan menolak).
      * Kalau pengecekan gagal dijalankan (mis. server menolak exec), dianggap bisa: upload biasa yang akan
      * melaporkan errornya.
      */
     public boolean canWrite(String path) {
+        String quoted = ShellQuote.quote(path);
         try {
-            var result = RemoteExec.run(connection(), "test -w " + ShellQuote.quote(path), null, CHECK_TIMEOUT);
+            var result = RemoteExec.run(connection(), "test -w " + quoted + " && test -O " + quoted, null, CHECK_TIMEOUT);
             return result.exitStatus() != 1; // 1 = tidak bisa ditulis; -1 = exec ditolak server (tidak diketahui)
         } catch (IOException | RuntimeException e) {
             log.debug("test -w {} gagal: {}", path, e.toString());
@@ -246,6 +248,10 @@ public final class RemoteFileService implements AutoCloseable {
      * Upload atomic: tulis ke {@code <dir>/.<name>.termul-<rand>.tmp}, set mode, lalu rename ke tujuan
      * ({@code posix-rename@openssh.com} kalau tersedia). Mode file lama dipertahankan; untuk file baru
      * dipakai {@code newFileMode} (atau default server kalau null).
+     *
+     * <p>File lama ditolak kalau tidak bisa ditulis user login, atau kalau owner-nya bukan user login
+     * (mis. root, walau group-writable). Rename cukup butuh izin tulis di direktori, jadi tanpa pengecekan ini
+     * file tersebut tertimpa dan owner-nya berubah menjadi user login. File seperti itu diedit lewat sudo.
      */
     public void upload(Path local, String remote, Integer newFileMode, TransferListener listener)
             throws RemoteFileException {
@@ -254,11 +260,18 @@ public final class RemoteFileService implements AutoCloseable {
                 "." + RemotePaths.name(remote) + ".termul-" + randomSuffix() + ".tmp");
         boolean tmpCreated = false;
         try {
-            Integer mode = exists(remote) ? Integer.valueOf(stat(remote).mode()) : newFileMode;
+            Attributes existing = exists(remote) ? sftp.stat(remote) : null;
+            if (existing != null) {
+                requireWritable(remote);
+            }
+            Integer mode = existing != null ? Integer.valueOf(existing.getPermissions() & 07777) : newFileMode;
             long total = Files.size(local);
             try (InputStream in = Files.newInputStream(local);
                  OutputStream out = sftp.write(tmp, BUFFER, OpenMode.Write, OpenMode.Create, OpenMode.Exclusive)) {
                 tmpCreated = true;
+                if (existing != null) {
+                    requireSameOwner(existing, tmp, remote); // temp dibuat user login: uid-nya = uid user login
+                }
                 copy(in, out, total, listener);
             }
             if (mode != null) {
@@ -278,6 +291,31 @@ public final class RemoteFileService implements AutoCloseable {
                     log.warn("File temp remote {} tidak bisa dihapus: {}", tmp, e.toString());
                 }
             }
+        }
+    }
+
+    /**
+     * Buka file untuk write tanpa truncate lalu langsung tutup: isi dan mtime tidak berubah, tapi server
+     * memeriksa izin (owner, group, ACL) seperti write biasa.
+     */
+    private void requireWritable(String remote) throws IOException {
+        try (var _ = sftp.open(remote, OpenMode.Write)) {
+            // hanya cek izin
+        } catch (SftpException e) {
+            if (e.getStatus() == SftpConstants.SSH_FX_PERMISSION_DENIED) {
+                throw new RemoteFileException("File tidak bisa ditulis user login: " + remote
+                        + " (akses ditolak; pakai \"Edit sebagai root\")", e);
+            }
+            throw e;
+        }
+    }
+
+    private void requireSameOwner(Attributes existing, String tmp, String remote) throws IOException {
+        int loginUid = sftp.stat(tmp).getUserId();
+        if (existing.getUserId() != loginUid) {
+            String owner = existing.getOwner() != null ? existing.getOwner() : "uid " + existing.getUserId();
+            throw new RemoteFileException("File milik " + owner + ", bukan user login: " + remote
+                    + " (menimpa tanpa sudo akan mengubah owner-nya; pakai \"Edit sebagai root\")");
         }
     }
 
