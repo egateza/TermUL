@@ -129,6 +129,11 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [ ] (usulan, menunggu keputusan user) Fallback koneksi kedua kalau server menolak channel (`MaxSessions`, default 10),
   atau opsi per profil "koneksi terpisah per tab"
 
+- [x] Grup bawaan di atas host tree yang tidak bisa di-rename/hapus (permintaan user 2026-10-01): **Favorites**
+  (klik kanan host → Tambah/Hapus dari Favorites, urut sesuai waktu ditambahkan) dan **Last used** (5 profil terakhir
+  yang dibuka, terbaru di atas; klik kanan grup → Bersihkan riwayat). Disimpan di `profiles.json` sebagai daftar id
+  (`favorites`, `recent`); profil yang dihapus otomatis keluar dari keduanya; file lama tetap terbaca
+
 ## Log progres
 
 | Tanggal | Commit | Task |
