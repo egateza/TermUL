@@ -94,7 +94,7 @@ class SshTtyConnectorTest {
         await().atMost(Duration.ofSeconds(5)).until(() -> server.windowChanges.contains("132x43"));
         assertThat(tty.isConnected()).isTrue();
 
-        tty.close();
+        tty.closeByUser();
         await().atMost(Duration.ofSeconds(5)).until(() -> sessions.connectionCount() == 0);
         assertThat(tty.isClosedByUser()).isTrue();
     }
@@ -107,6 +107,12 @@ class SshTtyConnectorTest {
 
         readUntil(tty, "$ ");
         tty.write("exit\r");
+        // JediTerm sendiri memanggil close() setelah stream EOF: tetap bukan penutupan oleh user
+        var buf = new char[256];
+        while (tty.read(buf, 0, buf.length) >= 0) {
+            // habiskan output sampai EOF
+        }
+        tty.close();
 
         await().atMost(Duration.ofSeconds(5)).until(() -> closed.get() != null);
         assertThat(tty.isClosedByUser()).isFalse();

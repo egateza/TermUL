@@ -240,7 +240,7 @@ public final class TerminalTab extends JPanel {
 
     private void disposeTerminal() {
         if (connector != null) {
-            connector.close();
+            connector.closeByUser();
             connector = null;
         }
         if (widget != null) {

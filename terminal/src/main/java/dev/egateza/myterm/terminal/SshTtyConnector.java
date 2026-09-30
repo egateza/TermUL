@@ -83,7 +83,7 @@ public final class SshTtyConnector implements TtyConnector {
         }
     }
 
-    /** true kalau ditutup lewat {@link #close()} (bukan exit/putus). */
+    /** true kalau ditutup lewat {@link #closeByUser()} (bukan exit/logout/putus). */
     public boolean isClosedByUser() {
         return closedByUser;
     }
@@ -178,14 +178,23 @@ public final class SshTtyConnector implements TtyConnector {
         return name;
     }
 
+    /**
+     * Menutup channel. Dipanggil juga oleh JediTerm sendiri setelah stream berakhir (mis. user
+     * {@code logout}), jadi <b>tidak</b> dianggap penutupan oleh user — pakai {@link #closeByUser()} untuk itu.
+     */
     @Override
     public void close() {
         if (!closed.compareAndSet(false, true)) {
             return;
         }
-        closedByUser = true;
         writer.shutdown();
         channel.close(false).addListener(f -> lease.close());
+    }
+
+    /** Penutupan oleh user (tab ditutup): close listener tahu tidak perlu menawarkan reconnect. */
+    public void closeByUser() {
+        closedByUser = true;
+        close();
     }
 
     private void notifyClosed() {
