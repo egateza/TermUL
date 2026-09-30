@@ -104,6 +104,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 | Tanggal | Commit | Task |
 |---|---|---|
+| 2026-09-30 | `refactor: rename aplikasi MyTerm menjadi TermUL` | Rename ke TermUL + migrasi folder data (permintaan user) |
 | 2026-09-30 | `feat(app): panel log aplikasi di bawah window dan menu Bantuan` | Panel log + menu Bantuan (permintaan user) |
 | 2026-09-30 | `feat(app): pakai logo resmi Ubuntu untuk ikon OS` | Logo Ubuntu (permintaan user) |
 | 2026-09-30 | `feat(app): ikon OS otomatis (deteksi saat connect) di host tree dan tab` | Ikon OS otomatis (+ OsInfo, OsDetector) |
