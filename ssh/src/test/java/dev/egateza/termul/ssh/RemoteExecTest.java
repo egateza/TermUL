@@ -43,6 +43,9 @@ class RemoteExecTest {
     void setUp() throws Exception {
         server = new TestSshServer(dir.resolve("hostkey.ser"), s -> s.setCommandFactory((channel, command) -> {
             commands.add(command);
+            if (command.equals("ditolak")) {
+                throw new IOException("exec tidak diizinkan");
+            }
             return command.equals("hang") ? new Hang() : new StdinEcho();
         }));
         var trust = new HostKeyPrompt() {
@@ -106,6 +109,16 @@ class RemoteExecTest {
                 .isInstanceOf(IOException.class)
                 .hasMessageContaining("tidak selesai");
         assertThat(lease.connection().isOpen()).isTrue(); // hanya channel yang ditutup
+    }
+
+    @Test
+    void execYangDitolakServerSelesaiCepatTanpaExitStatus() throws Exception {
+        long start = System.nanoTime();
+
+        var result = RemoteExec.run(lease.connection(), "ditolak", null, Duration.ofSeconds(10));
+
+        assertThat(result.exitStatus()).isEqualTo(-1);
+        assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofSeconds(5));
     }
 
     /** Menyalin stdin sampai EOF ke stdout, menulis "selesai" ke stderr, exit 3. */

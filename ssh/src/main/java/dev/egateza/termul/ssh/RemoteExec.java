@@ -8,6 +8,7 @@ import java.util.EnumSet;
 import java.util.Set;
 import org.apache.sshd.client.channel.ChannelExec;
 import org.apache.sshd.client.channel.ClientChannelEvent;
+import org.apache.sshd.core.CoreModuleProperties;
 
 /**
  * Menjalankan satu command lewat exec channel (koneksi yang sama dengan terminal, tanpa PTY) dan menunggu selesai.
@@ -20,7 +21,7 @@ public final class RemoteExec {
 
     static final int MAX_OUTPUT = 64 * 1024;
 
-    /** @param exitStatus exit code command, atau -1 kalau server tidak mengirimkannya */
+    /** @param exitStatus exit code command, atau -1 kalau server tidak mengirimkannya (mis. exec ditolak) */
     public record Result(int exitStatus, String stdout, String stderr) {
         public boolean ok() {
             return exitStatus == 0;
@@ -41,6 +42,7 @@ public final class RemoteExec {
             var err = new LimitedOutput(MAX_OUTPUT);
             exec.setOut(out);
             exec.setErr(err);
+            CoreModuleProperties.REQUEST_EXEC_REPLY.set(exec, true); // exec ditolak server -> channel langsung ditutup
             exec.open().verify(connection.channelOpenTimeout());
             try (OutputStream in = exec.getInvertedIn()) {
                 if (stdin != null) {

@@ -73,11 +73,13 @@ public final class RemoteFileService implements AutoCloseable {
 
     /**
      * Apakah user login bisa menulis file ini ({@code test -w} di server: memperhitungkan group dan ACL).
-     * Kalau pengecekan gagal dijalankan, dianggap bisa (upload biasa yang akan melaporkan errornya).
+     * Kalau pengecekan gagal dijalankan (mis. server menolak exec), dianggap bisa: upload biasa yang akan
+     * melaporkan errornya.
      */
     public boolean canWrite(String path) {
         try {
-            return RemoteExec.run(connection(), "test -w " + ShellQuote.quote(path), null, CHECK_TIMEOUT).ok();
+            var result = RemoteExec.run(connection(), "test -w " + ShellQuote.quote(path), null, CHECK_TIMEOUT);
+            return result.exitStatus() != 1; // 1 = tidak bisa ditulis; -1 = exec ditolak server (tidak diketahui)
         } catch (IOException | RuntimeException e) {
             log.debug("test -w {} gagal: {}", path, e.toString());
             return true;
