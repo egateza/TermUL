@@ -20,6 +20,7 @@ import java.util.UUID;
  * @param initialDirectory working directory awal, boleh null
  * @param notes            catatan bebas, boleh null
  * @param autoSudo         auto-trigger inject password sudo (default OFF, apalagi untuk prod)
+ * @param os               OS server yang terdeteksi otomatis saat connect (untuk ikon), boleh null
  */
 public record HostProfile(
         UUID id,
@@ -34,9 +35,18 @@ public record HostProfile(
         EnvironmentTag environment,
         String initialDirectory,
         String notes,
-        boolean autoSudo) {
+        boolean autoSudo,
+        OsInfo os) {
 
     public static final int DEFAULT_PORT = 22;
+
+    /** Constructor tanpa info OS (belum pernah terdeteksi). */
+    public HostProfile(UUID id, String name, String group, String host, int port, String username,
+                       AuthMethod authMethod, String privateKeyPath, UUID jumpHostId, EnvironmentTag environment,
+                       String initialDirectory, String notes, boolean autoSudo) {
+        this(id, name, group, host, port, username, authMethod, privateKeyPath, jumpHostId, environment,
+                initialDirectory, notes, autoSudo, null);
+    }
 
     public HostProfile {
         Objects.requireNonNull(id, "id");
@@ -69,12 +79,17 @@ public record HostProfile(
     /** Salinan dengan id baru dan nama "(salinan)". */
     public HostProfile duplicate() {
         return new HostProfile(UUID.randomUUID(), name + " (salinan)", group, host, port, username,
-                authMethod, privateKeyPath, jumpHostId, environment, initialDirectory, notes, autoSudo);
+                authMethod, privateKeyPath, jumpHostId, environment, initialDirectory, notes, autoSudo, os);
     }
 
     public HostProfile withGroup(String newGroup) {
         return new HostProfile(id, name, newGroup, host, port, username, authMethod, privateKeyPath,
-                jumpHostId, environment, initialDirectory, notes, autoSudo);
+                jumpHostId, environment, initialDirectory, notes, autoSudo, os);
+    }
+
+    public HostProfile withOs(OsInfo newOs) {
+        return new HostProfile(id, name, group, host, port, username, authMethod, privateKeyPath,
+                jumpHostId, environment, initialDirectory, notes, autoSudo, newOs);
     }
 
     /** Label singkat {@code user@host[:port]} untuk judul tab/log. */
