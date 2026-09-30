@@ -88,7 +88,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] Import `~/.ssh/config` (File → Impor dari ~/.ssh/config), jump host (ProxyJump, termasuk rantai; ProxyCommand tidak didukung)
 - [x] Warna tab per environment (titik + garis di atas terminal), konfirmasi paste multi-baris di prod
 - [ ] Pengaturan font/tema
-- [ ] Profile Maven `package-win` (jlink + jpackage → .msi)
+- [x] Profile Maven `package-win` (jlink + jpackage → app-image; `.msi` dengan `-Djpackage.type=msi`, butuh WiX)
 
 ### Tambahan dari uji manual user (setelah Fase 4)
 - [x] Auth "Default": coba key `~/.ssh`, lalu jatuh ke password (sebelumnya error kalau tidak ada key)

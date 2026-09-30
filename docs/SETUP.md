@@ -88,8 +88,21 @@ mvnw.cmd clean verify                       # compile + unit test (Surefire) + i
 mvnw.cmd verify -DskipITs                   # tanpa integration test
 mvnw.cmd install -DskipTests                # install modul ke local repo
 mvnw.cmd -pl app exec:java                  # jalankan aplikasi (setelah install)
-mvnw.cmd -pl app -am -Ppackage-win package  # jlink + jpackage → .msi (butuh WiX)
+mvnw.cmd install -DskipTests && mvnw.cmd -pl app -Ppackage-win -DskipTests package   # app-image portable → app/target/dist/TermUL/TermUL.exe
+mvnw.cmd -pl app -Ppackage-win -DskipTests package -Djpackage.type=msi        # installer .msi (butuh WiX di PATH)
 ```
+
+## Distribusi (profile `package-win`)
+
+- Runtime ramping dibuat `jpackage` lewat jlink dengan modul di property `jpackage.modules` (`app/pom.xml`), hasil
+  `jdeps --print-module-deps` ditambah `jdk.unsupported` dan `jdk.localedata`. Kalau menambah library, cek ulang:
+  `jdeps --ignore-missing-deps --print-module-deps --multi-release 25 --class-path "libs/*" termul-app-*.jar libs/*.jar`
+  (dari folder hasil `dependency:copy-dependencies`). Opsi jlink: `--strip-debug --no-man-pages --no-header-files --include-locales=en,id`.
+- Default `app-image` (folder portable ±100 MB, tanpa WiX). `-Djpackage.type=msi` mengaktifkan profile `package-win-msi`
+  (menu Start, shortcut desktop, pilih folder, install per user, `--win-upgrade-uuid` tetap supaya upgrade menimpa versi lama).
+- Data user tetap di `%APPDATA%\TermUL` / `%LOCALAPPDATA%\TermUL` (bukan di folder instalasi).
+- Ikon aplikasi (`app/src/main/packaging/termul.ico` + `icons/app-*.png` untuk window) dibuat dengan
+  `java tools/MakeAppIcon.java`.
 
 ## Ikon aplikasi (Font Awesome + Material Symbols)
 

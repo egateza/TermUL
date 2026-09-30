@@ -96,4 +96,127 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!--
+            Distribusi Windows: jlink (runtime ramping) + jpackage.
+              mvnw.cmd -Ppackage-win -DskipTests package                       → app-image (folder portable)
+              mvnw.cmd -Ppackage-win -DskipTests package -Djpackage.type=msi   → installer .msi (butuh WiX di PATH)
+            Hasil di app/target/dist/.
+        -->
+        <profile>
+            <id>package-win</id>
+            <properties>
+                <jpackage.type>app-image</jpackage.type>
+                <jpackage.input>${project.build.directory}/jpackage-input</jpackage.input>
+                <jpackage.dest>${project.build.directory}/dist</jpackage.dest>
+                <!-- versi numerik untuk Windows (tanpa -SNAPSHOT) -->
+                <jpackage.appVersion>0.1.0</jpackage.appVersion>
+                <!-- jdeps (lihat docs/SETUP.md) + jdk.unsupported (Unsafe reflektif) + jdk.localedata (locale id) -->
+                <jpackage.modules>java.base,java.desktop,java.management,java.naming,java.prefs,java.rmi,java.security.jgss,java.sql,jdk.unsupported,jdk.localedata</jpackage.modules>
+                <jpackage.installerArgs/>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-dependency-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>jpackage-libs</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>copy-dependencies</goal>
+                                </goals>
+                                <configuration>
+                                    <includeScope>runtime</includeScope>
+                                    <outputDirectory>${jpackage.input}/libs</outputDirectory>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-resources-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>jpackage-main-jar</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>copy-resources</goal>
+                                </goals>
+                                <configuration>
+                                    <outputDirectory>${jpackage.input}</outputDirectory>
+                                    <resources>
+                                        <resource>
+                                            <directory>${project.build.directory}</directory>
+                                            <includes>
+                                                <include>${project.build.finalName}.jar</include>
+                                            </includes>
+                                            <filtering>false</filtering>
+                                        </resource>
+                                    </resources>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-clean-plugin</artifactId>
+                        <executions>
+                            <!-- jpackage menolak folder tujuan yang sudah berisi app-image lama -->
+                            <execution>
+                                <id>jpackage-clean-dist</id>
+                                <phase>prepare-package</phase>
+                                <goals>
+                                    <goal>clean</goal>
+                                </goals>
+                                <configuration>
+                                    <excludeDefaultDirectories>true</excludeDefaultDirectories>
+                                    <filesets>
+                                        <fileset>
+                                            <directory>${jpackage.dest}</directory>
+                                        </fileset>
+                                        <fileset>
+                                            <directory>${jpackage.input}</directory>
+                                        </fileset>
+                                    </filesets>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>jpackage</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>exec</goal>
+                                </goals>
+                                <configuration>
+                                    <executable>${java.home}/bin/jpackage</executable>
+                                    <commandlineArgs>--type ${jpackage.type} --name TermUL --app-version ${jpackage.appVersion} --vendor egateza --description "SSH client pribadi" --input "${jpackage.input}" --main-jar ${project.build.finalName}.jar --main-class ${termul.mainClass} --dest "${jpackage.dest}" --icon "${project.basedir}/src/main/packaging/termul.ico" --add-modules ${jpackage.modules} --jlink-options "--strip-debug --no-man-pages --no-header-files --include-locales=en,id" --java-options --enable-native-access=ALL-UNNAMED ${jpackage.installerArgs}</commandlineArgs>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <!-- opsi installer, aktif otomatis bersama -Djpackage.type=msi -->
+        <profile>
+            <id>package-win-msi</id>
+            <activation>
+                <property>
+                    <name>jpackage.type</name>
+                    <value>msi</value>
+                </property>
+            </activation>
+            <properties>
+                <jpackage.installerArgs>--win-menu --win-menu-group TermUL --win-shortcut --win-dir-chooser --win-per-user-install --win-upgrade-uuid 3f6f8e2c-3b9e-4a52-9d53-7a1c2f0b9e41</jpackage.installerArgs>
+            </properties>
+        </profile>
+    </profiles>
 </project>

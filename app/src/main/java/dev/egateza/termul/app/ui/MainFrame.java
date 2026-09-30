@@ -109,6 +109,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
     public MainFrame(AppContext ctx, List<CustomTheme> customThemes, Runnable onExit) {
         super("TermUL");
+        setIconImages(appIcons());
         this.ctx = ctx;
         this.store = ctx.profiles();
         this.io = ctx.io();
@@ -368,6 +369,18 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         EditorSettingsDialog.show(this, ctx.config().current().editors()).ifPresent(editors ->
                 mutate(I18n.t("error.saveSettings"), () ->
                         ctx.config().save(ctx.config().current().withEditors(editors))));
+    }
+
+    /** Ikon aplikasi (dibuat dengan {@code tools/MakeAppIcon.java}); ukuran yang tidak ada dilewati. */
+    private static List<java.awt.Image> appIcons() {
+        var images = new java.util.ArrayList<java.awt.Image>();
+        for (int size : new int[] {16, 32, 48, 64, 128, 256}) {
+            var url = MainFrame.class.getResource("/dev/egateza/termul/app/icons/app-" + size + ".png");
+            if (url != null) {
+                images.add(new javax.swing.ImageIcon(url).getImage());
+            }
+        }
+        return images;
     }
 
     /** Impor host dari {@code ~/.ssh/config}: baca file di io, pilih di dialog (EDT), simpan di io. */
