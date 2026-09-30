@@ -7,7 +7,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 ## Fase 0: Perencanaan (sekarang)
 - [x] Konteks project (`CLAUDE.md`)
 - [x] Requirements, arsitektur, security, plan, setup
-- [ ] Putuskan nama aplikasi & base package (lihat "Keputusan terbuka")
+- [x] Putuskan nama aplikasi & base package: `MyTerm`, `dev.egateza.myterm`
 - [ ] Siapkan VM/container uji `openssh-server` (lihat `SETUP.md`)
 
 ## Fase 1: Skeleton & terminal SSH pertama (±2 minggu)
@@ -68,7 +68,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 ## Keputusan terbuka
 | # | Keputusan | Opsi | Status |
 |---|---|---|---|
-| D1 | Nama aplikasi & base package | `MyTerm` / lainnya; `dev.<nama>.myterm` | Terbuka |
+| D1 | Nama aplikasi & base package | `MyTerm` / lainnya; `dev.<nama>.myterm` | Diputuskan: `MyTerm`, `dev.egateza.myterm` |
 | D2 | Desain vault | DPAPI / master password / kombinasi | Terbuka (rekomendasi: kombinasi) |
 | D3 | Format storage profil | JSON / SQLite | Rekomendasi JSON (mudah di-diff & backup) |
 | D4 | Repo & lisensi | Private GitHub/GitLab | Terbuka |
