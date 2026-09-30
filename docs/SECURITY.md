@@ -67,6 +67,10 @@ Rekomendasi operasional (di luar aplikasi): untuk server prod, pertimbangkan aks
 - `sudo install` menjaga owner/mode. File temp di `/tmp` dibuat dengan mode 600 dan dihapus setelahnya.
 - Jangan pernah menaruh password di argumen command (terlihat di `ps`). Password selalu dikirim via stdin (`sudo -S -p ''`).
 
+## Keterbatasan yang diketahui
+
+- **Password login & passphrase key di MINA berupa `String`.** API Apache MINA SSHD (`UserInteraction`, `FilePasswordProvider`) hanya menerima `String`. Konversi `char[] → String` dibatasi di satu tempat (`ssh/.../auth/AuthSetup.java`), dilakukan tepat saat MINA memintanya, dan `char[]` asal langsung di-zero. String itu tidak disimpan di field, tidak di-log, dan menjadi garbage setelah paket auth terkirim. Password sudo/su (inject ke terminal) tetap `char[]`/`byte[]` penuh.
+
 ## Logging
 
 - Level default INFO. Konten terminal tidak di-log.

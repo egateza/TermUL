@@ -32,7 +32,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] Main window FlatLaf (host tree | tab area)
 - [x] `HostProfile` + `ProfileStore` (JSON, atomic write)
 - [x] Dialog tambah/edit profil
-- [ ] `SessionManager` (connect, auth key/agent/password prompt)
+- [x] `SessionManager` (connect, auth key/agent/password prompt)
 - [x] `HostKeyVerifier` (known_hosts + TOFU)
 - [ ] `SshTtyConnector` + tab JediTerm
 - [ ] Keep-alive + deteksi putus + reconnect
@@ -44,6 +44,7 @@ Belum dimulai. Lihat `docs/PLAN.md`.
 
 | Tanggal | Commit | Task |
 |---|---|---|
+| 2026-09-30 | `feat(ssh): tambah SessionManager dengan auth key/password, reference counting, dan keep-alive` | SessionManager (connect, auth key/password, ref-count, keep-alive) |
 | 2026-09-30 | `feat(ssh): tambah verifikasi host key strict dengan known_hosts aplikasi dan TOFU` | HostKeyVerifier (known_hosts + TOFU, logic) |
 | 2026-09-30 | `feat(app): tambah dialog tambah/edit profil host` | Dialog profil |
 | 2026-09-30 | `feat(app): tambah main window FlatLaf dengan host tree, grup, dan pencarian` | Main window + host tree |
@@ -53,7 +54,7 @@ Belum dimulai. Lihat `docs/PLAN.md`.
 
 ## Langkah berikutnya
 
-- SessionManager (connect, auth key/password, ref-count, keep-alive) di modul ssh; dialog TOFU di app menyusul saat wiring.
+- SshTtyConnector + tab JediTerm (modul terminal), lalu wiring connect di app (dialog TOFU & prompt password).
 
 ## Catatan / blocker
 
