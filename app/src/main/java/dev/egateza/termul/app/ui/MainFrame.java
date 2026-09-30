@@ -33,7 +33,6 @@ import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.util.concurrent.ExecutorService;
-import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JCheckBoxMenuItem;
 import javax.swing.JFrame;
@@ -53,7 +52,6 @@ import javax.swing.JTabbedPane;
 import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
-import javax.swing.UIManager;
 import javax.swing.WindowConstants;
 
 /** Window utama: host tree di kiri, tab terminal di kanan. */
@@ -75,6 +73,8 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private final JCheckBoxMenuItem showLog = new JCheckBoxMenuItem("Tampilkan log");
     private int logHeight = 220; // EDT
     private final JSplitPane hostSplit;
+    private static final int HOST_TOGGLE_WIDTH = 22;
+    private static final int HOST_TOGGLE_HEIGHT = 84;
     private final JButton hostToggle = new JButton();
     private int hostWidth = 260; // EDT
 
@@ -107,26 +107,27 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         welcome.setFont(welcome.getFont().deriveFont(Font.PLAIN, welcome.getFont().getSize2D() + 2));
         updateCenter();
 
-        hostSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, hostTree, center);
+        // tombol laci di tepi kiri sisi terminal (= tepi kanan panel host), di tengah vertikal; ikut sisi
+        // terminal, jadi tetap terlihat saat panel host disembunyikan
+        hostToggle.setFocusable(false);
+        hostToggle.setPreferredSize(new Dimension(HOST_TOGGLE_WIDTH, HOST_TOGGLE_HEIGHT));
+        hostToggle.putClientProperty("FlatLaf.style", "arc: 10; margin: 2,0,2,0");
+        hostToggle.addActionListener(e -> setHostPanelVisible(!hostTree.isVisible()));
+        updateHostToggle();
+        var handle = new JPanel(new java.awt.GridBagLayout());
+        handle.add(hostToggle);
+        var rightSide = new JPanel(new BorderLayout());
+        rightSide.add(handle, BorderLayout.WEST);
+        rightSide.add(center, BorderLayout.CENTER);
+        hostSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, hostTree, rightSide);
         hostSplit.setDividerLocation(hostWidth);
         hostSplit.setContinuousLayout(true);
         hostTree.setMinimumSize(new Dimension(160, 100));
-        // strip tipis di kiri dengan tombol laci; tetap terlihat saat panel host disembunyikan
-        hostToggle.putClientProperty("JButton.buttonType", "toolBarButton");
-        hostToggle.setFocusable(false);
-        hostToggle.addActionListener(e -> setHostPanelVisible(!hostTree.isVisible()));
-        updateHostToggle();
-        var rail = new JPanel(new BorderLayout());
-        rail.add(hostToggle, BorderLayout.NORTH);
-        rail.setBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, UIManager.getColor("Component.borderColor")));
-        var split = new JPanel(new BorderLayout());
-        split.add(rail, BorderLayout.WEST);
-        split.add(hostSplit, BorderLayout.CENTER);
         // panel log di bawah; disembunyikan dengan setVisible supaya tab terminal tidak di-reparent
         logPanel = new LogPanel(LogBuffer.global(), ctx.paths().logDir(), io, () -> setLogVisible(false));
         logPanel.setVisible(false);
         logPanel.setMinimumSize(new Dimension(100, 60));
-        logSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, split, logPanel);
+        logSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, hostSplit, logPanel);
         logSplit.setResizeWeight(1.0);
         logSplit.setContinuousLayout(true);
         getContentPane().add(logSplit, BorderLayout.CENTER);
@@ -286,7 +287,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
     private void updateHostToggle() {
         boolean open = hostTree.isVisible();
-        hostToggle.setIcon((open ? AppIcon.ANGLES_LEFT : AppIcon.ANGLES_RIGHT).icon(12));
+        hostToggle.setIcon((open ? AppIcon.ANGLES_LEFT : AppIcon.ANGLES_RIGHT).icon(18));
         hostToggle.setToolTipText(open ? "Sembunyikan panel host" : "Tampilkan panel host");
     }
 
