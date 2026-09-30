@@ -92,6 +92,44 @@ class SessionManagerIT {
     }
 
     @Test
+    void heartbeatMendeteksiServerHang() throws Exception {
+        var settings = new SshSettings(Duration.ofSeconds(15), Duration.ofSeconds(30), Duration.ofSeconds(15),
+                Duration.ofSeconds(1), 2, Duration.ZERO);
+        var creds = new CredentialProvider() {
+            @Override
+            public char[] password(HostProfile profile, int attempt) {
+                return OpenSshContainer.PASSWORD.toCharArray();
+            }
+
+            @Override
+            public char[] keyPassphrase(HostProfile profile, Path keyFile, int attempt) {
+                return null;
+            }
+        };
+        try (var fast = new SessionManager(new KnownHostsStore(dir.resolve("kh2")), new HostKeyPrompt() {
+            @Override
+            public boolean confirmUnknownHost(HostKeyInfo info) {
+                return true;
+            }
+
+            @Override
+            public void hostKeyChanged(HostKeyInfo presented, List<String> knownFingerprints) {
+            }
+        }, creds, settings)) {
+            SshLease lease = fast.acquire(profile());
+            var docker = SSHD.getDockerClient();
+            docker.pauseContainerCmd(SSHD.getContainerId()).exec();
+            try {
+                org.awaitility.Awaitility.await().atMost(Duration.ofSeconds(20))
+                        .until(() -> !lease.connection().isOpen());
+            } finally {
+                docker.unpauseContainerCmd(SSHD.getContainerId()).exec();
+                lease.close();
+            }
+        }
+    }
+
+    @Test
     void execDanPasswordSalah() throws Exception {
         try (SshLease lease = manager.acquire(profile())) {
             var exec = lease.connection().createExec("id -un");

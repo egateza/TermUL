@@ -35,7 +35,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] `SessionManager` (connect, auth key/agent/password prompt)
 - [x] `HostKeyVerifier` (known_hosts + TOFU)
 - [x] `SshTtyConnector` + tab JediTerm
-- [ ] Keep-alive + deteksi putus + reconnect
+- [x] Keep-alive + deteksi putus + reconnect
 
 ### Fase 2 – 6
 Belum dimulai. Lihat `docs/PLAN.md`.
@@ -44,6 +44,7 @@ Belum dimulai. Lihat `docs/PLAN.md`.
 
 | Tanggal | Commit | Task |
 |---|---|---|
+| 2026-09-30 | `test(ssh): tambah integration test heartbeat mendeteksi server hang` | Keep-alive + deteksi putus + reconnect |
 | 2026-09-30 | `feat(app): tambah tab terminal JediTerm, dialog TOFU, prompt password, dan integration test OpenSSH` | Tab terminal JediTerm + dialog TOFU/password + IT OpenSSH |
 | 2026-09-30 | `feat(terminal): tambah SshTtyConnector JediTerm di atas ChannelShell dengan writer thread terpisah` | SshTtyConnector + SshTerminalFactory |
 | 2026-09-30 | `feat(ssh): tambah SessionManager dengan auth key/password, reference counting, dan keep-alive` | SessionManager (connect, auth key/password, ref-count, keep-alive) |
@@ -56,7 +57,7 @@ Belum dimulai. Lihat `docs/PLAN.md`.
 
 ## Langkah berikutnya
 
-- Keep-alive + deteksi putus + reconnect: heartbeat & banner reconnect sudah ada, tinggal uji manual lalu centang. Setelah itu Fase 1 acceptance test manual, lalu Fase 2 (vault).
+- Fase 2: ADR 0002 desain vault, lalu CredentialVault (AES-256-GCM + Argon2id) + unit test. (Acceptance test manual Fase 1 masih perlu dilakukan user.)
 
 ## Catatan / blocker
 

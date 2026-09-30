@@ -18,7 +18,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] `SessionManager` dengan MINA: connect, auth key/agent/password (prompt manual dulu)
 - [x] `HostKeyVerifier`: known_hosts + dialog TOFU
 - [x] `SshTtyConnector` + tab JediTerm, resize, dan close yang rapi
-- [ ] Keep-alive + deteksi putus + tombol reconnect
+- [x] Keep-alive + deteksi putus + tombol reconnect
 
 **Acceptance**: bisa connect ke 3 server berbeda di 3 tab, menjalankan `htop` dan `vim` dengan tampilan benar, dan resize window berfungsi. Menutup tab tidak meninggalkan thread atau koneksi yang bocor (dicek dengan jconsole/VisualVM).
 
