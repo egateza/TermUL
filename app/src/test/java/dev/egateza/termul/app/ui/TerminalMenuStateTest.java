@@ -32,6 +32,15 @@ class TerminalMenuStateTest {
     }
 
     @Test
+    void sftpOnlyTabKeepsTabActionsButHasNoSftpToggleOrInject() {
+        var s = TerminalMenuState.of(true, false, true, false);
+
+        assertThat(s.tabActions()).isTrue();
+        assertThat(s.sftp()).isFalse();
+        assertThat(s.inject()).isFalse();
+    }
+
+    @Test
     void openSftpPanelCanStillBeClosedAfterSessionEnds() {
         var s = TerminalMenuState.of(true, false, true);
 

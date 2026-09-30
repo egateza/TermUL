@@ -23,19 +23,23 @@ class ConfigStoreTest {
         assertThat(config.hostButtonOpacity()).isEqualTo(AppConfig.DEFAULT_OPACITY);
         assertThat(config.hostPanelMode()).isEqualTo(AppConfig.HOST_DOCKED);
         assertThat(config.terminalFontSize()).isEqualTo(16f);
+        assertThat(config.theme()).isEqualTo(AppConfig.DEFAULT_THEME);
+        assertThat(config.themeMode()).isEqualTo(AppConfig.MODE_DARK);
     }
 
     @Test
     void settingsSurviveSaveAndLoad() {
         Path file = dir.resolve("config.json");
         new ConfigStore(file).save(AppConfig.defaults().withIconSet("material").withHostButtonOpacity(40)
-                .withHostPanelMode(AppConfig.HOST_FLOATING));
+                .withHostPanelMode(AppConfig.HOST_FLOATING).withTheme("default")
+                .withThemeMode(AppConfig.MODE_LIGHT));
 
         var loaded = new ConfigStore(file).load();
 
         assertThat(loaded.iconSet()).isEqualTo("material");
         assertThat(loaded.hostButtonOpacity()).isEqualTo(40);
         assertThat(loaded.hostPanelMode()).isEqualTo(AppConfig.HOST_FLOATING);
+        assertThat(loaded.themeMode()).isEqualTo(AppConfig.MODE_LIGHT);
     }
 
     @Test

@@ -2,17 +2,18 @@ package dev.egateza.termul.app.edit;
 
 import dev.egateza.termul.app.ui.Dialogs;
 import dev.egateza.termul.app.ui.Edt;
+import dev.egateza.termul.app.sftp.ActivityBar.Level;
 import dev.egateza.termul.core.config.EditorConfig;
 import dev.egateza.termul.core.profile.HostProfile;
 import dev.egateza.termul.sftp.RemoteFileException;
-import dev.egateza.termul.sftp.RemoteFileService;
+import dev.egateza.termul.sftp.SftpConnection;
+import dev.egateza.termul.sftp.SftpLinks;
 import dev.egateza.termul.sftp.edit.EditCache;
 import dev.egateza.termul.sftp.edit.EditWatcher;
 import dev.egateza.termul.sftp.edit.RemoteEditSession;
 import dev.egateza.termul.sftp.edit.RemoteEditSession.LineEndingPolicy;
 import dev.egateza.termul.sftp.edit.RemoteEditSession.SyncOptions;
 import dev.egateza.termul.sftp.edit.RemoteEditSession.SyncResult;
-import dev.egateza.termul.ssh.SessionManager;
 import java.awt.Component;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -25,6 +26,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
@@ -46,10 +48,13 @@ public final class EditManager implements AutoCloseable {
         private final HostProfile profile;
         private final RemoteEditSession session;
         private volatile Process editor;
+        private volatile String template; // command editor pilihan user, null = sesuai pengaturan
+        private final SftpConnection link; // koneksi bersama profil ini (dilepas saat sesi ditutup)
 
-        Entry(HostProfile profile, RemoteEditSession session) {
+        Entry(HostProfile profile, RemoteEditSession session, SftpConnection link) {
             this.profile = profile;
             this.session = session;
+            this.link = link;
         }
 
         public HostProfile profile() {
@@ -64,7 +69,11 @@ public final class EditManager implements AutoCloseable {
     private record Key(java.util.UUID profileId, String remotePath) {
     }
 
-    private final SessionManager sessions;
+    /** Keterangan aktivitas edit untuk ditampilkan di panel SFTP profil yang sama. */
+    private record Subscriber(java.util.UUID profileId, BiConsumer<Level, String> sink) {
+    }
+
+    private final SftpLinks links;
     private final EditCache cache;
     private final EditorLauncher launcher;
     private final Supplier<EditorConfig> editorConfig;
@@ -74,10 +83,11 @@ public final class EditManager implements AutoCloseable {
     private final Map<Key, Entry> entries = new ConcurrentHashMap<>();
     private final Map<Path, Entry> byLocal = new ConcurrentHashMap<>();
     private final CopyOnWriteArrayList<Runnable> listeners = new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<Subscriber> subscribers = new CopyOnWriteArrayList<>();
 
-    public EditManager(SessionManager sessions, EditCache cache, Supplier<EditorConfig> editorConfig,
+    public EditManager(SftpLinks links, EditCache cache, Supplier<EditorConfig> editorConfig,
                        ExecutorService sshOps, Supplier<Component> parent) throws IOException {
-        this.sessions = sessions;
+        this.links = links;
         this.cache = cache;
         this.editorConfig = editorConfig;
         this.launcher = new EditorLauncher(editorConfig);
@@ -91,35 +101,66 @@ public final class EditManager implements AutoCloseable {
         listeners.add(l);
     }
 
+    /**
+     * Berlangganan keterangan aktivitas edit (buka, upload mulai/selesai, konflik, error) untuk satu profil.
+     * Sink dipanggil di thread sembarang.
+     *
+     * @return pemanggil untuk berhenti berlangganan
+     */
+    public Runnable addActivityListener(java.util.UUID profileId, BiConsumer<Level, String> sink) {
+        var subscriber = new Subscriber(profileId, sink);
+        subscribers.add(subscriber);
+        return () -> subscribers.remove(subscriber);
+    }
+
+    private void activity(HostProfile profile, Level level, String message) {
+        for (var s : subscribers) {
+            if (s.profileId.equals(profile.id())) {
+                s.sink.accept(level, message);
+            }
+        }
+    }
+
     public List<Entry> entries() {
         return List.copyOf(entries.values());
     }
 
     /** Buka file remote di editor lokal (atau fokuskan lagi kalau sudah dibuka). */
     public void open(HostProfile profile, String remotePath) {
+        open(profile, remotePath, null);
+    }
+
+    /** @param template command editor pilihan user (menu "Edit dengan"); null = sesuai pengaturan */
+    public void open(HostProfile profile, String remotePath, String template) {
         var key = new Key(profile.id(), remotePath);
         sshOps.execute(() -> {
             try {
                 Entry entry = entries.get(key);
                 if (entry == null) {
-                    RemoteFileService files = RemoteFileService.open(sessions.acquire(profile));
+                    activity(profile, Level.INFO, "Mengunduh " + remotePath + " untuk diedit ...");
+                    SftpConnection link = links.acquire(profile);
                     RemoteEditSession session;
                     try {
-                        session = RemoteEditSession.open(files, cache, profile.id(), remotePath,
+                        session = RemoteEditSession.open(link.ensureLive(), cache, profile.id(), remotePath,
                                 RemoteEditSession.SFTP_UPLOADER);
-                    } catch (RemoteFileException e) {
-                        files.close();
+                    } catch (Exception e) {
+                        links.release(profile);
                         throw e;
                     }
-                    entry = new Entry(profile, session);
-                    session.addListener(s -> fireChanged());
+                    entry = new Entry(profile, session, link);
+                    session.addListener(s -> {
+                        fireChanged();
+                        publishState(profile, s);
+                    });
                     entries.put(key, entry);
                     byLocal.put(session.localFile().toAbsolutePath().normalize(), entry);
                     watcher.watch(session.localFile());
                     fireChanged();
                 }
+                entry.template = template;
                 launchEditor(entry);
             } catch (Exception e) {
+                activity(profile, Level.ERROR, "Gagal membuka " + remotePath + ": " + e.getMessage());
                 showError("Gagal membuka " + remotePath, e);
             }
         });
@@ -137,7 +178,7 @@ public final class EditManager implements AutoCloseable {
     }
 
     private void launchEditor(Entry entry) throws IOException {
-        Process p = launcher.launch(entry.session.localFile());
+        Process p = launcher.launch(entry.session.localFile(), entry.template);
         entry.editor = p;
         Instant started = Instant.now();
         p.onExit().thenRun(() -> {
@@ -164,23 +205,63 @@ public final class EditManager implements AutoCloseable {
         }
     }
 
-    /** Upload manual / retry dari EditTracker (dengan reconnect kalau koneksi SFTP putus). */
+    /** Terjemahkan perubahan state sesi edit menjadi keterangan aktivitas. */
+    private void publishState(HostProfile profile, RemoteEditSession s) {
+        String path = s.remotePath();
+        switch (s.state()) {
+            case UPLOADING -> activity(profile, Level.INFO, "Mengupload " + path + " ...");
+            case EDITING -> {
+                if ("Tersinkron".equals(s.lastMessage())) {
+                    activity(profile, Level.SUCCESS, path + " berhasil diupload");
+                } else if ("Dibuka".equals(s.lastMessage())) {
+                    activity(profile, Level.INFO, path + " dibuka di editor; perubahan diupload otomatis saat disimpan");
+                }
+            }
+            case NEEDS_ATTENTION -> activity(profile, Level.WARN, path + ": " + s.lastMessage());
+            case OPENING, CLOSED -> { }
+        }
+    }
+
+    /** Upload manual / retry dari EditTracker. Butuh sesi terminal tersambung (Reconnect dilakukan dari terminal). */
     public void retry(Entry entry) {
         sshOps.execute(() -> {
-            try {
-                if (!entry.session.files().isOpen()) {
-                    entry.session.rebind(RemoteFileService.open(sessions.acquire(entry.profile)));
-                }
-            } catch (Exception e) {
-                showError("Reconnect SFTP gagal", e);
-                return;
-            }
-            syncInteractive(entry, SyncOptions.DEFAULT);
+            syncInteractive(entry, SyncOptions.DEFAULT); // menunggu / ditolak sesuai status sesi terminal
         });
+    }
+
+    /**
+     * Pastikan koneksi SFTP hidup sebelum upload. Kalau terputus, upload menunggu terminal host ini menyambung
+     * ulang (bertahap, dikerjakan tab terminal) dan berjalan setelah shell + SFTP tersambung; kalau terminal
+     * menyerah, upload tidak dilakukan dan user diminta Reconnect dari terminal.
+     *
+     * @return false kalau tidak tersambung (user sudah diberi tahu)
+     */
+    private boolean ensureConnected(Entry entry) {
+        try {
+            var live = entry.link.ensureLive();
+            if (entry.session.files() != live) {
+                entry.session.rebind(live); // sesi edit yang sama tetap bisa menyimpan setelah reconnect
+            }
+            return true;
+        } catch (RemoteFileException e) {
+            log.warn("Upload {} ditunda, tidak tersambung: {}", entry.session.remotePath(), e.getMessage());
+            activity(entry.profile, Level.ERROR, "Upload " + entry.session.remotePath() + " ditunda: " + e.getMessage());
+            showError("Upload " + entry.session.remotePath() + " belum bisa dilakukan (perubahan tetap tersimpan "
+                    + "lokal, coba lagi dari daftar file yang diedit)", e);
+            return false;
+        }
     }
 
     /** Sync + dialog untuk konflik/CRLF. Berjalan di sshOps (dialog via invokeAndWait). */
     private void syncInteractive(Entry entry, SyncOptions options) {
+        syncInteractive(entry, options, true);
+    }
+
+    /** @param retryOnDisconnect sekali saja: koneksi putus di tengah upload -> sambung ulang lalu ulangi */
+    private void syncInteractive(Entry entry, SyncOptions options, boolean retryOnDisconnect) {
+        if (!ensureConnected(entry)) {
+            return;
+        }
         var session = entry.session;
         try {
             SyncResult result = session.sync(options);
@@ -191,7 +272,12 @@ public final class EditManager implements AutoCloseable {
                 case SyncResult.Unchanged _ -> { }
             }
         } catch (RemoteFileException e) {
+            if (retryOnDisconnect && !(e instanceof RemoteFileException.Cancelled) && !session.files().isOpen()) {
+                syncInteractive(entry, options, false);
+                return;
+            }
             log.warn("Upload {} gagal: {}", session.remotePath(), e.getMessage());
+            activity(entry.profile, Level.ERROR, "Upload " + session.remotePath() + " gagal: " + e.getMessage());
             showError("Upload " + session.remotePath() + " gagal (perubahan tetap tersimpan lokal, "
                     + "coba lagi dari daftar file yang diedit)", e);
         }
@@ -257,7 +343,7 @@ public final class EditManager implements AutoCloseable {
         entries.remove(new Key(entry.profile.id(), session.remotePath()));
         byLocal.remove(session.localFile().toAbsolutePath().normalize());
         cleanupDiffCopy(session.localFile());
-        session.files().close();
+        links.release(entry.profile);
         if (!removed) {
             showInfo("Perubahan " + session.remotePath() + " belum ter-upload dan disimpan di:\n" + session.localFile());
         }
@@ -297,7 +383,7 @@ public final class EditManager implements AutoCloseable {
         for (Entry e : entries.values()) {
             try {
                 e.session.close();
-                e.session.files().close();
+                links.release(e.profile);
             } catch (RuntimeException ex) {
                 log.warn("Menutup sesi edit gagal", ex);
             }

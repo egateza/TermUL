@@ -29,6 +29,6 @@ public record SshSettings(Duration connectTimeout, Duration authTimeout, Duratio
 
     public static SshSettings defaults() {
         return new SshSettings(Duration.ofSeconds(15), Duration.ofMinutes(2), Duration.ofSeconds(15),
-                Duration.ofSeconds(30), 3, Duration.ofSeconds(30));
+                Duration.ofSeconds(10), 3, Duration.ofSeconds(30));
     }
 }

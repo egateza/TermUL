@@ -6,9 +6,13 @@ import dev.egateza.termul.app.ui.Dialogs;
 import dev.egateza.termul.app.ui.UiAsync;
 import dev.egateza.termul.app.vault.VaultGate;
 import dev.egateza.termul.core.profile.HostProfile;
+import dev.egateza.termul.sftp.RemoteFileException;
+import dev.egateza.termul.sftp.SftpLinks;
+import dev.egateza.termul.sftp.TerminalState;
 import dev.egateza.termul.ssh.SshConnectException;
 import dev.egateza.termul.ssh.hostkey.HostKeyRejectedException;
 import dev.egateza.termul.terminal.ExitGuard;
+import dev.egateza.termul.terminal.Reconnector;
 import dev.egateza.termul.terminal.SshTerminalFactory;
 import dev.egateza.termul.terminal.SshTtyConnector;
 import dev.egateza.termul.vault.SecretType;
@@ -37,6 +41,10 @@ import org.slf4j.LoggerFactory;
 /**
  * Isi satu tab terminal. Semua method dipanggil di EDT; connect berjalan di executor {@code ssh-ops}.
  * State: CONNECTING → CONNECTED → (DISCONNECTED | ERROR) → reconnect → CONNECTING ...
+ *
+ * <p>Tab terminal adalah pemilik sesi: kalau koneksi terputus, tab ini menyambung ulang bertahap (langsung, +15 dtk,
+ * +30 dtk). Satu percobaan baru dianggap berhasil kalau shell <b>dan</b> SFTP (bila sedang dipakai) sama-sama
+ * tersambung. Panel SFTP hanya mengikuti status tab ini lewat {@link SftpLinks}.
  */
 public final class TerminalTab extends JPanel {
 
@@ -53,13 +61,21 @@ public final class TerminalTab extends JPanel {
     private boolean disposed;            // hanya diakses di EDT
     private final JPanel content = new JPanel(new BorderLayout()); // banner + terminal
     private final Function<HostProfile, SftpPanel> sftpFactory;
+    private final SftpLinks links;
+    private final SftpLinks.TerminalHandle gate;   // status sesi ini untuk panel SFTP & sesi edit
+    private final boolean sftpOnly;               // tab berisi panel SFTP saja, tanpa shell
+    private javax.swing.Timer monitor;             // EDT; hanya mode sftpOnly: mendeteksi koneksi SFTP putus
+    private Reconnector<?> reconnector; // EDT; tidak null selama reconnect otomatis berjalan
     private SftpPanel sftp;              // dibuat saat pertama kali dibuka
     private JSplitPane split;
     private int sftpDivider = 380;
 
     public TerminalTab(HostProfile profile, SshTerminalFactory factory, Executor sshOps, TerminalSettings settings,
-                       Function<HostProfile, SftpPanel> sftpFactory) {
+                       SftpLinks links, boolean sftpOnly, Function<HostProfile, SftpPanel> sftpFactory) {
         super(new BorderLayout());
+        this.sftpOnly = sftpOnly;
+        this.links = links;
+        this.gate = links.registerTerminal(profile);
         this.profile = profile;
         this.factory = factory;
         this.sshOps = sshOps;
@@ -68,6 +84,15 @@ public final class TerminalTab extends JPanel {
         content.add(banner, BorderLayout.NORTH);
         banner.setVisible(false);
         add(content, BorderLayout.CENTER);
+        if (sftpOnly) {
+            sftp = sftpFactory.apply(profile);
+            content.add(sftp, BorderLayout.CENTER);
+        }
+    }
+
+    /** true kalau tab ini hanya berisi panel SFTP (tanpa terminal). */
+    public boolean isSftpOnly() {
+        return sftpOnly;
     }
 
     private java.util.function.Consumer<SshTtyConnector> connectedListener; // EDT
@@ -85,6 +110,9 @@ public final class TerminalTab extends JPanel {
 
     /** Menampilkan/menyembunyikan panel SFTP di kiri terminal (koneksi SSH yang sama). */
     public void toggleSftp() {
+        if (sftpOnly) {
+            return; // panel SFTP adalah isi tab ini
+        }
         if (split != null) {
             sftpDivider = split.getDividerLocation();
             remove(split);
@@ -123,6 +151,9 @@ public final class TerminalTab extends JPanel {
 
     /** true kalau sesi sedang connect atau masih terhubung (menutup tab akan memutusnya). */
     public boolean isSessionActive() {
+        if (sftpOnly) {
+            return sftp != null && sftp.isConnected();
+        }
         return pending != null || (connector != null && connector.isConnected());
     }
 
@@ -132,16 +163,21 @@ public final class TerminalTab extends JPanel {
     }
 
     public void connect() {
+        if (sftpOnly) {
+            connectSftpOnly();
+            return;
+        }
         if (disposed || pending != null) {
             return;
         }
         hideBanner();
+        gate.set(TerminalState.CONNECTING);
         showCenter(centerMessage("Menghubungkan ke " + profile.address() + " ..."));
         stateListener.run();
         pending = UiAsync.run(sshOps,
                 () -> {
                     try {
-                        return factory.open(profile, SshTerminalFactory.DEFAULT_SIZE);
+                        return openSession();
                     } catch (SshConnectException e) {
                         throw new java.util.concurrent.CompletionException(e);
                     }
@@ -150,13 +186,63 @@ public final class TerminalTab extends JPanel {
                 this::onConnectFailed);
     }
 
+    /**
+     * Mode "SFTP saja": tidak ada terminal yang ditunggu, jadi SFTP langsung boleh dibuka. Tab ini sendiri yang
+     * memantau koneksi dan menyambung ulang bertahap (lihat {@link #startSftpReconnect}).
+     */
+    private void connectSftpOnly() {
+        if (disposed) {
+            return;
+        }
+        hideBanner();
+        gate.set(TerminalState.CONNECTED);
+        sftp.connect();
+        if (monitor == null) {
+            monitor = new javax.swing.Timer(1000, e -> checkSftp());
+            monitor.start();
+        }
+        stateListener.run();
+    }
+
+    private void checkSftp() {
+        if (disposed || autoReconnecting || sessionEnded || sftp == null) {
+            return;
+        }
+        if (sftp.isChannelDead()) {
+            startSftpReconnect();
+        }
+    }
+
+    /**
+     * Satu percobaan sambung: buka shell, lalu pulihkan SFTP kalau sedang dipakai (panel atau sesi edit). Kalau SFTP
+     * gagal, shell yang baru dibuka ditutup dan percobaan dianggap gagal, supaya terminal dan SFTP selalu tersambung
+     * bersama. Blocking: jalankan di {@code sshOps}.
+     */
+    private SshTtyConnector openSession() throws SshConnectException {
+        SshTtyConnector tty = factory.open(profile, SshTerminalFactory.DEFAULT_SIZE);
+        try {
+            links.restoreSftp(profile);
+        } catch (RemoteFileException e) {
+            tty.close();
+            throw new SshConnectException("Terminal tersambung tetapi SFTP gagal dibuka: " + e.getMessage(), e);
+        }
+        return tty;
+    }
+
     private void onConnected(SshTtyConnector tty) {
         pending = null;
         if (disposed) {
             tty.close();
             return;
         }
+        reconnector = null;
+        autoReconnecting = false;
+        hideBanner();
+        if (widget != null) {
+            widget.close(); // terminal lama yang beku setelah koneksi putus
+        }
         connector = tty;
+        gate.set(TerminalState.CONNECTED);
         widget = new ZoomableTermWidget(settings);
         widget.setTtyConnector(tty);
         tty.addCloseListener(c -> SwingUtilities.invokeLater(() -> onClosed(c)));
@@ -171,6 +257,7 @@ public final class TerminalTab extends JPanel {
 
     private void onConnectFailed(Throwable error) {
         pending = null;
+        gate.set(TerminalState.DOWN);
         stateListener.run();
         if (disposed) {
             return;
@@ -204,11 +291,124 @@ public final class TerminalTab extends JPanel {
         if (disposed || tty != connector || tty.isClosedByUser()) {
             return;
         }
+        if (tty.isConnectionLost()) { // koneksi SSH putus (bukan sekadar exit/logout di shell)
+            startAutoReconnect();
+            return;
+        }
+        gate.set(TerminalState.DOWN);
         sessionEnded = true;
         showBanner("Sesi ke " + profile.address() + " berakhir. Tekan Enter atau klik Reconnect untuk membuka lagi.");
     }
 
     private boolean sessionEnded; // EDT
+    private boolean autoReconnecting; // EDT
+
+    /** Koneksi terminal putus: sambung ulang shell dan SFTP bersama. */
+    private void startAutoReconnect() {
+        startReconnect(this::openSession, this::onConnected, "terminal dan SFTP");
+    }
+
+    /** Koneksi SFTP putus pada tab "SFTP saja": buka lagi kanalnya. */
+    private void startSftpReconnect() {
+        startReconnect(() -> {
+            links.restoreSftp(profile);
+            if (sftp.isChannelDead()) {
+                throw new java.io.IOException("Kanal SFTP belum bisa dibuka");
+            }
+            return Boolean.TRUE;
+        }, ok -> {
+            reconnector = null;
+            autoReconnecting = false;
+            hideBanner();
+            gate.set(TerminalState.CONNECTED);
+            stateListener.run();
+        }, "SFTP");
+    }
+
+    /**
+     * Sambung ulang bertahap (langsung, +15 dtk, +30 dtk) sampai berhasil. Layar lama tetap terlihat di bawah banner.
+     * Selama berjalan, panel SFTP dan sesi edit menunggu ({@link TerminalState#RECONNECTING}).
+     *
+     * @param what    yang disambung, untuk teks banner
+     * @param success dipanggil di EDT saat berhasil
+     */
+    private <T> void startReconnect(Reconnector.Attempt<T> attempt, java.util.function.Consumer<T> success, String what) {
+        String address = profile.address();
+        var r = new Reconnector<T>();
+        reconnector = r;
+        autoReconnecting = true;
+        sessionEnded = false;
+        gate.set(TerminalState.RECONNECTING);
+        stateListener.run();
+        log.info("Koneksi ke {} terputus, menyambung ulang {}", address, what);
+        showBanner("Koneksi ke " + address + " terputus. Menyambung ulang " + what + " ...", null, null);
+        sshOps.execute(() -> r.run(attempt, new Reconnector.Listener<T>() {
+            @Override
+            public void attempting(int n) {
+                SwingUtilities.invokeLater(() -> {
+                    if (reconnector == r) {
+                        showBanner(n == 1
+                                ? "Koneksi ke " + address + " terputus. Menyambung ulang " + what + " ..."
+                                : "Menyambung ulang " + what + " ke " + address + " (percobaan " + n + ") ...", null, null);
+                    }
+                });
+            }
+
+            @Override
+            public void waiting(int secondsLeft, Exception lastError) {
+                SwingUtilities.invokeLater(() -> {
+                    if (reconnector == r) {
+                        showBanner("Gagal menyambung ulang: " + lastError.getMessage()
+                                + ". Mencoba lagi dalam " + secondsLeft + " dtk", "Reconnect (" + secondsLeft + " dtk)",
+                                r::skipWait);
+                    }
+                });
+            }
+
+            @Override
+            public void connected(T value) {
+                SwingUtilities.invokeLater(() -> {
+                    if (disposed || reconnector != r) {
+                        discarded(value);
+                        return;
+                    }
+                    log.info("Tersambung kembali ke {} ({})", address, what);
+                    success.accept(value);
+                });
+            }
+
+            @Override
+            public void discarded(T value) {
+                if (value instanceof SshTtyConnector tty) {
+                    tty.close(); // shell yang sudah terlanjur dibuka tapi tidak dipakai
+                }
+            }
+
+            @Override
+            public void gaveUp(Exception lastError) {
+                SwingUtilities.invokeLater(() -> {
+                    if (disposed || reconnector != r) {
+                        return;
+                    }
+                    reconnector = null;
+                    autoReconnecting = false;
+                    gate.set(TerminalState.DOWN);
+                    sessionEnded = true;
+                    stateListener.run();
+                    showBanner("Gagal menyambung ulang ke " + address + ": " + lastError.getMessage()
+                            + ". Klik Reconnect untuk mencoba lagi.", "Reconnect", TerminalTab.this::reconnect);
+                });
+            }
+        }));
+    }
+
+    private void cancelAutoReconnect() {
+        if (reconnector != null) {
+            reconnector.cancel();
+            reconnector = null;
+        }
+        autoReconnecting = false;
+    }
 
     /**
      * Dipanggil dari dispatcher key global (EDT) sebelum JediTerm menerima key.
@@ -243,6 +443,12 @@ public final class TerminalTab extends JPanel {
         boolean enter = e.getKeyCode() == KeyEvent.VK_ENTER && e.getModifiersEx() == 0;
         boolean ctrlD = e.getKeyCode() == KeyEvent.VK_D
                 && e.getModifiersEx() == InputEvent.CTRL_DOWN_MASK;
+        if (autoReconnecting) { // Enter memotong hitung mundur
+            if (enter && reconnector != null) {
+                reconnector.skipWait();
+            }
+            return enter;
+        }
         if (sessionEnded) {
             if (enter) {
                 reconnect();
@@ -321,15 +527,22 @@ public final class TerminalTab extends JPanel {
     }
 
     private void showBanner(String text) {
+        showBanner(text, "Reconnect", this::reconnect);
+    }
+
+    /** @param buttonText null = tanpa tombol (sedang mencoba) */
+    private void showBanner(String text, String buttonText, Runnable action) {
         banner.removeAll();
         banner.setBackground(new Color(0x5A2A2A));
         banner.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
         var label = new JLabel(text);
         label.setForeground(Color.WHITE);
         banner.add(label, BorderLayout.CENTER);
-        var reconnect = new JButton("Reconnect", AppIcon.RECONNECT.icon());
-        reconnect.addActionListener(e -> reconnect());
-        banner.add(reconnect, BorderLayout.EAST);
+        if (buttonText != null) {
+            var reconnect = new JButton(buttonText, AppIcon.RECONNECT.icon());
+            reconnect.addActionListener(e -> action.run());
+            banner.add(reconnect, BorderLayout.EAST);
+        }
         banner.setVisible(true);
         content.revalidate();
         content.repaint();
@@ -341,7 +554,18 @@ public final class TerminalTab extends JPanel {
         banner.removeAll();
     }
 
+    /** Reconnect manual: menutup sesi sekarang lalu membuka lagi (shell + SFTP bersama). */
     public void reconnect() {
+        cancelAutoReconnect();
+        if (sftpOnly) {
+            hideBanner();
+            if (sftp.isChannelDead()) {
+                startSftpReconnect();
+            } else {
+                connectSftpOnly(); // belum pernah tersambung: coba buka lagi
+            }
+            return;
+        }
         disposeTerminal();
         connect();
     }
@@ -392,6 +616,11 @@ public final class TerminalTab extends JPanel {
     /** Menutup terminal (tab ditutup). Idempotent. */
     public void dispose() {
         disposed = true;
+        cancelAutoReconnect();
+        if (monitor != null) {
+            monitor.stop();
+        }
+        gate.close();
         disposeTerminal();
         if (sftp != null) {
             sftp.dispose();

@@ -58,6 +58,11 @@ public final class TransferQueue extends JPanel {
      * @param onError  dipanggil di EDT kalau gagal (tidak dipanggil kalau dibatalkan)
      */
     public void submit(String title, Job job, Runnable onDone, Consumer<Throwable> onError) {
+        submit(title, job, onDone, onError, () -> { });
+    }
+
+    /** @param onCancelled dipanggil di EDT kalau transfer dibatalkan user */
+    public void submit(String title, Job job, Runnable onDone, Consumer<Throwable> onError, Runnable onCancelled) {
         queued.incrementAndGet();
         setVisible(true);
         worker.execute(() -> {
@@ -114,7 +119,9 @@ public final class TransferQueue extends JPanel {
                 }
                 if (finalError != null) {
                     onError.accept(finalError);
-                } else if (!finalCancelled) {
+                } else if (finalCancelled) {
+                    onCancelled.run();
+                } else {
                     onDone.run();
                 }
             });

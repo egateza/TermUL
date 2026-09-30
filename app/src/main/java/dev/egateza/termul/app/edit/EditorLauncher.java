@@ -26,7 +26,13 @@ public final class EditorLauncher {
     }
 
     public Process launch(Path file) throws IOException {
-        List<String> command = resolve(config.get().commandFor(file));
+        return launch(file, null);
+    }
+
+    /** @param template command editor pilihan user; null = editor sesuai ekstensi/default dari pengaturan */
+    public Process launch(Path file, String template) throws IOException {
+        List<String> command = resolve(template == null
+                ? config.get().commandFor(file) : EditorConfig.commandFor(file, template));
         var pb = new ProcessBuilder(command);
         pb.redirectErrorStream(true);
         pb.redirectOutput(ProcessBuilder.Redirect.DISCARD);

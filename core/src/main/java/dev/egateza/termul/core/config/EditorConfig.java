@@ -8,13 +8,78 @@ import java.util.Map;
 import java.util.TreeMap;
 
 /**
- * Editor lokal per ekstensi file. Command berupa template dengan placeholder {@value #FILE_PLACEHOLDER};
+ * Editor lokal. Command berupa template dengan placeholder {@value #FILE_PLACEHOLDER};
  * kalau placeholder tidak ada, path file ditambahkan di akhir.
  *
- * @param defaultCommand command untuk ekstensi yang tidak ada di mapping, mis. {@code code --wait {file}}
- * @param byExtension    ekstensi tanpa titik (huruf kecil) → command, mis. {@code "sql" → "notepad++ {file}"}
+ * <p>Editor untuk sebuah file dipilih dari {@code editors} yang berurutan: yang pertama dengan mask cocok. Kalau tidak
+ * ada yang cocok dipakai {@code byExtension} lalu {@code defaultCommand} (pengaturan lama, sebelum ada daftar editor).
+ *
+ * @param defaultCommand command kalau tidak ada editor yang cocok, mis. {@code code --wait {file}}
+ * @param byExtension    (lama) ekstensi tanpa titik (huruf kecil) → command, mis. {@code "sql" → "notepad++ {file}"}
+ * @param editors        daftar editor berurutan; juga tampil di menu klik kanan "Edit dengan"
  */
-public record EditorConfig(String defaultCommand, Map<String, String> byExtension) {
+public record EditorConfig(String defaultCommand, Map<String, String> byExtension, List<NamedEditor> editors) {
+
+    /**
+     * Editor pilihan user.
+     *
+     * @param mask    pola nama file, dipisah {@code ;} atau {@code ,}; {@code *} dan {@code ?} sebagai wildcard,
+     *                tanpa membedakan huruf besar/kecil; {@value #ALL} (default) cocok dengan semua file
+     * @param command berformat sama dengan {@link EditorConfig#defaultCommand}
+     */
+    public record NamedEditor(String name, String mask, String command) {
+
+        public static final String ALL = "*.*";
+
+        public NamedEditor {
+            if (name == null || name.isBlank() || command == null || command.isBlank()) {
+                throw new IllegalArgumentException("Nama dan command editor wajib diisi");
+            }
+            name = name.strip();
+            command = command.strip();
+            tokenize(command);
+            mask = mask == null || mask.isBlank() ? ALL : mask.strip();
+            if (masks(mask).isEmpty()) {
+                throw new IllegalArgumentException("Mask tidak valid: " + mask);
+            }
+        }
+
+        public NamedEditor(String name, String command) {
+            this(name, ALL, command);
+        }
+
+        public boolean matches(String fileName) {
+            String lower = fileName.toLowerCase(Locale.ROOT);
+            for (String m : masks(mask)) {
+                if (m.equals("*.*") || m.equals("*") || java.util.regex.Pattern.matches(toRegex(m), lower)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static List<String> masks(String mask) {
+            var result = new ArrayList<String>();
+            for (String part : mask.split("[;,]")) {
+                if (!part.isBlank()) {
+                    result.add(part.strip().toLowerCase(Locale.ROOT));
+                }
+            }
+            return result;
+        }
+
+        private static String toRegex(String glob) {
+            var sb = new StringBuilder();
+            for (char c : glob.toCharArray()) {
+                switch (c) {
+                    case '*' -> sb.append(".*");
+                    case '?' -> sb.append('.');
+                    default -> sb.append(java.util.regex.Pattern.quote(String.valueOf(c)));
+                }
+            }
+            return sb.toString();
+        }
+    }
 
     public static final String FILE_PLACEHOLDER = "{file}";
     public static final String DEFAULT_COMMAND = "code --wait {file}";
@@ -32,15 +97,33 @@ public record EditorConfig(String defaultCommand, Map<String, String> byExtensio
             });
         }
         byExtension = Map.copyOf(normalized);
+        var unique = new java.util.LinkedHashMap<String, NamedEditor>();
+        if (editors != null) {
+            for (NamedEditor e : editors) {
+                if (e != null) {
+                    unique.putIfAbsent(e.name().toLowerCase(Locale.ROOT), e);
+                }
+            }
+        }
+        editors = List.copyOf(unique.values());
+    }
+
+    public EditorConfig(String defaultCommand, Map<String, String> byExtension) {
+        this(defaultCommand, byExtension, List.of());
     }
 
     public static EditorConfig defaults() {
-        return new EditorConfig(DEFAULT_COMMAND, Map.of());
+        return new EditorConfig(DEFAULT_COMMAND, Map.of(), List.of());
     }
 
     /** Command template untuk file ini. */
     public String templateFor(Path file) {
         String name = file.getFileName().toString();
+        for (NamedEditor editor : editors) {
+            if (editor.matches(name)) {
+                return editor.command();
+            }
+        }
         int dot = name.lastIndexOf('.');
         if (dot > 0 && dot < name.length() - 1) {
             String cmd = byExtension.get(name.substring(dot + 1).toLowerCase(Locale.ROOT));
@@ -53,7 +136,12 @@ public record EditorConfig(String defaultCommand, Map<String, String> byExtensio
 
     /** Argumen proses (sudah di-tokenize, placeholder diganti path absolut). */
     public List<String> commandFor(Path file) {
-        List<String> tokens = tokenize(templateFor(file));
+        return commandFor(file, templateFor(file));
+    }
+
+    /** Seperti {@link #commandFor(Path)} tapi dengan template tertentu (editor yang dipilih user). */
+    public static List<String> commandFor(Path file, String template) {
+        List<String> tokens = tokenize(template);
         String path = file.toAbsolutePath().toString();
         var result = new ArrayList<String>(tokens.size() + 1);
         boolean replaced = false;

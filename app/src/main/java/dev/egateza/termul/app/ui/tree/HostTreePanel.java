@@ -40,6 +40,9 @@ public final class HostTreePanel extends JPanel {
     public interface Actions {
         void open(HostProfile profile);
 
+        /** Buka tab yang hanya berisi panel SFTP (tanpa terminal). */
+        void openSftp(HostProfile profile);
+
         void newHost(String group);
 
         void edit(HostProfile profile);
@@ -229,6 +232,7 @@ public final class HostTreePanel extends JPanel {
         switch (target) {
             case HostProfile p -> {
                 menu.add(item(null, "Buka terminal", () -> actions.open(p)));
+                menu.add(item(null, "Buka SFTP saja", () -> actions.openSftp(p)));
                 menu.addSeparator();
                 menu.add(item(null, "Edit...", () -> actions.edit(p)));
                 menu.add(item(null, "Duplikat", () -> actions.duplicate(p)));

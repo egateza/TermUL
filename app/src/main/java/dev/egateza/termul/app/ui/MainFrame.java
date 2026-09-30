@@ -5,6 +5,7 @@ import dev.egateza.termul.app.edit.EditTrackerDialog;
 import dev.egateza.termul.app.edit.EditorSettingsDialog;
 import dev.egateza.termul.app.log.LogBuffer;
 import dev.egateza.termul.app.log.LogPanel;
+import dev.egateza.termul.app.sftp.ActivityBar;
 import dev.egateza.termul.app.sftp.SftpPanel;
 import dev.egateza.termul.app.terminal.TerminalTab;
 import dev.egateza.termul.app.ui.tree.HostTreePanel;
@@ -89,6 +90,10 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private final JPanel body = new JPanel(new BorderLayout());
     private final JPanel hostSide = new JPanel(new BorderLayout());
     private final JButton hostToggle = new JButton();
+    private final JPanel handle = new JPanel(new java.awt.GridBagLayout());
+    private final JButton modeToggle = new JButton(); // pojok kanan atas menu bar: terang/gelap
+    private AppTheme theme; // EDT
+    private ThemeMode wantedMode; // EDT
     private final HostDrawer drawer;
     private JSplitPane hostSplit; // hanya di mode panel, selain itu null. EDT
     private String hostMode = AppConfig.HOST_DOCKED; // EDT
@@ -101,6 +106,8 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         this.io = ctx.io();
         this.onExit = onExit;
         this.hostTree = new HostTreePanel(this);
+        this.theme = AppTheme.fromId(ctx.config().current().theme());
+        this.wantedMode = ThemeMode.fromId(ctx.config().current().themeMode());
 
         setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
         addWindowListener(new WindowAdapter() {
@@ -132,7 +139,6 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         hostToggle.setPreferredSize(new Dimension(HOST_HANDLE_WIDTH, HOST_TOGGLE_HEIGHT));
         hostToggle.addActionListener(e -> setDockedVisible(!hostTree.isVisible()));
         updateHostToggle();
-        var handle = new JPanel(new java.awt.GridBagLayout());
         handle.add(hostToggle);
         handle.setBackground(javax.swing.UIManager.getColor("Tree.background")); // satu warna dengan daftar host
         handle.setMinimumSize(new Dimension(HOST_HANDLE_WIDTH, 0)); // lebar minimum sisi kiri saat host tree tertutup
@@ -204,7 +210,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         }
         var tab = currentTab();
         var state = TerminalMenuState.of(tab.isPresent(), tab.map(TerminalTab::isConnected).orElse(false),
-                tab.map(TerminalTab::isSftpOpen).orElse(false));
+                tab.map(TerminalTab::isSftpOpen).orElse(false), tab.map(t -> !t.isSftpOnly()).orElse(true));
         for (var item : new JMenuItem[] {miDuplicate, miReconnect, miCloseTab, miZoomIn, miZoomOut, miZoomReset}) {
             item.setEnabled(state.tabActions());
         }
@@ -259,7 +265,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         var terminal = new JMenu("Terminal");
         int ctrlShift = InputEvent.CTRL_DOWN_MASK | InputEvent.SHIFT_DOWN_MASK;
         terminal.add(miDuplicate = menuItem(null, "Duplikat tab", KeyStroke.getKeyStroke(KeyEvent.VK_T, ctrlShift),
-                () -> currentTab().ifPresent(t -> open(t.profile()))));
+                () -> currentTab().ifPresent(t -> openTab(t.profile(), t.isSftpOnly()))));
         terminal.add(miReconnect = menuItem(null, "Reconnect", KeyStroke.getKeyStroke(KeyEvent.VK_F5, InputEvent.CTRL_DOWN_MASK),
                 () -> currentTab().ifPresent(TerminalTab::reconnect)));
         terminal.add(miCloseTab = menuItem(null, "Tutup tab", KeyStroke.getKeyStroke(KeyEvent.VK_W, ctrlShift),
@@ -300,13 +306,19 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         bar.add(buildVaultMenu());
 
         var settings = new JMenu("Pengaturan");
-        settings.add(menuItem(null, "Editor lokal...", null, () ->
-                EditorSettingsDialog.show(this, ctx.config().current().editors()).ifPresent(editors ->
-                        mutate("Gagal menyimpan pengaturan", () ->
-                                ctx.config().save(ctx.config().current().withEditors(editors))))));
+        settings.add(menuItem(null, "Editor lokal...", null, this::configureEditors));
         settings.add(buildHostPanelMenu());
+        settings.add(buildThemeMenu());
         settings.add(buildIconSetMenu());
         bar.add(settings);
+        bar.add(javax.swing.Box.createHorizontalGlue());
+        modeToggle.setFocusable(false);
+        modeToggle.putClientProperty("JButton.buttonType", "toolBarButton");
+        modeToggle.addActionListener(e -> {
+            applyTheme(theme, theme.effectiveMode(wantedMode).other());
+        });
+        bar.add(modeToggle);
+        updateModeToggle();
 
         var help = new JMenu("Bantuan");
         showLog.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_L, ctrlShift));
@@ -324,6 +336,12 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                                 .map(s -> "  • " + s.attribution()).collect(Collectors.joining("\n")))));
         bar.add(help);
         return bar;
+    }
+
+    private void configureEditors() {
+        EditorSettingsDialog.show(this, ctx.config().current().editors()).ifPresent(editors ->
+                mutate("Gagal menyimpan pengaturan", () ->
+                        ctx.config().save(ctx.config().current().withEditors(editors))));
     }
 
     private boolean floatingMode() {
@@ -433,6 +451,58 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         }
         menu.add(opacity);
         return menu;
+    }
+
+    /** Submenu pilihan tema; ganti langsung terlihat dan disimpan di config.json. */
+    private JMenu buildThemeMenu() {
+        var menu = new JMenu("Tema");
+        var group = new ButtonGroup();
+        for (AppTheme t : AppTheme.values()) {
+            var item = new JRadioButtonMenuItem(t.label(), t == theme);
+            item.setToolTipText("Mode: " + t.modes().stream().map(ThemeMode::label).collect(Collectors.joining(", ")));
+            item.addActionListener(e -> {
+                if (t != theme) {
+                    applyTheme(t, wantedMode);
+                }
+            });
+            group.add(item);
+            menu.add(item);
+        }
+        return menu;
+    }
+
+    /**
+     * Pasang tema+mode ke seluruh window yang terbuka lalu simpan. Mode yang diminta disimpan apa adanya (bukan
+     * mode efektif), supaya kembali ke mode favorit kalau user pindah ke tema yang mendukung keduanya. EDT.
+     */
+    private void applyTheme(AppTheme newTheme, ThemeMode wanted) {
+        theme = newTheme;
+        wantedMode = wanted;
+        theme.install(wanted);
+        // warna yang di-set manual tidak ikut berubah lewat updateUI
+        handle.setBackground(javax.swing.UIManager.getColor("Tree.background"));
+        com.formdev.flatlaf.FlatLaf.updateUI();
+        // FlatLaf.updateUI hanya menjangkau komponen yang sedang ada di window; yang terlepas dari hierarki
+        // (tabs saat belum ada tab, host tree di mode melayang, dst.) harus diperbarui sendiri
+        for (var detached : new java.awt.Component[] {tabs, welcome, hostTree, hostSide, logPanel, editTracker}) {
+            if (detached != null) {
+                SwingUtilities.updateComponentTreeUI(detached);
+            }
+        }
+        updateModeToggle();
+        mutate("Gagal menyimpan pengaturan", () ->
+                ctx.config().save(ctx.config().current().withTheme(newTheme.id()).withThemeMode(wanted.id())));
+    }
+
+    private void updateModeToggle() {
+        var mode = theme.effectiveMode(wantedMode);
+        boolean both = theme.modes().size() > 1;
+        // ikon menunjukkan mode tujuan: di mode gelap tampil matahari, di mode terang tampil bulan
+        modeToggle.setText(mode == ThemeMode.DARK ? "☀" : "☾");
+        modeToggle.setEnabled(both);
+        modeToggle.setToolTipText(both
+                ? "Ganti ke mode " + mode.other().label().toLowerCase(java.util.Locale.ROOT)
+                : "Tema " + theme.label() + " hanya punya mode " + mode.label().toLowerCase(java.util.Locale.ROOT));
     }
 
     /** Submenu pilihan set ikon; ganti langsung terlihat (repaint) dan disimpan di config.json. */
@@ -624,9 +694,13 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     }
 
     private static String tabTitle(HostProfile p) {
+        return tabTitle(p, "");
+    }
+
+    private static String tabTitle(HostProfile p, String suffix) {
         Color color = EnvColors.of(p.environment());
-        String name = p.name().replace("&", "&amp;").replace("<", "&lt;");
-        return color == null ? p.name()
+        String name = (p.name() + suffix).replace("&", "&amp;").replace("<", "&lt;");
+        return color == null ? p.name() + suffix
                 : "<html><font color='#%06x'>&#9679;</font> %s</html>".formatted(color.getRGB() & 0xFFFFFF, name);
     }
 
@@ -689,10 +763,40 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
     @Override
     public void open(HostProfile profile) {
+        openTab(profile, false);
+    }
+
+    @Override
+    public void openSftp(HostProfile profile) {
+        openTab(profile, true);
+    }
+
+    private void openTab(HostProfile profile, boolean sftpOnly) {
         drawer.setOpen(false); // mode tombol melayang: beri ruang penuh untuk terminal
-        var tab = new TerminalTab(profile, ctx.terminals(), ctx.sshOps(), ctx.terminalSettings(),
-                p -> new SftpPanel(p, ctx.sessions(), ctx.sshOps(), ctx.edits()::open));
-        tabs.addTab(tabTitle(profile), tab);
+        var tab = new TerminalTab(profile, ctx.terminals(), ctx.sshOps(), ctx.terminalSettings(), ctx.sftpLinks(),
+                sftpOnly, p -> new SftpPanel(p, ctx.sftpLinks(), ctx.sshOps(), new SftpPanel.EditActions() {
+                    @Override
+                    public void edit(HostProfile profile, String remotePath, String command) {
+                        ctx.edits().open(profile, remotePath, command);
+                    }
+
+                    @Override
+                    public List<dev.egateza.termul.core.config.EditorConfig.NamedEditor> editors() {
+                        return ctx.config().current().editors().editors();
+                    }
+
+                    @Override
+                    public void configure() {
+                        configureEditors();
+                    }
+
+                    @Override
+                    public Runnable onActivity(java.util.UUID profileId,
+                                               java.util.function.BiConsumer<ActivityBar.Level, String> sink) {
+                        return ctx.edits().addActivityListener(profileId, sink);
+                    }
+                }));
+        tabs.addTab(sftpOnly ? tabTitle(profile, " (SFTP)") : tabTitle(profile), tab);
         int index = tabs.indexOfComponent(tab);
         tabs.setToolTipTextAt(index, profile.address());
         tabs.setIconAt(index, OsIcons.of(profile.os()));

@@ -9,13 +9,19 @@ package dev.egateza.termul.core.config;
  * @param hostButtonOpacity opasitas tombol melayang panel host, persen {@value #MIN_OPACITY}..100 (100 = solid)
  * @param hostPanelMode     {@value #HOST_DOCKED} = panel host di samping (tetap), {@value #HOST_FLOATING} = tombol
  *                          melayang yang menampilkan panel di atas terminal
+ * @param theme             id tema UI (mis. {@code default}); diterjemahkan di modul app
+ * @param themeMode         {@value #MODE_LIGHT} atau {@value #MODE_DARK}; dipakai kalau tema mendukungnya
  */
 public record AppConfig(EditorConfig editors, float terminalFontSize, String iconSet, int hostButtonOpacity,
-                        String hostPanelMode) {
+                        String hostPanelMode, String theme, String themeMode) {
 
     public static final String HOST_DOCKED = "docked";
     public static final String HOST_FLOATING = "floating";
 
+    public static final String MODE_LIGHT = "light";
+    public static final String MODE_DARK = "dark";
+
+    public static final String DEFAULT_THEME = "default";
     public static final String DEFAULT_ICON_SET = "fontawesome";
     public static final int MIN_OPACITY = 10;
     public static final int DEFAULT_OPACITY = 100;
@@ -37,25 +43,40 @@ public record AppConfig(EditorConfig editors, float terminalFontSize, String ico
         if (!HOST_FLOATING.equals(hostPanelMode)) {
             hostPanelMode = HOST_DOCKED;
         }
+        if (theme == null || theme.isBlank()) {
+            theme = DEFAULT_THEME;
+        }
+        if (!MODE_LIGHT.equals(themeMode)) {
+            themeMode = MODE_DARK; // tampilan sebelum ada pilihan tema
+        }
     }
 
     public static AppConfig defaults() {
-        return new AppConfig(EditorConfig.defaults(), 14f, DEFAULT_ICON_SET, DEFAULT_OPACITY, HOST_DOCKED);
+        return new AppConfig(EditorConfig.defaults(), 14f, DEFAULT_ICON_SET, DEFAULT_OPACITY, HOST_DOCKED,
+                DEFAULT_THEME, MODE_DARK);
     }
 
     public AppConfig withEditors(EditorConfig e) {
-        return new AppConfig(e, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode);
+        return new AppConfig(e, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode);
     }
 
     public AppConfig withIconSet(String id) {
-        return new AppConfig(editors, terminalFontSize, id, hostButtonOpacity, hostPanelMode);
+        return new AppConfig(editors, terminalFontSize, id, hostButtonOpacity, hostPanelMode, theme, themeMode);
     }
 
     public AppConfig withHostButtonOpacity(int percent) {
-        return new AppConfig(editors, terminalFontSize, iconSet, percent, hostPanelMode);
+        return new AppConfig(editors, terminalFontSize, iconSet, percent, hostPanelMode, theme, themeMode);
     }
 
     public AppConfig withHostPanelMode(String mode) {
-        return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, mode);
+        return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, mode, theme, themeMode);
+    }
+
+    public AppConfig withTheme(String id) {
+        return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, id, themeMode);
+    }
+
+    public AppConfig withThemeMode(String mode) {
+        return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, mode);
     }
 }

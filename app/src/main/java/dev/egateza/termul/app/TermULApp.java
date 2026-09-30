@@ -1,20 +1,22 @@
 package dev.egateza.termul.app;
 
-import com.formdev.flatlaf.FlatDarkLaf;
 import dev.egateza.termul.app.edit.EditManager;
 import dev.egateza.termul.app.ssh.SwingCredentialProvider;
 import dev.egateza.termul.app.ssh.SwingHostKeyPrompt;
 import dev.egateza.termul.app.terminal.TerminalSettings;
 import dev.egateza.termul.app.ui.AppIcon;
+import dev.egateza.termul.app.ui.AppTheme;
 import dev.egateza.termul.app.ui.Dialogs;
 import dev.egateza.termul.app.ui.IconSet;
 import dev.egateza.termul.app.ui.MainFrame;
+import dev.egateza.termul.app.ui.ThemeMode;
 import dev.egateza.termul.app.ui.UiAsync;
 import dev.egateza.termul.app.vault.VaultCredentialProvider;
 import dev.egateza.termul.app.vault.VaultGate;
 import dev.egateza.termul.core.AppPaths;
 import dev.egateza.termul.core.config.ConfigStore;
 import dev.egateza.termul.core.profile.ProfileStore;
+import dev.egateza.termul.sftp.SftpLinks;
 import dev.egateza.termul.ssh.SessionManager;
 import dev.egateza.termul.ssh.SshSettings;
 import dev.egateza.termul.sftp.edit.EditCache;
@@ -65,19 +67,20 @@ public final class TermULApp {
                 new SwingHostKeyPrompt(frameRef::get),
                 new VaultCredentialProvider(vault, new SwingCredentialProvider(frameRef::get)),
                 SshSettings.defaults());
+        var sftpLinks = new SftpLinks(sessions);
         EditManager edits;
         try {
-            edits = new EditManager(sessions, new EditCache(paths.editCacheDir()), () -> config.current().editors(),
+            edits = new EditManager(sftpLinks, new EditCache(paths.editCacheDir()), () -> config.current().editors(),
                     sshOps, frameRef::get);
         } catch (java.io.IOException e) {
             throw new java.io.UncheckedIOException("WatchService tidak tersedia", e);
         }
 
         SwingUtilities.invokeLater(() -> {
-            FlatDarkLaf.setup();
+            AppTheme.fromId(config.current().theme()).install(ThemeMode.fromId(config.current().themeMode()));
             AppIcon.use(IconSet.fromId(config.current().iconSet()));
             var ctx = new AppContext(paths, config, store, io, sshOps, sessions, new SshTerminalFactory(sessions),
-                    new TerminalSettings(config.current().terminalFontSize()), vault, edits);
+                    new TerminalSettings(config.current().terminalFontSize()), vault, edits, sftpLinks);
             var frame = new MainFrame(ctx, () -> shutdown(io, sshOps, sessions, vault, edits, log));
             frameRef.set(frame);
             frame.setVisible(true);

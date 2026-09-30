@@ -5,6 +5,7 @@ import static org.awaitility.Awaitility.await;
 
 import dev.egateza.termul.core.config.EditorConfig;
 import dev.egateza.termul.sftp.SftpFixture;
+import dev.egateza.termul.sftp.SftpLinks;
 import dev.egateza.termul.sftp.edit.EditCache;
 import dev.egateza.termul.sftp.edit.RemoteEditSession.State;
 import java.nio.file.Files;
@@ -30,13 +31,15 @@ class EditManagerTest {
     private SftpFixture fx;
     private ExecutorService sshOps;
     private EditManager edits;
+    private SftpLinks links;
 
     @BeforeEach
     void setUp() throws Exception {
         fx = new SftpFixture(tmp);
         sshOps = Executors.newVirtualThreadPerTaskExecutor();
         var fakeEditor = new EditorConfig("cmd.exe /c exit 0", Map.of());
-        edits = new EditManager(fx.sessions, new EditCache(tmp.resolve("cache")), () -> fakeEditor, sshOps, () -> null);
+        links = new SftpLinks(fx.sessions);
+        edits = new EditManager(links, new EditCache(tmp.resolve("cache")), () -> fakeEditor, sshOps, () -> null);
     }
 
     @AfterEach
@@ -71,5 +74,40 @@ class EditManagerTest {
         edits.close(entry);
         assertThat(edits.entries()).isEmpty();
         assertThat(local).doesNotExist();
+    }
+
+    @Test
+    void koneksiPutusSaatEditLaluSimpanSambungUlangDanTerupload() throws Exception {
+        Files.writeString(fx.remoteRoot.resolve("app.conf"), "a=1\n");
+        edits.open(fx.profile, "/app.conf");
+        await().atMost(Duration.ofSeconds(10)).until(() -> edits.entries().size() == 1);
+        var entry = edits.entries().getFirst();
+        var oldFiles = entry.session().files();
+
+        oldFiles.close(); // koneksi SFTP terputus (timeout) sementara file masih terbuka di editor
+        assertThat(oldFiles.isOpen()).isFalse();
+        Files.writeString(entry.session().localFile(), "a=2\n");
+
+        await().atMost(Duration.ofSeconds(15))
+                .until(() -> Files.readString(fx.remoteRoot.resolve("app.conf")).equals("a=2\n"));
+        assertThat(entry.session().files()).isNotSameAs(oldFiles);
+        assertThat(entry.session().files().isOpen()).isTrue();
+    }
+
+    @Test
+    void aktivitasEditTampilUntukPanelSftpProfilYangSama() throws Exception {
+        Files.writeString(fx.remoteRoot.resolve("x.txt"), "1");
+        var messages = new java.util.concurrent.CopyOnWriteArrayList<String>();
+        edits.addActivityListener(fx.profile.id(), (level, text) -> messages.add(level + ": " + text));
+        edits.addActivityListener(java.util.UUID.randomUUID(), (level, text) -> messages.add("SALAH: " + text));
+
+        edits.open(fx.profile, "/x.txt");
+        await().atMost(Duration.ofSeconds(10)).until(() -> edits.entries().size() == 1);
+        Files.writeString(edits.entries().getFirst().session().localFile(), "2");
+
+        await().atMost(Duration.ofSeconds(10)).until(() -> messages.stream().anyMatch(m -> m.startsWith("SUCCESS")
+                && m.contains("/x.txt berhasil diupload")));
+        assertThat(messages).anyMatch(m -> m.startsWith("INFO") && m.contains("Mengupload /x.txt"));
+        assertThat(messages).noneMatch(m -> m.startsWith("SALAH"));
     }
 }

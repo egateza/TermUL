@@ -54,6 +54,7 @@ public final class SshTtyConnector implements TtyConnector {
     private final AtomicBoolean closed = new AtomicBoolean();
     private final AtomicBoolean closeNotified = new AtomicBoolean();
     private volatile boolean closedByUser;
+    private volatile boolean connectionLost;
 
     public SshTtyConnector(SshLease lease, ChannelShell channel, String name) {
         this.lease = Objects.requireNonNull(lease, "lease");
@@ -86,6 +87,15 @@ public final class SshTtyConnector implements TtyConnector {
     /** true kalau ditutup lewat {@link #closeByUser()} (bukan exit/logout/putus). */
     public boolean isClosedByUser() {
         return closedByUser;
+    }
+
+    /**
+     * true kalau shell tertutup karena <b>koneksi SSH-nya putus</b> (jaringan mati, server restart), bukan karena
+     * exit/logout atau ditutup user. Ditentukan saat channel tertutup, sebelum lease dilepas, jadi aman dibaca
+     * kapan saja setelah close listener dipanggil (tidak seperti {@code lease().connection()}).
+     */
+    public boolean isConnectionLost() {
+        return connectionLost;
     }
 
     public SshLease lease() {
@@ -201,7 +211,17 @@ public final class SshTtyConnector implements TtyConnector {
         if (!closeNotified.compareAndSet(false, true)) {
             return;
         }
-        log.info("Shell {} ditutup ({})", name, closedByUser ? "tab ditutup" : "exit/logout/putus");
+        boolean lost = false;
+        if (!closedByUser && !lease.isReleased()) {
+            try {
+                lost = !lease.connection().isOpen();
+            } catch (IllegalStateException e) {
+                // lease dilepas bersamaan: anggap penutupan biasa
+            }
+        }
+        connectionLost = lost;
+        log.info("Shell {} ditutup ({})", name,
+                closedByUser ? "tab ditutup" : lost ? "koneksi putus" : "exit/logout");
         writer.shutdown();
         lease.close();
         fireClosed();

@@ -126,6 +126,37 @@ class SshTtyConnectorTest {
     }
 
     @Test
+    void koneksiPutusDitandaiBedaDenganExit() throws Exception {
+        SshTtyConnector tty = factory.open(profile, SshTerminalFactory.DEFAULT_SIZE);
+        var closed = new AtomicReference<SshTtyConnector>();
+        tty.addCloseListener(closed::set);
+        readUntil(tty, "$ ");
+
+        server.dropAllSessions(); // jaringan putus / server menutup koneksi
+
+        await().atMost(Duration.ofSeconds(10)).until(() -> closed.get() != null);
+        assertThat(tty.isConnectionLost()).isTrue();
+        assertThat(tty.isClosedByUser()).isFalse();
+    }
+
+    @Test
+    void exitBiasaBukanKoneksiPutus() throws Exception {
+        SshTtyConnector tty = factory.open(profile, SshTerminalFactory.DEFAULT_SIZE);
+        var closed = new AtomicReference<SshTtyConnector>();
+        tty.addCloseListener(closed::set);
+        readUntil(tty, "$ ");
+        tty.write("exit\r");
+        var buf = new char[256];
+        while (tty.read(buf, 0, buf.length) >= 0) {
+            // habiskan output sampai EOF
+        }
+        tty.close();
+
+        await().atMost(Duration.ofSeconds(5)).until(() -> closed.get() != null);
+        assertThat(tty.isConnectionLost()).isFalse();
+    }
+
+    @Test
     void writeSetelahCloseDiabaikanTanpaException() throws Exception {
         SshTtyConnector tty = factory.open(profile, SshTerminalFactory.DEFAULT_SIZE);
         tty.close();

@@ -61,4 +61,55 @@ class EditorConfigTest {
         assertThat(new ConfigStore(file).load()).isEqualTo(AppConfig.defaults());
         assertThat(file).hasContent("{rusak");
     }
+
+    @Test
+    void firstMatchingMaskWinsAndFallsBackToLegacySettings() {
+        var cfg = new EditorConfig("fallback {file}", Map.of("md", "legacy {file}"), java.util.List.of(
+                new EditorConfig.NamedEditor("Notepad++", "*.sql;*.TXT", "notepad++ {file}"),
+                new EditorConfig.NamedEditor("Code", "*.*", "code --wait {file}")));
+
+        assertThat(cfg.templateFor(Path.of("a.SQL"))).isEqualTo("notepad++ {file}");
+        assertThat(cfg.templateFor(Path.of("x", "b.txt"))).isEqualTo("notepad++ {file}");
+        assertThat(cfg.templateFor(Path.of("c.java"))).isEqualTo("code --wait {file}");
+        assertThat(cfg.templateFor(Path.of("Makefile"))).isEqualTo("code --wait {file}");
+        assertThat(new EditorConfig("fallback {file}", Map.of("md", "legacy {file}")).templateFor(Path.of("r.md")))
+                .isEqualTo("legacy {file}");
+    }
+
+    @Test
+    void maskSupportsWildcardsAndSeparators() {
+        var editor = new EditorConfig.NamedEditor("Log", "*.log, app-?.out", "less {file}");
+
+        assertThat(editor.matches("server.LOG")).isTrue();
+        assertThat(editor.matches("app-1.out")).isTrue();
+        assertThat(editor.matches("app-12.out")).isFalse();
+        assertThat(editor.matches("server.log.gz")).isFalse();
+        assertThat(new EditorConfig.NamedEditor("Semua", " ", "x").mask()).isEqualTo("*.*");
+    }
+
+    @Test
+    void invalidEditorIsRejected() {
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> new EditorConfig.NamedEditor("", "*.*", "x"))
+                .isInstanceOf(IllegalArgumentException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> new EditorConfig.NamedEditor("A", ";,", "x"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void duplicateEditorNamesKeepFirst() {
+        var cfg = new EditorConfig(null, Map.of(), java.util.List.of(
+                new EditorConfig.NamedEditor("Code", "code {file}"),
+                new EditorConfig.NamedEditor("code", "other")));
+
+        assertThat(cfg.editors()).hasSize(1);
+        assertThat(cfg.editors().getFirst().command()).isEqualTo("code {file}");
+    }
+
+    @Test
+    void explicitTemplateOverridesExtensionMapping() {
+        var file = java.nio.file.Path.of("tmp", "a.sql");
+
+        assertThat(EditorConfig.commandFor(file, "subl --wait {file}"))
+                .containsExactly("subl", "--wait", file.toAbsolutePath().toString());
+    }
 }

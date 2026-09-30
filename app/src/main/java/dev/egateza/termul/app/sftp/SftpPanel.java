@@ -1,5 +1,6 @@
 package dev.egateza.termul.app.sftp;
 
+import dev.egateza.termul.app.sftp.ActivityBar.Level;
 import dev.egateza.termul.app.ui.AppIcon;
 import dev.egateza.termul.app.ui.Dialogs;
 import dev.egateza.termul.app.ui.Edt;
@@ -7,8 +8,9 @@ import dev.egateza.termul.app.ui.UiAsync;
 import dev.egateza.termul.core.profile.HostProfile;
 import dev.egateza.termul.sftp.RemoteEntry;
 import dev.egateza.termul.sftp.RemoteFileService;
+import dev.egateza.termul.sftp.SftpConnection;
+import dev.egateza.termul.sftp.SftpLinks;
 import dev.egateza.termul.sftp.RemotePaths;
-import dev.egateza.termul.ssh.SessionManager;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Toolkit;
@@ -43,6 +45,7 @@ import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.JToolBar;
 import javax.swing.KeyStroke;
+import javax.swing.SwingUtilities;
 import javax.swing.ListSelectionModel;
 import javax.swing.TransferHandler;
 import javax.swing.table.DefaultTableCellRenderer;
@@ -59,26 +62,48 @@ public class SftpPanel extends JPanel {
     private static final Logger log = LoggerFactory.getLogger(SftpPanel.class);
 
     protected final HostProfile profile;
-    protected final SessionManager sessions;
+    private final SftpLinks links;
     protected final ExecutorService sshOps;
     protected final SftpTableModel model = new SftpTableModel();
     protected final JTable table = new JTable(model);
     protected final JTextField pathField = new JTextField();
-    protected final JLabel status = new JLabel(" ");
+    /** Keterangan aktivitas panel ini (upload, download, operasi file, reconnect, edit remote). */
+    protected final ActivityBar activity = new ActivityBar();
     protected final JToolBar toolbar = new JToolBar();
-    private volatile RemoteFileService service; // ditulis sekali setelah connect
+    private volatile SftpConnection link;        // koneksi bersama profil; ditulis sekali setelah connect
+    private Runnable unsubscribeLink = () -> { }; // EDT
+    private Runnable unsubscribeEdits = () -> { }; // EDT
+    private boolean disposed;                    // EDT
     protected String currentDir;                 // EDT
     private boolean connecting;                  // EDT
 
-    private final java.util.function.BiConsumer<HostProfile, String> openInEditor;
+    private final EditActions editActions;
 
-    public SftpPanel(HostProfile profile, SessionManager sessions, ExecutorService sshOps,
-                     java.util.function.BiConsumer<HostProfile, String> openInEditor) {
+    /** Hubungan panel ke editor lokal (diwujudkan di modul wiring). */
+    public interface EditActions {
+        /** @param command template editor pilihan user; null = editor default sesuai ekstensi */
+        void edit(HostProfile profile, String remotePath, String command);
+
+        /** Editor bernama untuk submenu "Edit dengan"; dibaca setiap menu dibuka. */
+        java.util.List<dev.egateza.termul.core.config.EditorConfig.NamedEditor> editors();
+
+        /** Buka dialog pengaturan editor. */
+        void configure();
+
+        /**
+         * Berlangganan keterangan aktivitas edit remote untuk profil ini (buka, upload mulai/selesai, error).
+         *
+         * @return pemanggil untuk berhenti berlangganan
+         */
+        Runnable onActivity(java.util.UUID profileId, java.util.function.BiConsumer<Level, String> sink);
+    }
+
+    public SftpPanel(HostProfile profile, SftpLinks links, ExecutorService sshOps, EditActions editActions) {
         super(new BorderLayout());
         this.profile = profile;
-        this.sessions = sessions;
+        this.links = links;
         this.sshOps = sshOps;
-        this.openInEditor = openInEditor;
+        this.editActions = editActions;
 
         toolbar.setFloatable(false);
         toolbar.add(button(AppIcon.ARROW_UP, null, "Direktori induk (Backspace)", this::goUp));
@@ -148,10 +173,9 @@ public class SftpPanel extends JPanel {
         add(scroll, BorderLayout.CENTER);
 
         transfers = new TransferQueue(profile.name());
-        status.setBorder(BorderFactory.createEmptyBorder(2, 6, 2, 6));
         var bottom = new JPanel(new BorderLayout());
         bottom.add(transfers, BorderLayout.NORTH);
-        bottom.add(status, BorderLayout.SOUTH);
+        bottom.add(activity, BorderLayout.SOUTH);
         add(bottom, BorderLayout.SOUTH);
     }
 
@@ -171,6 +195,29 @@ public class SftpPanel extends JPanel {
 
     private JPopupMenu buildPopup() {
         var menu = new JPopupMenu();
+        var edit = menuItem("Edit", () -> editSelected(null));
+        var editWith = new javax.swing.JMenu("Edit dengan");
+        menu.add(edit);
+        menu.add(editWith);
+        menu.addSeparator();
+        menu.addPopupMenuListener(new javax.swing.event.PopupMenuListener() {
+            @Override
+            public void popupMenuWillBecomeVisible(javax.swing.event.PopupMenuEvent e) {
+                selectRowUnderPointer();
+                boolean file = selectedEntries().stream().anyMatch(en -> en.type() == RemoteEntry.Type.FILE);
+                edit.setEnabled(file);
+                editWith.setEnabled(file);
+                rebuildEditWith(editWith);
+            }
+
+            @Override
+            public void popupMenuWillBecomeInvisible(javax.swing.event.PopupMenuEvent e) {
+            }
+
+            @Override
+            public void popupMenuCanceled(javax.swing.event.PopupMenuEvent e) {
+            }
+        });
         menu.add(menuItem("Download...", this::downloadSelected));
         menu.add(menuItem("Upload ke sini...", this::chooseUpload));
         menu.addSeparator();
@@ -185,6 +232,31 @@ public class SftpPanel extends JPanel {
         return menu;
     }
 
+    /** Klik kanan pada baris yang belum terpilih memilih baris itu dulu (perilaku file manager). */
+    private void selectRowUnderPointer() {
+        var pointer = java.awt.MouseInfo.getPointerInfo();
+        if (pointer == null || !table.isShowing()) {
+            return;
+        }
+        var p = pointer.getLocation();
+        javax.swing.SwingUtilities.convertPointFromScreen(p, table);
+        int row = table.rowAtPoint(p);
+        if (row >= 0 && !table.isRowSelected(row)) {
+            table.setRowSelectionInterval(row, row);
+        }
+    }
+
+    private void rebuildEditWith(javax.swing.JMenu menu) {
+        menu.removeAll();
+        for (var editor : editActions.editors()) {
+            menu.add(menuItem(editor.name(), () -> editSelected(editor.command())));
+        }
+        if (menu.getItemCount() > 0) {
+            menu.addSeparator();
+        }
+        menu.add(menuItem("Konfigurasi editor...", editActions::configure));
+    }
+
     private static JMenuItem menuItem(String label, Runnable action) {
         var item = new JMenuItem(label);
         item.addActionListener(e -> action.run());
@@ -194,7 +266,7 @@ public class SftpPanel extends JPanel {
     // ------------------------------------------------------------------ transfer
 
     private void chooseUpload() {
-        if (service == null || currentDir == null) {
+        if (link == null || currentDir == null) {
             return;
         }
         var chooser = new JFileChooser();
@@ -207,7 +279,7 @@ public class SftpPanel extends JPanel {
 
     /** Upload file ke direktori saat ini. Direktori lokal dilewati (belum didukung). */
     public void upload(List<Path> files) {
-        if (service == null || currentDir == null) {
+        if (link == null || currentDir == null) {
             return;
         }
         String dir = currentDir;
@@ -218,16 +290,32 @@ public class SftpPanel extends JPanel {
                 continue;
             }
             String target = RemotePaths.join(dir, file.getFileName().toString());
-            transfers.submit("Upload " + file.getFileName(), listener -> {
-                if (service.exists(target) && !confirmOverwrite(target)) {
+            String name = file.getFileName().toString();
+            var existsSkipped = new AtomicBoolean();
+            activity.report(Level.INFO, "Upload " + name + " ke " + dir + " diantrekan");
+            transfers.submit("Upload " + name, listener -> {
+                activity.report(Level.INFO, "Mengupload " + name + " ke " + dir + " ...");
+                link.execute(() -> {
+                    if (svc().exists(target) && !confirmOverwrite(target)) {
+                        existsSkipped.set(true);
+                        return null;
+                    }
+                    svc().upload(file, target, null, listener);
+                    return null;
+                });
+            }, () -> {
+                if (existsSkipped.get()) {
+                    activity.report(Level.WARN, "Upload " + name + " dilewati (file sudah ada dan tidak ditimpa)");
                     return;
                 }
-                service.upload(file, target, null, listener);
-            }, () -> {
+                activity.report(Level.SUCCESS, name + " berhasil diupload ke " + dir);
                 if (dir.equals(currentDir)) {
                     refresh();
                 }
-            }, err -> Dialogs.error(this, "Upload gagal", err));
+            }, err -> {
+                activity.report(Level.ERROR, "Upload " + name + " gagal: " + err.getMessage());
+                Dialogs.error(this, "Upload gagal", err);
+            }, () -> activity.report(Level.WARN, "Upload " + name + " dibatalkan"));
         }
         if (!skipped.isEmpty()) {
             Dialogs.info(this, "Upload", "Upload direktori belum didukung, dilewati: " + String.join(", ", skipped));
@@ -254,26 +342,39 @@ public class SftpPanel extends JPanel {
         Path targetDir = chooser.getSelectedFile().toPath();
         for (RemoteEntry entry : selected) {
             Path target = targetDir.resolve(entry.name());
+            var skipped = new AtomicBoolean();
+            activity.report(Level.INFO, "Download " + entry.name() + " diantrekan");
             transfers.submit("Download " + entry.name(), listener -> {
-                if (Files.exists(target) && !confirmOverwrite(target.toString())) {
-                    return;
-                }
-                service.download(entry.path(), target, listener);
-            }, () -> status.setText("Tersimpan: " + target), err -> Dialogs.error(this, "Download gagal", err));
+                activity.report(Level.INFO, "Mengunduh " + entry.path() + " ...");
+                link.execute(() -> {
+                    if (Files.exists(target) && !confirmOverwrite(target.toString())) {
+                        skipped.set(true);
+                        return null;
+                    }
+                    svc().download(entry.path(), target, listener);
+                    return null;
+                });
+            }, () -> activity.report(skipped.get() ? Level.WARN : Level.SUCCESS,
+                    skipped.get() ? "Download " + entry.name() + " dilewati (file lokal sudah ada)"
+                            : entry.name() + " berhasil diunduh ke " + target),
+                    err -> {
+                        activity.report(Level.ERROR, "Download " + entry.name() + " gagal: " + err.getMessage());
+                        Dialogs.error(this, "Download gagal", err);
+                    }, () -> activity.report(Level.WARN, "Download " + entry.name() + " dibatalkan"));
         }
     }
 
     // ------------------------------------------------------------------ operasi file
 
     private void mkdir() {
-        if (service == null || currentDir == null) {
+        if (link == null || currentDir == null) {
             return;
         }
         String name = Dialogs.input(this, "Direktori baru", "Nama direktori di " + currentDir + ":", "");
         if (name != null) {
             String path = RemotePaths.join(currentDir, name);
-            call(() -> {
-                service.mkdir(path);
+            call("Membuat direktori " + path, "Direktori " + path + " dibuat", () -> {
+                svc().mkdir(path);
                 return path;
             }, p -> refresh());
         }
@@ -288,10 +389,11 @@ public class SftpPanel extends JPanel {
         String name = Dialogs.input(this, "Rename", "Nama baru untuk " + entry.name() + ":", entry.name());
         if (name != null && !name.equals(entry.name())) {
             String target = RemotePaths.join(RemotePaths.parent(entry.path()), name);
-            call(() -> {
-                service.rename(entry.path(), target);
-                return target;
-            }, t -> refresh());
+            call("Mengganti nama " + entry.name() + " menjadi " + name,
+                    entry.name() + " diganti namanya menjadi " + name, () -> {
+                        svc().rename(entry.path(), target);
+                        return target;
+                    }, t -> refresh());
         }
     }
 
@@ -312,12 +414,14 @@ public class SftpPanel extends JPanel {
             Dialogs.error(this, "chmod", e.getMessage());
             return;
         }
-        call(() -> {
-            for (RemoteEntry e : selected) {
-                service.chmod(e.path(), mode);
-            }
-            return selected.size();
-        }, n -> refresh());
+        String modeText = String.format("%04o", mode);
+        call("Mengubah permission " + selected.size() + " item menjadi " + modeText,
+                "Permission " + selected.size() + " item diubah menjadi " + modeText, () -> {
+                    for (RemoteEntry e : selected) {
+                        svc().chmod(e.path(), mode);
+                    }
+                    return selected.size();
+                }, n -> refresh());
     }
 
     private void deleteSelected() {
@@ -331,9 +435,9 @@ public class SftpPanel extends JPanel {
         if (!Dialogs.confirm(this, "Hapus", "Hapus " + what + " secara permanen?" + warning)) {
             return;
         }
-        call(() -> {
+        call("Menghapus " + what, what + " dihapus", () -> {
             for (RemoteEntry e : selected) {
-                service.delete(e.path(), e.isDirectory());
+                svc().delete(e.path(), e.isDirectory());
             }
             return selected.size();
         }, n -> refresh());
@@ -343,7 +447,7 @@ public class SftpPanel extends JPanel {
     private final class FileDropHandler extends TransferHandler {
         @Override
         public boolean canImport(TransferSupport support) {
-            return service != null && support.isDataFlavorSupported(DataFlavor.javaFileListFlavor);
+            return link != null && support.isDataFlavorSupported(DataFlavor.javaFileListFlavor);
         }
 
         @Override
@@ -365,30 +469,65 @@ public class SftpPanel extends JPanel {
 
     /** Connect (sekali) lalu buka direktori awal profil atau home. */
     public void connect() {
-        if (service != null || connecting) {
+        if (link != null || connecting) {
             return;
         }
         connecting = true;
-        status.setText("Membuka SFTP ke " + profile.address() + " ...");
+        activity.progress("Membuka SFTP ke " + profile.address() + " ...");
         UiAsync.run(sshOps, () -> {
+            SftpConnection l = links.acquire(profile);
+            Runnable unsubscribe = l.addListener(this::onLinkStatus);
             try {
-                var svc = RemoteFileService.open(sessions.acquire(profile));
-                String start = profile.initialDirectory() != null ? svc.canonicalize(profile.initialDirectory()) : svc.home();
-                return new Start(svc, start);
+                var svc = l.ensureLive();
+                String start = profile.initialDirectory() != null
+                        ? svc.canonicalize(profile.initialDirectory()) : svc.home();
+                return new Start(l, unsubscribe, start);
             } catch (Exception e) {
+                unsubscribe.run();
+                links.release(profile);
                 throw new CompletionException(e);
             }
         }, start -> {
             connecting = false;
-            service = start.service();
+            if (disposed) { // tab ditutup selagi menyambung
+                start.unsubscribe().run();
+                sshOps.execute(() -> links.release(profile));
+                return;
+            }
+            link = start.link();
+            unsubscribeLink = start.unsubscribe();
+            unsubscribeEdits = editActions.onActivity(profile.id(), activity::report);
             navigate(start.dir());
         }, err -> {
             connecting = false;
-            status.setText("SFTP gagal: " + err.getMessage());
+            activity.report(Level.ERROR, "SFTP gagal: " + err.getMessage());
         });
     }
 
-    private record Start(RemoteFileService service, String dir) {
+    private record Start(SftpConnection link, Runnable unsubscribe, String dir) {
+    }
+
+    /**
+     * Status koneksi SFTP, yang mengikuti sesi terminal tab ini (dipanggil bukan di EDT). Reconnect dilakukan dari
+     * terminal; panel hanya menampilkan status dan memuat ulang daftar begitu tersambung kembali.
+     */
+    private void onLinkStatus(SftpConnection.Status st) {
+        switch (st.state()) {
+            case CONNECTED -> {
+                boolean again = link != null;
+                activity.report(Level.SUCCESS, again ? st.message() : "Tersambung ke " + profile.address());
+                if (again) {
+                    SwingUtilities.invokeLater(this::refresh);
+                }
+            }
+            case WAITING -> activity.report(Level.WARN, st.message());
+            case DISCONNECTED -> activity.report(Level.ERROR, st.message());
+            case IDLE, CLOSED -> { }
+        }
+    }
+
+    private RemoteFileService svc() {
+        return link.service();
     }
 
     public int activeTransfers() {
@@ -396,7 +535,13 @@ public class SftpPanel extends JPanel {
     }
 
     public boolean isConnected() {
-        return service != null;
+        return link != null;
+    }
+
+    /** true kalau SFTP pernah tersambung tetapi kanalnya sekarang mati (koneksi putus). Tanpa I/O. */
+    public boolean isChannelDead() {
+        var l = link;
+        return l != null && !l.service().isOpen();
     }
 
     public String currentDir() {
@@ -404,18 +549,18 @@ public class SftpPanel extends JPanel {
     }
 
     public void navigate(String dir) {
-        if (service == null || dir.isEmpty()) {
+        if (link == null || dir.isEmpty()) {
             return;
         }
-        status.setText("Memuat " + dir + " ...");
+        activity.progress("Memuat " + dir + " ...");
         call(() -> {
-            String canonical = service.canonicalize(dir);
-            return new Listing(canonical, service.list(canonical));
+            String canonical = svc().canonicalize(dir);
+            return new Listing(canonical, svc().list(canonical));
         }, listing -> {
             currentDir = listing.dir();
             pathField.setText(listing.dir());
             model.setEntries(listing.entries());
-            status.setText(listing.entries().size() + " item");
+            activity.report(Level.INFO, listing.dir() + ": " + listing.entries().size() + " item");
         });
     }
 
@@ -435,8 +580,8 @@ public class SftpPanel extends JPanel {
     }
 
     public void goHome() {
-        if (service != null) {
-            call(service::home, this::navigate);
+        if (link != null) {
+            call(() -> svc().home(), this::navigate);
         }
     }
 
@@ -451,8 +596,13 @@ public class SftpPanel extends JPanel {
 
     /** Membuka file di editor lokal (auto-upload saat disimpan). */
     protected void openFile(RemoteEntry entry) {
-        status.setText("Membuka " + entry.name() + " di editor ...");
-        openInEditor.accept(profile, entry.path());
+        editActions.edit(profile, entry.path(), null);
+    }
+
+    private void editSelected(String command) {
+        selectedEntries().stream().filter(e -> e.type() == RemoteEntry.Type.FILE).findFirst().ifPresent(entry -> {
+            editActions.edit(profile, entry.path(), command);
+        });
     }
 
     protected List<RemoteEntry> selectedEntries() {
@@ -463,20 +613,33 @@ public class SftpPanel extends JPanel {
         return result;
     }
 
-    protected RemoteFileService service() {
-        return service;
+    /**
+     * Menjalankan operasi remote di {@code sshOps} lewat {@link SftpConnection#execute}: kalau koneksi terputus,
+     * operasi menunggu penyambungan ulang bertahap dulu. Error ditampilkan sebagai dialog dan di baris aktivitas.
+     */
+    protected <T> void call(Callable<T> work, Consumer<T> onSuccess) {
+        call(null, null, work, onSuccess);
     }
 
-    /** Menjalankan operasi remote di {@code sshOps}; error ditampilkan sebagai dialog. */
-    protected <T> void call(Callable<T> work, Consumer<T> onSuccess) {
+    /** @param doing keterangan saat mulai (null = tanpa); @param done keterangan sukses (null = tanpa) */
+    protected <T> void call(String doing, String done, Callable<T> work, Consumer<T> onSuccess) {
+        if (doing != null) {
+            activity.report(Level.INFO, doing + " ...");
+        }
+        var l = link;
         UiAsync.run(sshOps, () -> {
             try {
-                return work.call();
+                return l.execute(work);
             } catch (Exception e) {
                 throw new CompletionException(e);
             }
-        }, onSuccess, err -> {
-            status.setText(" ");
+        }, result -> {
+            if (done != null) {
+                activity.report(Level.SUCCESS, done);
+            }
+            onSuccess.accept(result);
+        }, err -> {
+            activity.report(Level.ERROR, (doing != null ? doing + " gagal: " : "Gagal: ") + err.getMessage());
             log.info("Operasi SFTP gagal: {}", err.getMessage());
             Dialogs.error(this, "SFTP", err);
         });
@@ -501,13 +664,16 @@ public class SftpPanel extends JPanel {
         });
     }
 
-    /** Menutup SFTP (tab ditutup). */
+    /** Menutup SFTP (tab ditutup). Koneksi bersama baru ditutup kalau tidak dipakai lagi (mis. sesi edit). */
     public void dispose() {
+        disposed = true;
         transfers.shutdown();
-        var svc = service;
-        service = null;
-        if (svc != null) {
-            sshOps.execute(svc::close);
+        unsubscribeLink.run();
+        unsubscribeEdits.run();
+        var l = link;
+        link = null;
+        if (l != null) {
+            sshOps.execute(() -> links.release(profile));
         }
     }
 }
