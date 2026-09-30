@@ -134,17 +134,20 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
   yang dibuka, terbaru di atas; klik kanan grup → Bersihkan riwayat). Disimpan di `profiles.json` sebagai daftar id
   (`favorites`, `recent`); profil yang dihapus otomatis keluar dari keduanya; file lama tetap terbaca
 
-- [x] Split terminal (permintaan user 2026-10-01): menu **Terminal → Split kanan** (`Ctrl+Shift+D`) / **Split bawah**
-  (`Ctrl+Shift+S`) membuka shell baru ke host yang sama di dalam tab yang sama (koneksi SSH dipakai bersama lewat
-  ref-count); split bisa bersarang. **Pindah ke panel split berikutnya** (`Ctrl+Shift+N`), **Tutup panel split**
-  (`Ctrl+Shift+X`, panel terakhir = tutup tab, konfirmasi kalau sesi masih aktif). Panel aktif mengikuti fokus dan diberi
-  garis aksen. Tab "SFTP saja" tidak bisa di-split. Container generik `SplitPanes` + unit test
+- [x] Split terminal dengan menggabungkan tab (permintaan user 2026-10-01): **Ctrl+klik** tab untuk memilih (judul
+  diberi tanda ✔, klik biasa membatalkan), lalu **Ctrl+G** (Terminal → Gabungkan tab terpilih) menjadikannya satu tab
+  split, maksimal **3 terminal** per grup; boleh host berbeda. Ctrl+G hanya diambil aplikasi kalau ≥2 tab dipilih
+  (selain itu tetap ^G ke shell). **Ctrl+Shift+G** memisahkan grup kembali jadi tab-tab biasa tanpa memutus sesi.
+  **Terminal → Mode split**: menyamping (default) / atas-bawah, langsung berlaku ke semua grup, disimpan di
+  `config.json` (`splitMode`). Panel berikutnya `Ctrl+Shift+N`, tutup panel aktif `Ctrl+Shift+X`. Panel aktif mengikuti
+  fokus dan diberi garis aksen. Container `SplitPanes` + unit test
 
 ## Log progres
 
 | Tanggal | Commit | Task |
 |---|---|---|
-| 2026-10-01 | `feat(app): split terminal kanan/bawah di dalam satu tab` | Split terminal (permintaan user) |
+| 2026-10-01 | `feat(app): split terminal dengan menggabungkan tab (Ctrl+klik, Ctrl+G) dan ungroup` | Split via group tab, maks 3, mode split (permintaan user) |
+| 2026-10-01 | `feat(app): split terminal kanan/bawah di dalam satu tab` | Split terminal (diganti model group tab) |
 | 2026-10-01 | `docs: acceptance manual Fase 1–5 lulus` | Centang acceptance Fase 1–5 (uji manual user) |
 | 2026-10-01 | `build: profile package-win (jlink + jpackage app-image/msi) dan ikon aplikasi` | Packaging Windows + ikon (Fase 6) |
 | 2026-10-01 | `feat(app): warna terminal khusus per host ...` | Warna terminal per host (Fase 6) |

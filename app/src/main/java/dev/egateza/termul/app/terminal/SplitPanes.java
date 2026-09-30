@@ -3,7 +3,6 @@ package dev.egateza.termul.app.terminal;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
-import java.awt.Container;
 import java.awt.KeyboardFocusManager;
 import java.beans.PropertyChangeListener;
 import java.util.ArrayList;
@@ -17,18 +16,24 @@ import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 
 /**
- * Isi satu tab: satu panel, atau beberapa panel yang dibagi dengan {@link JSplitPane} bersarang (split terminal).
- * Panel aktif mengikuti fokus keyboard; saat ada lebih dari satu panel, panel aktif diberi garis aksen. Semua method
- * dipanggil di EDT.
+ * Isi satu tab: satu panel, atau beberapa tab yang digabung (split) berdampingan dalam satu arah, maksimal
+ * {@value #MAX_PANES} panel. Panel aktif mengikuti fokus keyboard; saat ada lebih dari satu panel, panel aktif diberi
+ * garis aksen. Semua method dipanggil di EDT.
  *
  * @param <T> jenis panel (di aplikasi: {@link TerminalTab})
  */
 public final class SplitPanes<T extends JComponent> extends JPanel {
 
+    /** Jumlah maksimal panel dalam satu grup. */
+    public static final int MAX_PANES = 3;
+
     private static final int ACTIVE_BORDER = 2;
 
     private final Class<T> type;
-    private T active; // EDT; null setelah panel terakhir dilepas
+    private final List<T> panes = new ArrayList<>(); // EDT; urutan tampil
+    private final List<JSplitPane> splits = new ArrayList<>(); // EDT; split yang sedang dipakai layout
+    private int orientation;  // EDT; JSplitPane.HORIZONTAL_SPLIT (menyamping) atau VERTICAL_SPLIT (atas-bawah)
+    private T active;         // EDT; null setelah panel terakhir dilepas
     private Runnable activeListener = () -> { }; // EDT
     private final PropertyChangeListener focusTracker = e -> {
         if (e.getNewValue() instanceof Component owner) {
@@ -37,10 +42,20 @@ public final class SplitPanes<T extends JComponent> extends JPanel {
     };
 
     public SplitPanes(Class<T> type, T first) {
+        this(type, List.of(first), JSplitPane.HORIZONTAL_SPLIT);
+    }
+
+    /** @param panes 1..{@value #MAX_PANES} panel, panel pertama menjadi aktif */
+    public SplitPanes(Class<T> type, List<T> panes, int orientation) {
         super(new BorderLayout());
+        if (panes.isEmpty() || panes.size() > MAX_PANES) {
+            throw new IllegalArgumentException("Jumlah panel harus 1.." + MAX_PANES + ": " + panes.size());
+        }
         this.type = type;
-        this.active = first;
-        add(first, BorderLayout.CENTER);
+        this.orientation = orientation;
+        this.panes.addAll(panes);
+        this.active = panes.getFirst();
+        relayout();
     }
 
     /** Dipanggil (di EDT) setiap panel aktif berganti atau jumlah panel berubah. */
@@ -54,24 +69,20 @@ public final class SplitPanes<T extends JComponent> extends JPanel {
 
     /** Semua panel, urut kiri → kanan / atas → bawah. */
     public List<T> panes() {
-        var result = new ArrayList<T>();
-        if (getComponentCount() > 0) {
-            collect(getComponent(0), result);
-        }
-        return result;
+        return List.copyOf(panes);
     }
 
-    private void collect(Component c, List<T> into) {
-        if (type.isInstance(c)) {
-            into.add(type.cast(c));
-        } else if (c instanceof JSplitPane split) {
-            if (split.getLeftComponent() != null) {
-                collect(split.getLeftComponent(), into);
-            }
-            if (split.getRightComponent() != null) {
-                collect(split.getRightComponent(), into);
-            }
+    public int orientation() {
+        return orientation;
+    }
+
+    /** Ganti arah split: {@link JSplitPane#HORIZONTAL_SPLIT} (menyamping) atau {@link JSplitPane#VERTICAL_SPLIT}. */
+    public void setOrientation(int orientation) {
+        if (orientation == this.orientation) {
+            return;
         }
+        this.orientation = orientation;
+        relayout();
     }
 
     /** Panel yang memuat komponen {@code c} (mis. sumber key event), kalau ada di tab ini. */
@@ -79,11 +90,11 @@ public final class SplitPanes<T extends JComponent> extends JPanel {
         if (c == null) {
             return Optional.empty();
         }
-        return panes().stream().filter(p -> SwingUtilities.isDescendingFrom(c, p)).findFirst();
+        return panes.stream().filter(p -> SwingUtilities.isDescendingFrom(c, p)).findFirst();
     }
 
     public void setActive(T pane) {
-        if (pane == active || !panes().contains(pane)) {
+        if (pane == active || !panes.contains(pane)) {
             return;
         }
         active = pane;
@@ -91,101 +102,89 @@ public final class SplitPanes<T extends JComponent> extends JPanel {
         activeListener.run();
     }
 
-    /**
-     * Membagi panel aktif menjadi dua; panel baru di kanan ({@link JSplitPane#HORIZONTAL_SPLIT}) atau di bawah
-     * ({@link JSplitPane#VERTICAL_SPLIT}) dan menjadi panel aktif.
-     */
-    public void split(T pane, int orientation) {
-        T target = active;
-        Container parent = target.getParent();
-        JSplitPane outer = parent instanceof JSplitPane p ? p : null;
-        boolean left = outer != null && outer.getLeftComponent() == target;
-        int outerDivider = outer == null ? -1 : outer.getDividerLocation();
-
-        var split = new JSplitPane(orientation, true);
-        split.setBorder(null);
-        split.setResizeWeight(0.5);
-        if (outer == null) {
-            remove(target);
-        }
-        split.setLeftComponent(target); // melepas target dari split luar (kalau ada)
-        split.setRightComponent(pane);
-        if (outer == null) {
-            add(split, BorderLayout.CENTER);
-        } else {
-            if (left) {
-                outer.setLeftComponent(split);
-            } else {
-                outer.setRightComponent(split);
-            }
-            outer.setDividerLocation(outerDivider);
-        }
-        active = pane;
-        updateBorders();
-        revalidate();
-        repaint();
-        SwingUtilities.invokeLater(() -> split.setDividerLocation(0.5)); // setelah ukuran split diketahui
-        activeListener.run();
-    }
-
-    /**
-     * Melepas panel dari tab; saudaranya mengambil tempat split yang ditinggalkan. Panel tidak di-dispose di sini.
-     *
-     * @return true kalau tidak ada panel tersisa (tab boleh ditutup)
-     */
-    public boolean removePane(T pane) {
-        Container parent = pane.getParent();
-        if (parent == this) {
-            remove(pane);
-            active = null;
-            activeListener.run();
-            return true;
-        }
-        if (!(parent instanceof JSplitPane split) || !SwingUtilities.isDescendingFrom(split, this)) {
-            return panes().isEmpty();
-        }
-        Component sibling = split.getLeftComponent() == pane ? split.getRightComponent() : split.getLeftComponent();
-        Container grand = split.getParent();
-        split.removeAll();
-        if (grand == this) {
-            remove(split);
-            add(sibling, BorderLayout.CENTER);
-        } else {
-            var outer = (JSplitPane) grand;
-            int divider = outer.getDividerLocation();
-            if (outer.getLeftComponent() == split) {
-                outer.setLeftComponent(sibling);
-            } else {
-                outer.setRightComponent(sibling);
-            }
-            outer.setDividerLocation(divider);
-        }
-        if (active == pane || !panes().contains(active)) {
-            var rest = new ArrayList<T>();
-            collect(sibling, rest);
-            active = rest.getFirst();
-        }
-        updateBorders();
-        revalidate();
-        repaint();
-        activeListener.run();
-        return false;
-    }
-
     /** Panel berikutnya (berputar) menjadi aktif; null kalau hanya ada satu panel. */
     public T next() {
-        var all = panes();
-        if (all.size() < 2) {
+        if (panes.size() < 2) {
             return null;
         }
-        T next = all.get((all.indexOf(active) + 1) % all.size());
+        T next = panes.get((panes.indexOf(active) + 1) % panes.size());
         setActive(next);
         return next;
     }
 
+    /**
+     * Melepas satu panel (tidak di-dispose); panel lain mengisi ruangnya.
+     *
+     * @return true kalau tidak ada panel tersisa (tab boleh ditutup)
+     */
+    public boolean removePane(T pane) {
+        int index = panes.indexOf(pane);
+        if (index < 0) {
+            return panes.isEmpty();
+        }
+        panes.remove(index);
+        if (active == pane) {
+            active = panes.isEmpty() ? null : panes.get(Math.min(index, panes.size() - 1));
+        }
+        relayout();
+        activeListener.run();
+        return panes.isEmpty();
+    }
+
+    /** Melepas semua panel (untuk ungroup: tiap panel dipindah ke tab sendiri). Tab ini kosong sesudahnya. */
+    public List<T> detachAll() {
+        var result = List.copyOf(panes);
+        panes.clear();
+        active = null;
+        relayout();
+        result.forEach(p -> p.setBorder(null));
+        return result;
+    }
+
+    /** Susun ulang: panel tunggal langsung, atau rantai JSplitPane dengan ukuran sama rata. */
+    private void relayout() {
+        for (var split : splits) {
+            split.removeAll(); // lepaskan panel dari split lama sebelum dipasang lagi
+        }
+        splits.clear();
+        removeAll();
+        if (!panes.isEmpty()) {
+            add(chain(0), BorderLayout.CENTER);
+        }
+        updateBorders();
+        revalidate();
+        repaint();
+        if (!splits.isEmpty()) {
+            SwingUtilities.invokeLater(this::equalize); // setelah ukuran split diketahui
+        }
+    }
+
+    private Component chain(int from) {
+        if (from == panes.size() - 1) {
+            return panes.get(from);
+        }
+        var split = new JSplitPane(orientation, true);
+        split.setBorder(null);
+        int remaining = panes.size() - from;
+        split.setResizeWeight(1.0 / remaining);
+        split.setLeftComponent(panes.get(from));
+        splits.add(split);
+        split.setRightComponent(chain(from + 1));
+        return split;
+    }
+
+    /** Bagi ruang sama rata: split ke-i memberi panel kirinya 1/(sisa panel). */
+    private void equalize() {
+        for (int i = 0; i < splits.size(); i++) {
+            var split = splits.get(i);
+            split.validate();
+            split.setDividerLocation(1.0 / (panes.size() - i));
+            split.validate(); // split dalam berikutnya ikut ukuran baru
+        }
+    }
+
     /** Garis aksen di panel aktif hanya saat tab di-split; panel tunggal tanpa border. */
     private void updateBorders() {
-        var all = panes();
         Color accent = UIManager.getColor("Component.focusColor");
         if (accent == null) {
             accent = UIManager.getColor("Component.accentColor");
@@ -193,8 +192,8 @@ public final class SplitPanes<T extends JComponent> extends JPanel {
         if (accent == null) {
             accent = new Color(0x4A88C7);
         }
-        for (T p : all) {
-            if (all.size() < 2) {
+        for (T p : panes) {
+            if (panes.size() < 2) {
                 p.setBorder(null);
             } else if (p == active) {
                 p.setBorder(BorderFactory.createLineBorder(accent, ACTIVE_BORDER));

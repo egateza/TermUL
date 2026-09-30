@@ -69,6 +69,8 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private final ExecutorService io;
     private final HostTreePanel hostTree;
     private final JTabbedPane tabs = new JTabbedPane(JTabbedPane.TOP, JTabbedPane.SCROLL_TAB_LAYOUT);
+    /** Tab yang dipilih dengan Ctrl+klik untuk digabung (Ctrl+G), urutan pilih. EDT. */
+    private final java.util.Set<java.awt.Component> marked = new java.util.LinkedHashSet<>();
     private final JPanel center = new JPanel(new BorderLayout());
     private final JLabel welcome = new JLabel(
             "", SwingConstants.CENTER);
@@ -89,8 +91,8 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private JMenuItem miZoomReset;
     private JMenuItem miInjectSudo;
     private JMenuItem miInjectRoot;
-    private JMenuItem miSplitRight;
-    private JMenuItem miSplitDown;
+    private JMenuItem miGroup;
+    private JMenuItem miUngroup;
     private JMenuItem miClosePane;
     private JMenuItem miNextPane;
     private static final int HOST_HANDLE_WIDTH = 18;
@@ -149,6 +151,29 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             updateTerminalMenu();
             if (tabs.getSelectedComponent() instanceof TerminalTab tab) {
                 SwingUtilities.invokeLater(tab::focusTerminal);
+            }
+        });
+        // Ctrl+klik tab = pilih/batal pilih untuk digabung (Ctrl+G); klik biasa membatalkan semua pilihan
+        tabs.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mousePressed(java.awt.event.MouseEvent e) {
+                if (!SwingUtilities.isLeftMouseButton(e)) {
+                    return;
+                }
+                int index = tabs.indexAtLocation(e.getX(), e.getY());
+                if (index < 0) {
+                    return;
+                }
+                if (e.isControlDown()) {
+                    var c = tabs.getComponentAt(index);
+                    if (!marked.remove(c)) {
+                        marked.add(c);
+                    }
+                } else if (!marked.isEmpty()) {
+                    marked.clear();
+                }
+                refreshTitles();
+                updateTerminalMenu();
             }
         });
         welcome.setFont(welcome.getFont().deriveFont(Font.PLAIN, welcome.getFont().getSize2D() + 2));
@@ -210,6 +235,13 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         if (e.getID() != KeyEvent.KEY_PRESSED || !e.isControlDown() || e.isAltDown()) {
             return false;
         }
+        // Ctrl+G hanya diambil kalau ada tab yang dipilih untuk digabung; selain itu tetap ^G ke shell
+        if (e.getKeyCode() == KeyEvent.VK_G && !e.isShiftDown() && marked.size() >= 2
+                && e.getComponent() != null && SwingUtilities.getWindowAncestor(e.getComponent()) == this) {
+            groupMarkedTabs();
+            e.consume();
+            return true;
+        }
         boolean appCombo = e.isShiftDown() || e.getKeyCode() == KeyEvent.VK_F5;
         if (!appCombo || e.getComponent() == null || SwingUtilities.getWindowAncestor(e.getComponent()) != this) {
             return false;
@@ -241,10 +273,12 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         miSftp.setEnabled(state.sftp());
         miInjectSudo.setEnabled(state.inject());
         miInjectRoot.setEnabled(state.inject());
-        miSplitRight.setEnabled(state.split());
-        miSplitDown.setEnabled(state.split());
-        miClosePane.setEnabled(state.tabActions());
-        miNextPane.setEnabled(currentGroup().map(g -> g.panes().size() > 1).orElse(false));
+        boolean grouped = currentGroup().map(g -> g.panes().size() > 1).orElse(false);
+        marked.removeIf(c -> tabs.indexOfComponent(c) < 0); // tab yang sudah ditutup
+        miGroup.setEnabled(marked.size() >= 2);
+        miUngroup.setEnabled(grouped);
+        miClosePane.setEnabled(grouped);
+        miNextPane.setEnabled(grouped);
     }
 
     private static JMenuItem findAccelerator(JMenuBar bar, KeyStroke ks) {
@@ -302,10 +336,12 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         terminal.add(miSftp = menuItem(null, I18n.t("main.menu.terminal.sftp"), KeyStroke.getKeyStroke(KeyEvent.VK_F, ctrlShift),
                 () -> currentTab().ifPresent(TerminalTab::toggleSftp)));
         terminal.addSeparator();
-        terminal.add(miSplitRight = menuItem(null, I18n.t("main.menu.terminal.splitRight"), KeyStroke.getKeyStroke(KeyEvent.VK_D, ctrlShift),
-                () -> splitPane(JSplitPane.HORIZONTAL_SPLIT)));
-        terminal.add(miSplitDown = menuItem(null, I18n.t("main.menu.terminal.splitDown"), KeyStroke.getKeyStroke(KeyEvent.VK_S, ctrlShift),
-                () -> splitPane(JSplitPane.VERTICAL_SPLIT)));
+        terminal.add(miGroup = menuItem(null, I18n.t("main.menu.terminal.group"), KeyStroke.getKeyStroke(KeyEvent.VK_G, InputEvent.CTRL_DOWN_MASK),
+                this::groupMarkedTabs));
+        miGroup.setToolTipText(I18n.t("main.splitGroup.hint", String.valueOf(SplitPanes.MAX_PANES)));
+        terminal.add(miUngroup = menuItem(null, I18n.t("main.menu.terminal.ungroup"), KeyStroke.getKeyStroke(KeyEvent.VK_G, ctrlShift),
+                this::ungroupCurrent));
+        terminal.add(buildSplitModeMenu());
         terminal.add(miNextPane = menuItem(null, I18n.t("main.menu.terminal.nextPane"), KeyStroke.getKeyStroke(KeyEvent.VK_N, ctrlShift),
                 () -> currentGroup().map(SplitPanes::next).ifPresent(TerminalTab::focusTerminal)));
         terminal.add(miClosePane = menuItem(null, I18n.t("main.menu.terminal.closePane"), KeyStroke.getKeyStroke(KeyEvent.VK_X, ctrlShift),
@@ -924,7 +960,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
     private void updateTabIcons(java.util.UUID profileId, OsInfo os) {
         for (int i = 0; i < tabs.getTabCount(); i++) {
-            if (groupAt(i).panes().getFirst().profile().id().equals(profileId)) { // semua panel satu tab = host yang sama
+            if (groupAt(i).panes().getFirst().profile().id().equals(profileId)) { // ikon grup = host panel pertama
                 tabs.setIconAt(i, OsIcons.of(os));
             }
         }
@@ -979,22 +1015,29 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
     /**
      * Konfirmasi menutup panel-panel terminal kalau masih ada sesi/transfer aktif, atau sesi edit host yang ikut
-     * ditutup (panel terakhir host ini). Tanpa hal aktif langsung true.
+     * ditutup (panel terakhir host itu). Tanpa hal aktif langsung true.
      *
      * @param reveal dipanggil sebelum dialog, supaya yang akan ditutup terlihat
      */
     private boolean confirmClose(List<TerminalTab> closing, String title, Runnable reveal) {
-        var tab = closing.getFirst(); // semua panel satu tab = host yang sama
         int transfers = closing.stream().mapToInt(TerminalTab::activeTransfers).sum();
-        int edits = isLastTabOf(closing) ? ctx.edits().openCount(tab.profile().id()) : 0;
+        int edits = lastProfilesOf(closing).stream().mapToInt(id -> ctx.edits().openCount(id)).sum();
         if (closing.stream().noneMatch(TerminalTab::isSessionActive) && transfers == 0 && edits == 0) {
             return true;
         }
         String transferNote = transfers > 0 ? I18n.t("main.tab.close.transfers", String.valueOf(transfers)) : "";
         String editNote = edits > 0 ? I18n.t("main.tab.close.edits", String.valueOf(edits)) : "";
+        String question;
+        if (closing.size() == 1) {
+            var p = closing.getFirst().profile();
+            question = I18n.t("main.tab.close.confirm", p.name(), p.address());
+        } else {
+            question = I18n.t("main.tab.close.confirmGroup", String.valueOf(closing.size()), closing.stream()
+                    .map(t -> t.profile().name() + " (" + t.profile().address() + ")")
+                    .collect(Collectors.joining(", ")));
+        }
         reveal.run();
-        boolean yes = JOptionPane.showConfirmDialog(this,
-                I18n.t("main.tab.close.confirm", tab.profile().name(), tab.profile().address()) + transferNote + editNote,
+        boolean yes = JOptionPane.showConfirmDialog(this, question + transferNote + editNote,
                 title, JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE) == JOptionPane.YES_OPTION;
         if (!yes) {
             currentTab().ifPresent(TerminalTab::focusTerminal);
@@ -1002,33 +1045,101 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         return yes;
     }
 
-    /** true kalau tidak ada panel terminal lain (di luar {@code closing}) untuk profil yang sama. */
-    private boolean isLastTabOf(List<TerminalTab> closing) {
-        var id = closing.getFirst().profile().id();
-        return allPanes().stream().noneMatch(other -> !closing.contains(other) && other.profile().id().equals(id));
+    /** Profil yang tidak punya panel terminal lagi (di luar {@code closing}) setelah panel-panel ini ditutup. */
+    private Set<java.util.UUID> lastProfilesOf(List<TerminalTab> closing) {
+        var ids = new java.util.LinkedHashSet<java.util.UUID>();
+        closing.forEach(t -> ids.add(t.profile().id()));
+        for (var other : allPanes()) {
+            if (!closing.contains(other)) {
+                ids.remove(other.profile().id());
+            }
+        }
+        return ids;
     }
 
     /** @param closeEdits true = tab terakhir host ini ikut menutup sesi edit-nya (saat keluar: lewat EditManager.close) */
     private void removeTab(int index, boolean closeEdits) {
-        var panes = groupAt(index).panes();
-        if (closeEdits && isLastTabOf(panes)) {
-            ctx.edits().closeProfile(panes.getFirst().profile().id());
+        var group = groupAt(index);
+        var panes = group.panes();
+        if (closeEdits) {
+            lastProfilesOf(panes).forEach(id -> ctx.edits().closeProfile(id));
         }
         panes.forEach(TerminalTab::dispose);
+        marked.remove(group);
         tabs.removeTabAt(index);
         updateCenter();
         updateTerminalMenu();
     }
 
-    /** Split panel aktif: shell baru ke host yang sama (koneksi SSH dipakai bersama) di kanan atau di bawah. */
-    private void splitPane(int orientation) {
-        var group = currentGroup().orElse(null);
-        if (group == null || group.active().isSftpOnly()) {
+    /** Arah split menurut pengaturan: menyamping (default) atau atas-bawah. */
+    private int splitOrientation() {
+        return AppConfig.SPLIT_VERTICAL.equals(ctx.config().current().splitMode())
+                ? JSplitPane.VERTICAL_SPLIT : JSplitPane.HORIZONTAL_SPLIT;
+    }
+
+    /**
+     * Gabungkan tab yang dipilih (Ctrl+klik) menjadi satu tab split, urut sesuai posisi tab, di posisi tab pertama.
+     * Tab yang sudah berupa grup ikut dilebur; total maksimal {@value SplitPanes#MAX_PANES} terminal.
+     */
+    private void groupMarkedTabs() {
+        marked.removeIf(c -> tabs.indexOfComponent(c) < 0);
+        if (marked.size() < 2) {
+            Dialogs.info(this, I18n.t("main.splitGroup.title"), I18n.t("main.splitGroup.hint", String.valueOf(SplitPanes.MAX_PANES)));
             return;
         }
-        var pane = createPane(group.active().profile(), false);
-        group.split(pane, orientation);
-        pane.connect();
+        var indexes = marked.stream().mapToInt(tabs::indexOfComponent).sorted().toArray();
+        var panes = new ArrayList<TerminalTab>();
+        for (int i : indexes) {
+            panes.addAll(groupAt(i).panes());
+        }
+        if (panes.size() > SplitPanes.MAX_PANES) {
+            Dialogs.info(this, I18n.t("main.splitGroup.title"),
+                    I18n.t("main.splitGroup.max", String.valueOf(SplitPanes.MAX_PANES), String.valueOf(panes.size())));
+            return;
+        }
+        var focus = currentTab().filter(panes::contains).orElse(panes.getFirst());
+        marked.clear();
+        for (int k = indexes.length - 1; k >= 0; k--) { // dari belakang supaya indeks di depannya tetap
+            groupAt(indexes[k]).detachAll();
+            tabs.removeTabAt(indexes[k]);
+        }
+        var group = new SplitPanes<>(TerminalTab.class, panes, splitOrientation());
+        insertGroupTab(group, indexes[0]);
+        group.setActive(focus);
+        refreshTitles();
+        SwingUtilities.invokeLater(focus::focusTerminal);
+    }
+
+    /** Pisahkan tab grup yang dipilih: setiap panel kembali menjadi tab sendiri (sesi tetap berjalan). */
+    private void ungroupCurrent() {
+        int index = tabs.getSelectedIndex();
+        if (index < 0 || groupAt(index).panes().size() < 2) {
+            return;
+        }
+        var group = groupAt(index);
+        var focus = group.active();
+        var panes = group.detachAll();
+        marked.remove(group);
+        tabs.removeTabAt(index);
+        SplitPanes<TerminalTab> selected = null;
+        for (int k = 0; k < panes.size(); k++) {
+            var single = new SplitPanes<>(TerminalTab.class, panes.get(k));
+            insertGroupTab(single, index + k);
+            if (panes.get(k) == focus) {
+                selected = single;
+            }
+        }
+        tabs.setSelectedComponent(selected);
+        SwingUtilities.invokeLater(focus::focusTerminal);
+    }
+
+    /** Pasang tab (tunggal atau grup) di posisi {@code index} dan pilih tab itu. */
+    private void insertGroupTab(SplitPanes<TerminalTab> group, int index) {
+        group.setActiveListener(this::updateTerminalMenu);
+        var first = group.panes().getFirst().profile();
+        tabs.insertTab(tabTitle(group), OsIcons.of(first.os()), group, tabTooltip(group), index);
+        tabs.setSelectedIndex(index);
+        updateCenter();
         updateTerminalMenu();
     }
 
@@ -1047,8 +1158,10 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         if (!confirmClose(List.of(pane), I18n.t("main.menu.terminal.closePane"), () -> { })) {
             return;
         }
-        pane.dispose(); // panel lain di tab ini host yang sama, jadi sesi edit tetap dipakai
+        lastProfilesOf(List.of(pane)).forEach(id -> ctx.edits().closeProfile(id));
+        pane.dispose();
         group.removePane(pane);
+        refreshTitles();
         updateTerminalMenu();
         group.active().focusTerminal();
     }
@@ -1082,15 +1195,60 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         return -1;
     }
 
-    private static String tabTitle(HostProfile p) {
-        return tabTitle(p, "");
+    /** Judul tab: nama host (titik warna environment), digabung "|" untuk grup, tanda centang kalau dipilih. */
+    private String tabTitle(SplitPanes<TerminalTab> group) {
+        var panes = group.panes();
+        boolean isMarked = marked.contains(group);
+        var parts = new ArrayList<String>();
+        boolean html = isMarked || panes.size() > 1;
+        for (var pane : panes) {
+            var p = pane.profile();
+            String name = (p.name() + (pane.isSftpOnly() ? " (SFTP)" : "")).replace("&", "&amp;").replace("<", "&lt;");
+            Color color = EnvColors.of(p.environment());
+            html |= color != null;
+            parts.add(color == null ? name
+                    : "<font color='#%06x'>&#9679;</font> %s".formatted(color.getRGB() & 0xFFFFFF, name));
+        }
+        if (!html) {
+            var only = panes.getFirst();
+            return only.profile().name() + (only.isSftpOnly() ? " (SFTP)" : "");
+        }
+        return "<html>" + (isMarked ? "<b>&#10004;</b> " : "") + String.join(" &nbsp;|&nbsp; ", parts) + "</html>";
     }
 
-    private static String tabTitle(HostProfile p, String suffix) {
-        Color color = EnvColors.of(p.environment());
-        String name = (p.name() + suffix).replace("&", "&amp;").replace("<", "&lt;");
-        return color == null ? p.name() + suffix
-                : "<html><font color='#%06x'>&#9679;</font> %s</html>".formatted(color.getRGB() & 0xFFFFFF, name);
+    private static String tabTooltip(SplitPanes<TerminalTab> group) {
+        return group.panes().stream().map(t -> t.profile().address()).collect(Collectors.joining(" | "));
+    }
+
+    /** Perbarui judul semua tab (tanda pilih, isi grup). EDT. */
+    private void refreshTitles() {
+        for (int i = 0; i < tabs.getTabCount(); i++) {
+            tabs.setTitleAt(i, tabTitle(groupAt(i)));
+            tabs.setToolTipTextAt(i, tabTooltip(groupAt(i)));
+        }
+    }
+
+    /** Submenu arah split tab yang digabung; berlaku langsung ke semua grup dan disimpan di config.json. */
+    private JMenu buildSplitModeMenu() {
+        var menu = new JMenu(I18n.t("main.menu.terminal.splitMode"));
+        var group = new ButtonGroup();
+        record Mode(String id, String label, int orientation) {
+        }
+        for (var mode : new Mode[] {
+                new Mode(AppConfig.SPLIT_HORIZONTAL, I18n.t("main.menu.terminal.splitMode.horizontal"), JSplitPane.HORIZONTAL_SPLIT),
+                new Mode(AppConfig.SPLIT_VERTICAL, I18n.t("main.menu.terminal.splitMode.vertical"), JSplitPane.VERTICAL_SPLIT)}) {
+            var item = new JRadioButtonMenuItem(mode.label(), mode.id().equals(ctx.config().current().splitMode()));
+            item.addActionListener(e -> {
+                for (int i = 0; i < tabs.getTabCount(); i++) {
+                    groupAt(i).setOrientation(mode.orientation());
+                }
+                mutate(I18n.t("error.saveSettings"), () ->
+                        ctx.config().save(ctx.config().current().withSplitMode(mode.id())));
+            });
+            group.add(item);
+            menu.add(item);
+        }
+        return menu;
     }
 
     /** @param icon null = tanpa ikon (ikon hanya untuk item utama: host/grup baru, Tentang) */
@@ -1164,14 +1322,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         drawer.setOpen(false); // mode tombol melayang: beri ruang penuh untuk terminal
         mutate(I18n.t("main.error.recent"), () -> store.markUsed(profile.id()));
         var tab = createPane(profile, sftpOnly);
-        var group = new SplitPanes<>(TerminalTab.class, tab);
-        group.setActiveListener(this::updateTerminalMenu);
-        tabs.addTab(sftpOnly ? tabTitle(profile, " (SFTP)") : tabTitle(profile), group);
-        int index = tabs.indexOfComponent(group);
-        tabs.setToolTipTextAt(index, profile.address());
-        tabs.setIconAt(index, OsIcons.of(profile.os()));
-        tabs.setSelectedIndex(index);
-        updateCenter();
+        insertGroupTab(new SplitPanes<>(TerminalTab.class, tab), tabs.getTabCount());
         tab.connect();
     }
 

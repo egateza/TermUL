@@ -1,7 +1,9 @@
 package dev.egateza.termul.app.terminal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -17,6 +19,10 @@ class SplitPanesTest {
         return p;
     }
 
+    private static SplitPanes<JPanel> group(int orientation, JPanel... panes) {
+        return new SplitPanes<>(JPanel.class, List.of(panes), orientation);
+    }
+
     @Test
     void satuPanelTanpaSplitDanTanpaBorder() {
         var a = pane("a");
@@ -30,120 +36,123 @@ class SplitPanesTest {
     }
 
     @Test
-    void splitMenaruhPanelBaruDiKananDanMenjadikannyaAktif() {
+    void duaPanelMenyampingDenganPanelPertamaAktif() {
         var a = pane("a");
         var b = pane("b");
-        var group = new SplitPanes<>(JPanel.class, a);
-        var changes = new AtomicInteger();
-        group.setActiveListener(changes::incrementAndGet);
-
-        group.split(b, JSplitPane.HORIZONTAL_SPLIT);
+        var group = group(JSplitPane.HORIZONTAL_SPLIT, a, b);
 
         var split = (JSplitPane) group.getComponent(0);
         assertThat(split.getOrientation()).isEqualTo(JSplitPane.HORIZONTAL_SPLIT);
         assertThat(split.getLeftComponent()).isSameAs(a);
         assertThat(split.getRightComponent()).isSameAs(b);
-        assertThat(group.panes()).containsExactly(a, b);
-        assertThat(group.active()).isSameAs(b);
-        assertThat(changes).hasValue(1);
+        assertThat(group.active()).isSameAs(a);
         assertThat(a.getBorder()).isNotNull();
         assertThat(b.getBorder()).isNotNull();
     }
 
     @Test
-    void splitBersarangMengikutiPanelAktif() {
+    void tigaPanelDibagiRataDalamSatuArah() {
         var a = pane("a");
         var b = pane("b");
         var c = pane("c");
-        var group = new SplitPanes<>(JPanel.class, a);
-        group.split(b, JSplitPane.HORIZONTAL_SPLIT);
-        group.setActive(a);
-
-        group.split(c, JSplitPane.VERTICAL_SPLIT); // a dibagi atas/bawah, b tetap di kanan
+        var group = group(JSplitPane.VERTICAL_SPLIT, a, b, c);
 
         var outer = (JSplitPane) group.getComponent(0);
-        var inner = (JSplitPane) outer.getLeftComponent();
+        var inner = (JSplitPane) outer.getRightComponent();
+        assertThat(outer.getOrientation()).isEqualTo(JSplitPane.VERTICAL_SPLIT);
         assertThat(inner.getOrientation()).isEqualTo(JSplitPane.VERTICAL_SPLIT);
-        assertThat(inner.getLeftComponent()).isSameAs(a);
+        assertThat(outer.getLeftComponent()).isSameAs(a);
+        assertThat(inner.getLeftComponent()).isSameAs(b);
         assertThat(inner.getRightComponent()).isSameAs(c);
-        assertThat(outer.getRightComponent()).isSameAs(b);
-        assertThat(group.panes()).containsExactly(a, c, b);
-        assertThat(group.active()).isSameAs(c);
+        assertThat(outer.getResizeWeight()).isEqualTo(1.0 / 3);
+        assertThat(inner.getResizeWeight()).isEqualTo(0.5);
+        assertThat(group.panes()).containsExactly(a, b, c);
     }
 
     @Test
-    void nextBerputarSesuaiUrutanPanel() {
+    void lebihDariMaksimalDitolak() {
+        assertThatThrownBy(() -> group(JSplitPane.HORIZONTAL_SPLIT, pane("a"), pane("b"), pane("c"), pane("d")))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(SplitPanes.MAX_PANES).isEqualTo(3);
+    }
+
+    @Test
+    void gantiArahMenyusunUlangPanelYangSama() {
+        var a = pane("a");
+        var b = pane("b");
+        var group = group(JSplitPane.HORIZONTAL_SPLIT, a, b);
+
+        group.setOrientation(JSplitPane.VERTICAL_SPLIT);
+
+        var split = (JSplitPane) group.getComponent(0);
+        assertThat(split.getOrientation()).isEqualTo(JSplitPane.VERTICAL_SPLIT);
+        assertThat(split.getLeftComponent()).isSameAs(a);
+        assertThat(split.getRightComponent()).isSameAs(b);
+        assertThat(group.orientation()).isEqualTo(JSplitPane.VERTICAL_SPLIT);
+    }
+
+    @Test
+    void nextBerputarDanMemberitahuListener() {
         var a = pane("a");
         var b = pane("b");
         var c = pane("c");
-        var group = new SplitPanes<>(JPanel.class, a);
-        group.split(b, JSplitPane.HORIZONTAL_SPLIT);
-        group.split(c, JSplitPane.VERTICAL_SPLIT);
+        var group = group(JSplitPane.HORIZONTAL_SPLIT, a, b, c);
+        var changes = new AtomicInteger();
+        group.setActiveListener(changes::incrementAndGet);
 
-        assertThat(group.next()).isSameAs(a);
         assertThat(group.next()).isSameAs(b);
         assertThat(group.next()).isSameAs(c);
+        assertThat(group.next()).isSameAs(a);
+        assertThat(changes).hasValue(3);
     }
 
     @Test
-    void menutupPanelMembuatSaudaranyaMengisiTempatSplit() {
+    void menutupPanelMembuatPanelLainMengisiRuang() {
         var a = pane("a");
         var b = pane("b");
         var c = pane("c");
-        var group = new SplitPanes<>(JPanel.class, a);
-        group.split(b, JSplitPane.HORIZONTAL_SPLIT);
-        group.split(c, JSplitPane.VERTICAL_SPLIT); // [a | [b / c]]
+        var group = group(JSplitPane.HORIZONTAL_SPLIT, a, b, c);
+        group.setActive(b);
 
-        assertThat(group.removePane(c)).isFalse();
+        assertThat(group.removePane(b)).isFalse();
 
         var split = (JSplitPane) group.getComponent(0);
         assertThat(split.getLeftComponent()).isSameAs(a);
-        assertThat(split.getRightComponent()).isSameAs(b);
-        assertThat(group.panes()).containsExactly(a, b);
-        assertThat(group.active()).isSameAs(b);
+        assertThat(split.getRightComponent()).isSameAs(c);
+        assertThat(group.active()).isSameAs(c); // panel di posisi yang sama
 
         assertThat(group.removePane(a)).isFalse();
 
-        assertThat(group.getComponentCount()).isEqualTo(1);
-        assertThat(group.getComponent(0)).isSameAs(b);
-        assertThat(group.panes()).containsExactly(b);
-        assertThat(b.getBorder()).isNull();
+        assertThat(group.getComponent(0)).isSameAs(c);
+        assertThat(c.getBorder()).isNull();
+        assertThat(group.removePane(c)).isTrue();
+        assertThat(group.panes()).isEmpty();
     }
 
     @Test
-    void menutupPanelDiSplitDalamMempertahankanStrukturLuar() {
+    void detachAllMelepasSemuaPanelUntukUngroup() {
         var a = pane("a");
         var b = pane("b");
-        var c = pane("c");
-        var group = new SplitPanes<>(JPanel.class, a);
-        group.split(b, JSplitPane.HORIZONTAL_SPLIT);
-        group.setActive(a);
-        group.split(c, JSplitPane.VERTICAL_SPLIT); // [[a / c] | b]
-        group.setActive(b);
+        var group = group(JSplitPane.HORIZONTAL_SPLIT, a, b);
 
-        group.removePane(a);
+        var detached = group.detachAll();
 
-        var split = (JSplitPane) group.getComponent(0);
-        assertThat(split.getLeftComponent()).isSameAs(c);
-        assertThat(split.getRightComponent()).isSameAs(b);
-        assertThat(group.active()).isSameAs(b); // panel aktif lain tidak berubah
-    }
-
-    @Test
-    void menutupPanelTerakhirMengosongkanTab() {
-        var a = pane("a");
-        var group = new SplitPanes<>(JPanel.class, a);
-
-        assertThat(group.removePane(a)).isTrue();
+        assertThat(detached).containsExactly(a, b);
+        assertThat(a.getParent()).isNull();
+        assertThat(b.getParent()).isNull();
+        assertThat(a.getBorder()).isNull();
         assertThat(group.panes()).isEmpty();
+        assertThat(group.getComponentCount()).isZero();
+
+        var single = new SplitPanes<>(JPanel.class, a); // panel bisa langsung dipasang di tab baru
+        assertThat(single.getComponent(0)).isSameAs(a);
     }
 
     @Test
     void paneOfMenemukanPanelDariKomponenDiDalamnya() {
         var a = pane("a");
         var b = pane("b");
-        var group = new SplitPanes<>(JPanel.class, a);
-        group.split(b, JSplitPane.HORIZONTAL_SPLIT);
+        var group = group(JSplitPane.HORIZONTAL_SPLIT, a, b);
 
         assertThat(group.paneOf(b.getComponent(0))).contains(b);
         assertThat(group.paneOf(a)).contains(a);
