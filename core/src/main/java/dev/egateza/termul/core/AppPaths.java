@@ -96,6 +96,10 @@ public record AppPaths(Path configDir, Path cacheDir) {
         return configDir.resolve("vault.bin");
     }
 
+    public Path themesDir() {
+        return configDir.resolve("themes");
+    }
+
     public Path logDir() {
         return configDir.resolve("logs");
     }
