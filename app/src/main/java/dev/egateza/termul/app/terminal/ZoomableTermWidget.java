@@ -30,19 +30,24 @@ public final class ZoomableTermWidget extends JediTermWidget {
     }
 
     private static final class ZoomPanel extends TerminalPanel {
+        private final BellSettings bell; // null kalau settings bukan TerminalSettings: getar tetap aktif
+
         ZoomPanel(SettingsProvider settings, TerminalTextBuffer buffer, StyleState styleState) {
             super(settings, buffer, styleState);
+            this.bell = settings instanceof TerminalSettings ts ? ts.bell() : null;
         }
 
         void refreshFont() {
             reinitFontAndResize();
         }
 
-        /** Dipanggil dari thread emulator saat server mengirim BEL: bunyi sistem lalu layar bergetar. */
+        /** Dipanggil dari thread emulator saat server mengirim BEL: bunyi sistem dan/atau layar bergetar sesuai {@link BellSettings}. */
         @Override
         public void beep() {
-            super.beep();
-            SwingUtilities.invokeLater(() -> ShakeEffect.shake(this));
+            super.beep(); // bunyi hanya kalau audibleBell() aktif
+            if (bell == null || bell.shake()) {
+                SwingUtilities.invokeLater(() -> ShakeEffect.shake(this));
+            }
         }
     }
 }

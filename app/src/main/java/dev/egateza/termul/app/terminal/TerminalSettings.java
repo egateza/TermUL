@@ -22,20 +22,26 @@ public final class TerminalSettings extends DefaultSettingsProvider {
     private final float defaultSize;
     private volatile float fontSize;
     private volatile Font font;
+    private final BellSettings bell;
 
     public TerminalSettings(float fontSize) {
-        this(pickFont(), fontSize);
+        this(pickFont(), fontSize, new BellSettings());
     }
 
-    private TerminalSettings(String family, float fontSize) {
+    private TerminalSettings(String family, float fontSize, BellSettings bell) {
         this.family = family;
+        this.bell = bell;
         this.defaultSize = clamp(fontSize);
         setFontSize(fontSize);
     }
 
-    /** Salinan dengan ukuran default yang sama (untuk tab baru). */
+    /** Salinan dengan ukuran default yang sama (untuk tab baru); pengaturan bell dipakai bersama. */
     public TerminalSettings copy() {
-        return new TerminalSettings(family, defaultSize);
+        return new TerminalSettings(family, defaultSize, bell);
+    }
+
+    public BellSettings bell() {
+        return bell;
     }
 
     /** @return ukuran baru setelah dibatasi {@link #MIN_SIZE}..{@link #MAX_SIZE} */
@@ -71,7 +77,7 @@ public final class TerminalSettings extends DefaultSettingsProvider {
 
     @Override
     public boolean audibleBell() {
-        return true;
+        return bell.sound();
     }
 
     @Override

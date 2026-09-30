@@ -311,6 +311,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         settings.add(buildHostPanelMenu());
         settings.add(buildThemeMenu());
         settings.add(buildLanguageMenu());
+        settings.add(buildBellMenu());
         settings.add(buildIconSetMenu());
         bar.add(settings);
         bar.add(javax.swing.Box.createHorizontalGlue());
@@ -452,6 +453,34 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             opacity.add(item);
         }
         menu.add(opacity);
+        return menu;
+    }
+
+    /** Submenu reaksi terhadap BEL dari server: suara sistem dan getaran layar, masing-masing bisa dimatikan. */
+    private JMenu buildBellMenu() {
+        var menu = new JMenu(I18n.t("menu.settings.bell"));
+        menu.setToolTipText(I18n.t("menu.settings.bell.tooltip"));
+        var bell = ctx.terminalSettings().bell();
+        var sound = new javax.swing.JCheckBoxMenuItem(I18n.t("menu.settings.bell.sound"), bell.sound());
+        sound.addActionListener(e -> {
+            bell.setSound(sound.isSelected());
+            mutate(I18n.t("error.saveSettings"), () ->
+                    ctx.config().save(ctx.config().current().withBellSound(sound.isSelected())));
+            if (sound.isSelected()) {
+                java.awt.Toolkit.getDefaultToolkit().beep(); // contoh suara
+            }
+        });
+        var shake = new javax.swing.JCheckBoxMenuItem(I18n.t("menu.settings.bell.shake"), bell.shake());
+        shake.addActionListener(e -> {
+            bell.setShake(shake.isSelected());
+            mutate(I18n.t("error.saveSettings"), () ->
+                    ctx.config().save(ctx.config().current().withBellShake(shake.isSelected())));
+            if (shake.isSelected()) {
+                SwingUtilities.invokeLater(() -> ShakeEffect.shake(getRootPane())); // contoh getaran
+            }
+        });
+        menu.add(sound);
+        menu.add(shake);
         return menu;
     }
 

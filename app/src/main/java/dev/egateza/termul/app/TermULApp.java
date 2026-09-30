@@ -83,8 +83,11 @@ public final class TermULApp {
             AppTheme.fromId(config.current().theme()).install(ThemeMode.fromId(config.current().themeMode()));
             AppIcon.use(IconSet.fromId(config.current().iconSet()));
             DialogSounds.install();
+            var terminalSettings = new TerminalSettings(config.current().terminalFontSize());
+            terminalSettings.bell().setSound(config.current().bellSound());
+            terminalSettings.bell().setShake(config.current().bellShake());
             var ctx = new AppContext(paths, config, store, io, sshOps, sessions, new SshTerminalFactory(sessions),
-                    new TerminalSettings(config.current().terminalFontSize()), vault, edits, sftpLinks);
+                    terminalSettings, vault, edits, sftpLinks);
             var frame = new MainFrame(ctx, () -> shutdown(io, sshOps, sessions, vault, edits, log));
             frameRef.set(frame);
             frame.setVisible(true);
