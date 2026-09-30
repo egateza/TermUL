@@ -64,7 +64,7 @@ Catatan implementasi: satu `sudo sh -c` per upload (backup ke `/var/backups/term
 - [x] Import `~/.ssh/config` (File → Impor dari ~/.ssh/config), jump host (ProxyJump, termasuk rantai; ProxyCommand tidak didukung)
 - [x] Warna tab per environment (titik di judul tab + garis di atas terminal), konfirmasi paste multi-baris di prod (semua jalur paste lewat `TerminalCopyPasteHandler`)
 - [x] Pengaturan font/tema (font + tema bawaan)
-- [ ] Tema custom (user mengatur palet sendiri):
+- [x] Tema custom (user mengatur palet sendiri):
   - [x] `CustomTheme` + `ThemeStore` di `core` (JSON per tema di `%APPDATA%\TermUL\themes\`, warna sebagai hex, id divalidasi)
   - [x] Terapkan palet UI (override FlatLaf di atas base terang/gelap) dan palet terminal (16 warna ANSI, background, foreground, selection; JediTerm tidak menyediakan warna cursor)
   - [x] Opsi "terapkan ke UI dan terminal" (default aktif); kalau dimatikan, tema terminal dipilih terpisah
@@ -72,7 +72,7 @@ Catatan implementasi: satu `sudo sh -c` per upload (backup ke `/var/backups/term
   - [x] Impor/ekspor `.json`, peringatan kontras (< 4.5:1)
   - [x] Opsi wallpaper desktop sebagai gambar latar (Windows saja) dan pemilih gambar bawaan OS dengan thumbnail
   - [x] Gambar latar terminal (per tema, keterlihatan diatur) dan transparansi jendela (Pengaturan > Transparansi jendela; aktif dari 100% butuh restart karena window memakai title bar FlatLaf)
-  - [ ] (opsional) warna terminal per profil host, mis. tanda server prod
+  - [x] (opsional) warna terminal per profil host (Edit host → Warna terminal: ikut pengaturan / latar merah produksi / tema custom; hanya tab host itu, tanpa gambar latar)
 - [ ] Profile Maven `package-win`: `jlink` runtime yang di-trim + `jpackage` → installer `.msi`
 - [ ] (backlog) port forwarding, snippet library, session log dengan masking, follow cwd (OSC 7)
 

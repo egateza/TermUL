@@ -181,7 +181,10 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         setSize(1280, 800);
         setLocationRelativeTo(null);
 
-        store.addListener(s -> SwingUtilities.invokeLater(() -> hostTree.setSnapshot(s)));
+        store.addListener(s -> SwingUtilities.invokeLater(() -> {
+            hostTree.setSnapshot(s);
+            reloadTerminalColors(); // warna khusus host / environment yang diubah di Edit host
+        }));
         // belum ada tab: langsung tampilkan daftar host (mode tombol melayang), menutup otomatis saat host dibuka
         SwingUtilities.invokeLater(() -> drawer.setOpen(true));
         KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(hotkeys);
@@ -1096,6 +1099,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         tab.setStateListener(this::updateTerminalMenu);
         tab.setCurrentProfile(() -> store.snapshot().find(profile.id()).orElse(null));
         tab.setAutoSudoVault(ctx.vault());
+        tab.setHostPalette(id -> HostTerminalColors.palette(id, customThemes));
         tabs.setSelectedIndex(index);
         updateCenter();
         tab.connect();
@@ -1103,14 +1107,14 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
     @Override
     public void newHost(String group) {
-        ProfileDialog.create(this, group, store.snapshot()).ifPresent(this::saveProfile);
+        ProfileDialog.create(this, group, store.snapshot(), HostTerminalColors.choices(customThemes)).ifPresent(this::saveProfile);
     }
 
     @Override
     public void edit(HostProfile profile) {
         // baca metadata vault (disk I/O) di luar EDT, lalu buka dialog
         UiAsync.run(io, () -> storedSecrets(profile), stored ->
-                        ProfileDialog.edit(this, profile, store.snapshot(), stored).ifPresent(this::saveProfile),
+                        ProfileDialog.edit(this, profile, store.snapshot(), stored, HostTerminalColors.choices(customThemes)).ifPresent(this::saveProfile),
                 err -> Dialogs.error(this, I18n.t("main.error.readVault"), err));
     }
 

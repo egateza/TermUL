@@ -46,6 +46,29 @@ class TerminalSettingsColorsTest {
     }
 
     @Test
+    void overridePerTabTidakMengubahTabLainDanMenyembunyikanGambarLatar() {
+        var shared = ThemeTemplates.dark("x", "X").terminal();
+        var red = ThemeTemplates.dark("merah", "Merah").terminal();
+        var base = new TerminalSettings(14f);
+        base.setPalette(shared);
+        base.setBackgroundImage(new java.awt.image.BufferedImage(2, 2, java.awt.image.BufferedImage.TYPE_INT_RGB), 50);
+        var prodTab = base.copy();
+        var otherTab = base.copy();
+        var redBackground = new dev.egateza.termul.core.theme.CustomTheme.TerminalPalette("#3A0D0D", red.foreground(),
+                red.selection(), red.ansi(), null, null, null);
+
+        prodTab.setPaletteOverride(redBackground);
+
+        assertThat(hex(prodTab.getDefaultStyle().getBackground().toColor())).isEqualTo("#3A0D0D");
+        assertThat(hex(otherTab.getDefaultStyle().getBackground().toColor())).isEqualTo(shared.background());
+        assertThat(prodTab.backgroundLayer()).isNull();
+        assertThat(otherTab.backgroundLayer()).isNotNull();
+
+        prodTab.setPaletteOverride(null);
+        assertThat(hex(prodTab.getDefaultStyle().getBackground().toColor())).isEqualTo(shared.background());
+    }
+
+    @Test
     void copiesShareThePaletteAndNullRestoresDefaults() {
         var settings = new TerminalSettings(14f);
         var tab = settings.copy();

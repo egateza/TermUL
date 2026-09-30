@@ -17,6 +17,7 @@ import java.awt.Window;
 import java.awt.event.KeyEvent;
 import java.nio.file.Path;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -67,6 +68,7 @@ public final class ProfileDialog extends JDialog {
     private final JTextField initialDir = new JTextField(24);
     private final JTextArea notes = new JTextArea(3, 24);
     private final JCheckBox autoSudo = new JCheckBox(I18n.t("profile.field.autoSudo"));
+    private final JComboBox<HostTerminalColors.Choice> terminalColors = new JComboBox<>();
     private final Map<SecretType, JPasswordField> secretFields = new EnumMap<>(SecretType.class);
     private final Map<SecretType, JCheckBox> clearBoxes = new EnumMap<>(SecretType.class);
     private final Set<SecretType> storedSecrets;
@@ -77,8 +79,9 @@ public final class ProfileDialog extends JDialog {
     }
 
     private ProfileDialog(Window owner, String title, HostProfile initial, String defaultGroup, ProfileSnapshot snapshot,
-                          Set<SecretType> storedSecrets) {
+                          Set<SecretType> storedSecrets, List<HostTerminalColors.Choice> colorChoices) {
         super(owner, title, ModalityType.APPLICATION_MODAL);
+        colorChoices.forEach(terminalColors::addItem);
         this.id = initial == null ? UUID.randomUUID() : initial.id();
         this.os = initial == null ? null : initial.os();
         this.storedSecrets = Set.copyOf(storedSecrets);
@@ -123,20 +126,23 @@ public final class ProfileDialog extends JDialog {
     }
 
     /** Menampilkan dialog profil baru. */
-    public static Optional<Result> create(Component parent, String group, ProfileSnapshot snapshot) {
-        return show(parent, I18n.t("profile.title.new"), null, group, snapshot, Set.of());
+    public static Optional<Result> create(Component parent, String group, ProfileSnapshot snapshot,
+                                          List<HostTerminalColors.Choice> colorChoices) {
+        return show(parent, I18n.t("profile.title.new"), null, group, snapshot, Set.of(), colorChoices);
     }
 
     /** Menampilkan dialog edit profil. {@code storedSecrets} = secret yang sudah ada di vault. */
     public static Optional<Result> edit(Component parent, HostProfile profile, ProfileSnapshot snapshot,
-                                        Set<SecretType> storedSecrets) {
-        return show(parent, I18n.t("profile.title.edit", profile.name()), profile, profile.group(), snapshot, storedSecrets);
+                                        Set<SecretType> storedSecrets, List<HostTerminalColors.Choice> colorChoices) {
+        return show(parent, I18n.t("profile.title.edit", profile.name()), profile, profile.group(), snapshot, storedSecrets,
+                colorChoices);
     }
 
     private static Optional<Result> show(Component parent, String title, HostProfile initial, String group,
-                                         ProfileSnapshot snapshot, Set<SecretType> storedSecrets) {
+                                         ProfileSnapshot snapshot, Set<SecretType> storedSecrets,
+                                         List<HostTerminalColors.Choice> colorChoices) {
         Window owner = parent instanceof Window w ? w : javax.swing.SwingUtilities.getWindowAncestor(parent);
-        var dialog = new ProfileDialog(owner, title, initial, group, snapshot, storedSecrets);
+        var dialog = new ProfileDialog(owner, title, initial, group, snapshot, storedSecrets, colorChoices);
         dialog.setVisible(true);
         return Optional.ofNullable(dialog.result);
     }
@@ -153,6 +159,11 @@ public final class ProfileDialog extends JDialog {
         initialDir.setText(Objects.requireNonNullElse(p.initialDirectory(), ""));
         notes.setText(Objects.requireNonNullElse(p.notes(), ""));
         autoSudo.setSelected(p.autoSudo());
+        for (int i = 0; i < terminalColors.getItemCount(); i++) {
+            if (Objects.equals(terminalColors.getItemAt(i).id(), p.terminalTheme())) {
+                terminalColors.setSelectedIndex(i);
+            }
+        }
         if (p.jumpHostId() != null) {
             snapshot.find(p.jumpHostId()).ifPresent(j -> {
                 for (int i = 0; i < jumpHost.getItemCount(); i++) {
@@ -198,7 +209,8 @@ public final class ProfileDialog extends JDialog {
                     host.getText(), (Integer) port.getValue(), username.getText(),
                     (AuthMethod) auth.getSelectedItem(), keyPath.getText(),
                     jump == null || jump.profile() == null ? null : jump.profile().id(),
-                    env, initialDir.getText(), notes.getText(), autoSudo.isSelected(), os);
+                    env, initialDir.getText(), notes.getText(), autoSudo.isSelected(), os,
+                    terminalColors.getSelectedItem() instanceof HostTerminalColors.Choice c ? c.id() : null);
             result = new Result(profile, collectSecretChanges());
             dispose();
         } catch (IllegalArgumentException e) {
@@ -225,6 +237,7 @@ public final class ProfileDialog extends JDialog {
         row = addRow(form, row, I18n.t("profile.field.privateKey"), keyPanel);
         row = addRow(form, row, I18n.t("profile.field.jumpHost"), jumpHost);
         row = addRow(form, row, I18n.t("profile.field.environment"), environment);
+        row = addRow(form, row, I18n.t("profile.field.terminalColors"), terminalColors);
         row = addRow(form, row, I18n.t("profile.field.initialDir"), initialDir);
         row = addRow(form, row, I18n.t("profile.field.notes"), new JScrollPane(notes));
         row = addRow(form, row, "", autoSudo);

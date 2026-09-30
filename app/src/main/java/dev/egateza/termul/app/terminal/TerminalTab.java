@@ -115,7 +115,16 @@ public final class TerminalTab extends JPanel {
      */
     public void setCurrentProfile(java.util.function.Supplier<HostProfile> current) {
         this.currentProfile = current;
-        applyEnvironmentColor();
+        reloadColors();
+    }
+
+    private java.util.function.Function<String, dev.egateza.termul.core.theme.CustomTheme.TerminalPalette> hostPalette =
+            id -> null; // EDT; id warna khusus host -> palet (null = ikut pengaturan)
+
+    /** Penerjemah warna terminal khusus host (id di profil -> palet); dibaca setiap warna dimuat ulang. */
+    public void setHostPalette(java.util.function.Function<String, dev.egateza.termul.core.theme.CustomTheme.TerminalPalette> resolver) {
+        this.hostPalette = resolver;
+        reloadColors();
     }
 
     /** Vault untuk auto-inject password sudo/su (guard lengkap di {@link PromptResponder}); aktif per profil. */
@@ -315,6 +324,7 @@ public final class TerminalTab extends JPanel {
         });
         tty.addOutputListener(responder);
         gate.set(TerminalState.CONNECTED);
+        settings.setPaletteOverride(hostPalette.apply(latestProfile().terminalTheme()));
         widget = new ZoomableTermWidget(settings);
         widget.setTtyConnector(tty);
         widget.setPasteFilter(this::confirmPaste);
@@ -591,6 +601,8 @@ public final class TerminalTab extends JPanel {
 
     /** Pakai warna terminal yang baru dipilih (pengaturan bersama) di tab ini. EDT. */
     public void reloadColors() {
+        settings.setPaletteOverride(hostPalette.apply(latestProfile().terminalTheme()));
+        applyEnvironmentColor();
         if (widget != null) {
             widget.refreshColors();
         }

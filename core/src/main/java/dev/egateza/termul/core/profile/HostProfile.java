@@ -21,6 +21,8 @@ import java.util.UUID;
  * @param notes            catatan bebas, boleh null
  * @param autoSudo         auto-trigger inject password sudo (default OFF, apalagi untuk prod)
  * @param os               OS server yang terdeteksi otomatis saat connect (untuk ikon), boleh null
+ * @param terminalTheme    warna terminal khusus host ini (id tema custom atau preset bawaan, diterjemahkan di modul
+ *                         app), null = ikut pengaturan
  */
 public record HostProfile(
         UUID id,
@@ -36,7 +38,8 @@ public record HostProfile(
         String initialDirectory,
         String notes,
         boolean autoSudo,
-        OsInfo os) {
+        OsInfo os,
+        String terminalTheme) {
 
     public static final int DEFAULT_PORT = 22;
 
@@ -45,7 +48,20 @@ public record HostProfile(
                        AuthMethod authMethod, String privateKeyPath, UUID jumpHostId, EnvironmentTag environment,
                        String initialDirectory, String notes, boolean autoSudo) {
         this(id, name, group, host, port, username, authMethod, privateKeyPath, jumpHostId, environment,
-                initialDirectory, notes, autoSudo, null);
+                initialDirectory, notes, autoSudo, null, null);
+    }
+
+    /** Constructor tanpa warna terminal khusus. */
+    public HostProfile(UUID id, String name, String group, String host, int port, String username,
+                       AuthMethod authMethod, String privateKeyPath, UUID jumpHostId, EnvironmentTag environment,
+                       String initialDirectory, String notes, boolean autoSudo, OsInfo os) {
+        this(id, name, group, host, port, username, authMethod, privateKeyPath, jumpHostId, environment,
+                initialDirectory, notes, autoSudo, os, null);
+    }
+
+    public HostProfile withTerminalTheme(String themeId) {
+        return new HostProfile(id, name, group, host, port, username, authMethod, privateKeyPath, jumpHostId,
+                environment, initialDirectory, notes, autoSudo, os, themeId);
     }
 
     public HostProfile {
@@ -62,6 +78,7 @@ public record HostProfile(
         privateKeyPath = blankToNull(privateKeyPath);
         initialDirectory = blankToNull(initialDirectory);
         notes = blankToNull(notes);
+        terminalTheme = blankToNull(terminalTheme);
         if (authMethod == AuthMethod.KEY && privateKeyPath == null) {
             throw new IllegalArgumentException("Path private key wajib diisi untuk auth KEY");
         }
@@ -79,22 +96,22 @@ public record HostProfile(
     /** Salinan dengan id baru dan nama "(salinan)". */
     public HostProfile duplicate() {
         return new HostProfile(UUID.randomUUID(), name + " (salinan)", group, host, port, username,
-                authMethod, privateKeyPath, jumpHostId, environment, initialDirectory, notes, autoSudo, os);
+                authMethod, privateKeyPath, jumpHostId, environment, initialDirectory, notes, autoSudo, os, terminalTheme);
     }
 
     public HostProfile withGroup(String newGroup) {
         return new HostProfile(id, name, newGroup, host, port, username, authMethod, privateKeyPath,
-                jumpHostId, environment, initialDirectory, notes, autoSudo, os);
+                jumpHostId, environment, initialDirectory, notes, autoSudo, os, terminalTheme);
     }
 
     public HostProfile withJumpHostId(UUID newJumpHostId) {
         return new HostProfile(id, name, group, host, port, username, authMethod, privateKeyPath,
-                newJumpHostId, environment, initialDirectory, notes, autoSudo, os);
+                newJumpHostId, environment, initialDirectory, notes, autoSudo, os, terminalTheme);
     }
 
     public HostProfile withOs(OsInfo newOs) {
         return new HostProfile(id, name, group, host, port, username, authMethod, privateKeyPath,
-                jumpHostId, environment, initialDirectory, notes, autoSudo, newOs);
+                jumpHostId, environment, initialDirectory, notes, autoSudo, newOs, terminalTheme);
     }
 
     /** Label singkat {@code user@host[:port]} untuk judul tab/log. */

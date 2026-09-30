@@ -101,6 +101,22 @@ class ProfileStoreTest {
     }
 
     @Test
+    void warnaTerminalPerHostTersimpanDanFileLamaTanpaFieldTetapTerbaca() throws Exception {
+        Path file = dir.resolve("profiles.json");
+        var p = HostProfile.create("prod", "h", "u").withTerminalTheme("builtin:prod-red");
+        new ProfileStore(file).save(p);
+
+        assertThat(new ProfileStore(file).load().find(p.id())).map(HostProfile::terminalTheme)
+                .contains("builtin:prod-red");
+
+        String json = Files.readString(file);
+        String old = json.replaceAll(",\\s*\"terminalTheme\"\\s*:\\s*\"[^\"]*\"", ""); // profiles.json versi lama
+        assertThat(old).doesNotContain("terminalTheme");
+        Files.writeString(file, old);
+        assertThat(new ProfileStore(file).load().find(p.id())).map(HostProfile::terminalTheme).isEmpty();
+    }
+
+    @Test
     void jsonTidakMengandungFieldSecret() throws Exception {
         Path file = dir.resolve("profiles.json");
         new ProfileStore(file).save(HostProfile.create("a", "h", "u"));

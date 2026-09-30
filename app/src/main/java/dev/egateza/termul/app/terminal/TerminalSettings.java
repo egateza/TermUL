@@ -33,6 +33,7 @@ public final class TerminalSettings extends DefaultSettingsProvider {
     private final BellSettings bell;
     private final AtomicReference<Colors> colors; // null = warna bawaan JediTerm; dipakai bersama semua tab
     private final AtomicReference<Backdrop> backdrop; // null = tanpa gambar latar; dipakai bersama semua tab
+    private volatile Colors override; // null = ikut warna bersama; hanya untuk tab ini (warna khusus host)
     /**
      * Warna default yang dibaca saat digambar ({@link TerminalColor} berbasis supplier), bukan disalin ke sel. JediTerm
      * menyimpan style di setiap sel yang ditulis, jadi warna tetap yang dipakai sekarang akan tertinggal di sel-sel
@@ -74,11 +75,11 @@ public final class TerminalSettings extends DefaultSettingsProvider {
         this.backdrop = backdrop;
         this.defaultStyle = new TextStyle(
                 new TerminalColor(() -> {
-                    var c = colors.get();
+                    var c = effectiveColors();
                     return c == null ? FALLBACK_FOREGROUND : c.foregroundColor();
                 }),
                 new TerminalColor(() -> {
-                    var c = colors.get();
+                    var c = effectiveColors();
                     return c == null ? FALLBACK_BACKGROUND : c.backgroundColor();
                 }));
         this.defaultSize = clamp(fontSize);
@@ -111,8 +112,25 @@ public final class TerminalSettings extends DefaultSettingsProvider {
         backdrop.set(image == null ? null : new Backdrop(image, Math.max(0, Math.min(100, visibility))));
     }
 
+    /**
+     * Warna khusus untuk tab ini saja (mis. host produksi), di atas warna bersama. Salinan lain tidak terpengaruh.
+     *
+     * @param palette palet, atau null untuk kembali ke warna bersama
+     */
+    public void setPaletteOverride(TerminalPalette palette) {
+        override = palette == null ? null : Colors.of(palette);
+    }
+
+    private Colors effectiveColors() {
+        var o = override;
+        return o != null ? o : colors.get();
+    }
+
     /** @return lapisan gambar latar yang berlaku sekarang, atau null kalau tidak ada gambar atau palet tema */
     public BackgroundLayer backgroundLayer() {
+        if (override != null) {
+            return null; // warna khusus host: tanpa gambar latar supaya warnanya jelas terlihat
+        }
         var b = backdrop.get();
         var c = colors.get();
         return b == null || c == null ? null : new BackgroundLayer(b.image(), b.visibility(), c.awtBackground());
@@ -183,7 +201,7 @@ public final class TerminalSettings extends DefaultSettingsProvider {
 
     @Override
     public ColorPalette getTerminalColorPalette() {
-        var c = colors.get();
+        var c = effectiveColors();
         return c == null ? super.getTerminalColorPalette() : c.palette();
     }
 
@@ -200,7 +218,7 @@ public final class TerminalSettings extends DefaultSettingsProvider {
 
     @Override
     public TextStyle getSelectionColor() {
-        var c = colors.get();
+        var c = effectiveColors();
         return c == null ? super.getSelectionColor() : c.selection();
     }
 
