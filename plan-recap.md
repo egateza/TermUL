@@ -30,7 +30,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 ### Fase 1: Skeleton & terminal SSH pertama
 - [x] Maven multi-module + wrapper + enforcer
 - [ ] Main window FlatLaf (host tree | tab area)
-- [ ] `HostProfile` + `ProfileStore` (JSON, atomic write)
+- [x] `HostProfile` + `ProfileStore` (JSON, atomic write)
 - [ ] Dialog tambah/edit profil
 - [ ] `SessionManager` (connect, auth key/agent/password prompt)
 - [ ] `HostKeyVerifier` (known_hosts + TOFU)
@@ -44,12 +44,13 @@ Belum dimulai. Lihat `docs/PLAN.md`.
 
 | Tanggal | Commit | Task |
 |---|---|---|
-| 2026-09-30 | `build: tambah skeleton Maven multi-module, wrapper, dan enforcer` | Maven multi-module[^|]* |
+| 2026-09-30 | `feat(core): tambah HostProfile, AppPaths, dan ProfileStore JSON dengan atomic write` | HostProfile + ProfileStore |
+| 2026-09-30 | `build: tambah skeleton Maven multi-module, wrapper, dan enforcer` | Skeleton Maven multi-module |
 | 2026-09-30 | `docs: tambah dokumentasi perencanaan awal (Fase 0)` | Dokumentasi awal |
 
 ## Langkah berikutnya
 
-- Main window FlatLaf + HostProfile/ProfileStore (Fase 1, task 2–3).
+- Main window FlatLaf (host tree | tab area) di modul app.
 
 ## Catatan / blocker
 
