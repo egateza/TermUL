@@ -115,6 +115,10 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
   Transparansi tombol: 100/70/40/20% (`hostButtonOpacity`), solid lagi saat di-hover. Diverifikasi lewat screenshot.
   Juga: strip mode panel satu warna dengan daftar host; divider panel log disembunyikan bersama panelnya
   (sebelumnya meninggalkan titik-titik di tepi bawah window)
+- [x] Menu Terminal ikut status tab/sesi (`TerminalMenuState`): tanpa tab semua item nonaktif kecuali "File yang sedang
+  diedit"; Duplikat/Reconnect/Tutup tab/Zoom butuh ada tab (Reconnect sengaja tidak menunggu sesi aktif); Panel SFTP dan
+  Inject password sudo/root butuh sesi tersambung (SFTP tetap aktif selama panelnya terbuka, supaya bisa ditutup).
+  Diperbarui saat tab berganti, sesi connect/gagal/berakhir, menu dibuka, dan sebelum shortcut dicari (permintaan user)
 - [ ] (usulan, menunggu keputusan user) Fallback koneksi kedua kalau server menolak channel (`MaxSessions`, default 10),
   atau opsi per profil "koneksi terpisah per tab"
 
@@ -122,6 +126,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 | Tanggal | Commit | Task |
 |---|---|---|
+| 2026-09-30 | `feat(app): menu Terminal nonaktif kalau tidak ada tab/sesi aktif` | Enable/disable menu Terminal sesuai sesi (permintaan user) |
 | 2026-09-30 | `feat(app): mode tombol melayang untuk panel host dengan opsi transparansi` | Panel host: mode melayang + panel di samping (permintaan user) |
 | 2026-09-30 | `feat(app): pilihan set ikon Font Awesome / Material Symbols dan tool AddIcon` | Dua set ikon + tool tambah ikon (permintaan user) |
 | 2026-09-30 | `feat(app): tombol laci untuk buka/tutup panel host` | Buka/tutup panel host (permintaan user) |

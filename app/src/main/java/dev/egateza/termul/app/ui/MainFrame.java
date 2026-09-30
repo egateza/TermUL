@@ -73,6 +73,16 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private final JCheckBoxMenuItem showLog = new JCheckBoxMenuItem("Tampilkan log");
     private int logHeight = 220; // EDT
     private int logDividerSize; // EDT
+    // item menu Terminal yang bergantung pada tab/sesi aktif (lihat updateTerminalMenu)
+    private JMenuItem miDuplicate;
+    private JMenuItem miReconnect;
+    private JMenuItem miCloseTab;
+    private JMenuItem miSftp;
+    private JMenuItem miZoomIn;
+    private JMenuItem miZoomOut;
+    private JMenuItem miZoomReset;
+    private JMenuItem miInjectSudo;
+    private JMenuItem miInjectRoot;
     private static final int HOST_HANDLE_WIDTH = 18;
     private static final int HOST_TOGGLE_HEIGHT = 44;
     /** Isi area utama: split (mode panel) atau area terminal saja (mode tombol melayang). */
@@ -106,6 +116,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                 (BiConsumer<JTabbedPane, Integer>) (t, index) -> closeTab(index));
         tabs.addChangeListener(e -> {
             updateCenter();
+            updateTerminalMenu();
             if (tabs.getSelectedComponent() instanceof TerminalTab tab) {
                 SwingUtilities.invokeLater(tab::focusTerminal);
             }
@@ -173,6 +184,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         if (!appCombo || e.getComponent() == null || SwingUtilities.getWindowAncestor(e.getComponent()) != this) {
             return false;
         }
+        updateTerminalMenu(); // status bisa berubah sejak menu terakhir dibuka
         JMenuItem item = findAccelerator(getJMenuBar(), KeyStroke.getKeyStrokeForEvent(e));
         if (item == null || !item.isEnabled()) {
             return false;
@@ -180,6 +192,25 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         item.doClick(0);
         e.consume();
         return true;
+    }
+
+    /**
+     * Aktif/nonaktifkan item menu Terminal sesuai tab yang dipilih: aksi tab butuh ada tab; SFTP dan inject password
+     * butuh sesi tersambung. Dipanggil saat status berubah, saat menu dibuka, dan sebelum shortcut dicari.
+     */
+    private void updateTerminalMenu() {
+        if (miDuplicate == null) { // dipanggil sebelum menu selesai dibuat
+            return;
+        }
+        var tab = currentTab();
+        var state = TerminalMenuState.of(tab.isPresent(), tab.map(TerminalTab::isConnected).orElse(false),
+                tab.map(TerminalTab::isSftpOpen).orElse(false));
+        for (var item : new JMenuItem[] {miDuplicate, miReconnect, miCloseTab, miZoomIn, miZoomOut, miZoomReset}) {
+            item.setEnabled(state.tabActions());
+        }
+        miSftp.setEnabled(state.sftp());
+        miInjectSudo.setEnabled(state.inject());
+        miInjectRoot.setEnabled(state.inject());
     }
 
     private static JMenuItem findAccelerator(JMenuBar bar, KeyStroke ks) {
@@ -227,29 +258,44 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
         var terminal = new JMenu("Terminal");
         int ctrlShift = InputEvent.CTRL_DOWN_MASK | InputEvent.SHIFT_DOWN_MASK;
-        terminal.add(menuItem(null, "Duplikat tab", KeyStroke.getKeyStroke(KeyEvent.VK_T, ctrlShift),
+        terminal.add(miDuplicate = menuItem(null, "Duplikat tab", KeyStroke.getKeyStroke(KeyEvent.VK_T, ctrlShift),
                 () -> currentTab().ifPresent(t -> open(t.profile()))));
-        terminal.add(menuItem(null, "Reconnect", KeyStroke.getKeyStroke(KeyEvent.VK_F5, InputEvent.CTRL_DOWN_MASK),
+        terminal.add(miReconnect = menuItem(null, "Reconnect", KeyStroke.getKeyStroke(KeyEvent.VK_F5, InputEvent.CTRL_DOWN_MASK),
                 () -> currentTab().ifPresent(TerminalTab::reconnect)));
-        terminal.add(menuItem(null, "Tutup tab", KeyStroke.getKeyStroke(KeyEvent.VK_W, ctrlShift),
+        terminal.add(miCloseTab = menuItem(null, "Tutup tab", KeyStroke.getKeyStroke(KeyEvent.VK_W, ctrlShift),
                 () -> closeTab(tabs.getSelectedIndex())));
-        terminal.add(menuItem(null, "Panel SFTP", KeyStroke.getKeyStroke(KeyEvent.VK_F, ctrlShift),
+        terminal.add(miSftp = menuItem(null, "Panel SFTP", KeyStroke.getKeyStroke(KeyEvent.VK_F, ctrlShift),
                 () -> currentTab().ifPresent(TerminalTab::toggleSftp)));
         terminal.addSeparator();
-        terminal.add(menuItem(null, "Zoom in", KeyStroke.getKeyStroke(KeyEvent.VK_EQUALS, InputEvent.CTRL_DOWN_MASK),
+        terminal.add(miZoomIn = menuItem(null, "Zoom in", KeyStroke.getKeyStroke(KeyEvent.VK_EQUALS, InputEvent.CTRL_DOWN_MASK),
                 () -> currentTab().ifPresent(t -> t.zoom(1))));
-        terminal.add(menuItem(null, "Zoom out", KeyStroke.getKeyStroke(KeyEvent.VK_MINUS, InputEvent.CTRL_DOWN_MASK),
+        terminal.add(miZoomOut = menuItem(null, "Zoom out", KeyStroke.getKeyStroke(KeyEvent.VK_MINUS, InputEvent.CTRL_DOWN_MASK),
                 () -> currentTab().ifPresent(t -> t.zoom(-1))));
-        terminal.add(menuItem(null, "Ukuran font default", KeyStroke.getKeyStroke(KeyEvent.VK_0, InputEvent.CTRL_DOWN_MASK),
+        terminal.add(miZoomReset = menuItem(null, "Ukuran font default", KeyStroke.getKeyStroke(KeyEvent.VK_0, InputEvent.CTRL_DOWN_MASK),
                 () -> currentTab().ifPresent(t -> t.zoom(0))));
         terminal.addSeparator();
         terminal.add(menuItem(null, "File yang sedang diedit...", KeyStroke.getKeyStroke(KeyEvent.VK_E, ctrlShift),
                 this::showEditTracker));
         terminal.addSeparator();
-        terminal.add(menuItem(null, "Inject password sudo", KeyStroke.getKeyStroke(KeyEvent.VK_P, ctrlShift),
+        terminal.add(miInjectSudo = menuItem(null, "Inject password sudo", KeyStroke.getKeyStroke(KeyEvent.VK_P, ctrlShift),
                 () -> currentTab().ifPresent(t -> t.injectSecret(SecretType.SUDO_PASSWORD, ctx.vault()))));
-        terminal.add(menuItem(null, "Inject password root", KeyStroke.getKeyStroke(KeyEvent.VK_R, ctrlShift),
+        terminal.add(miInjectRoot = menuItem(null, "Inject password root", KeyStroke.getKeyStroke(KeyEvent.VK_R, ctrlShift),
                 () -> currentTab().ifPresent(t -> t.injectSecret(SecretType.ROOT_PASSWORD, ctx.vault()))));
+        terminal.addMenuListener(new javax.swing.event.MenuListener() {
+            @Override
+            public void menuSelected(javax.swing.event.MenuEvent e) {
+                updateTerminalMenu();
+            }
+
+            @Override
+            public void menuDeselected(javax.swing.event.MenuEvent e) {
+            }
+
+            @Override
+            public void menuCanceled(javax.swing.event.MenuEvent e) {
+            }
+        });
+        updateTerminalMenu();
         bar.add(terminal);
         bar.add(buildVaultMenu());
 
@@ -544,6 +590,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         }
         tabs.removeTabAt(index);
         updateCenter();
+        updateTerminalMenu();
     }
 
     /** Ringkasan hal yang masih aktif (untuk konfirmasi keluar). Dipanggil di EDT, tanpa I/O. */
@@ -650,6 +697,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         tabs.setToolTipTextAt(index, profile.address());
         tabs.setIconAt(index, OsIcons.of(profile.os()));
         tab.setConnectedListener(tty -> detectOs(profile.id(), tty));
+        tab.setStateListener(this::updateTerminalMenu);
         tabs.setSelectedIndex(index);
         updateCenter();
         tab.connect();

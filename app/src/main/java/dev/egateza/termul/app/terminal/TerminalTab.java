@@ -71,6 +71,12 @@ public final class TerminalTab extends JPanel {
     }
 
     private java.util.function.Consumer<SshTtyConnector> connectedListener; // EDT
+    private Runnable stateListener = () -> { }; // EDT
+
+    /** Dipanggil (di EDT) setiap status sesi/panel SFTP berubah: connect, gagal, berakhir, toggle SFTP. */
+    public void setStateListener(Runnable listener) {
+        this.stateListener = listener;
+    }
 
     /** Dipanggil (di EDT) setiap kali terminal berhasil connect, termasuk setelah reconnect. */
     public void setConnectedListener(java.util.function.Consumer<SshTtyConnector> listener) {
@@ -99,10 +105,20 @@ public final class TerminalTab extends JPanel {
         }
         revalidate();
         repaint();
+        stateListener.run();
     }
 
     public HostProfile profile() {
         return profile;
+    }
+
+    /** true kalau terminal sedang tersambung ke server (bukan sekadar sedang connect). */
+    public boolean isConnected() {
+        return connector != null && connector.isConnected();
+    }
+
+    public boolean isSftpOpen() {
+        return split != null;
     }
 
     /** true kalau sesi sedang connect atau masih terhubung (menutup tab akan memutusnya). */
@@ -121,6 +137,7 @@ public final class TerminalTab extends JPanel {
         }
         hideBanner();
         showCenter(centerMessage("Menghubungkan ke " + profile.address() + " ..."));
+        stateListener.run();
         pending = UiAsync.run(sshOps,
                 () -> {
                     try {
@@ -149,10 +166,12 @@ public final class TerminalTab extends JPanel {
             connectedListener.accept(tty);
         }
         widget.requestFocusInWindow();
+        stateListener.run();
     }
 
     private void onConnectFailed(Throwable error) {
         pending = null;
+        stateListener.run();
         if (disposed) {
             return;
         }
@@ -179,6 +198,7 @@ public final class TerminalTab extends JPanel {
     }
 
     private void onClosed(SshTtyConnector tty) {
+        stateListener.run();
         log.info("Sesi terminal {} berakhir (disposed={}, current={}, byUser={})",
                 tty.getName(), disposed, tty == connector, tty.isClosedByUser());
         if (disposed || tty != connector || tty.isClosedByUser()) {
