@@ -1,6 +1,11 @@
 package dev.egateza.myterm.app.ui;
 
+import dev.egateza.myterm.app.AppContext;
+import dev.egateza.myterm.app.terminal.TerminalTab;
 import dev.egateza.myterm.app.ui.tree.HostTreePanel;
+import java.awt.Color;
+import java.util.Optional;
+import java.util.function.BiConsumer;
 import dev.egateza.myterm.core.profile.HostProfile;
 import dev.egateza.myterm.core.profile.ProfileSnapshot;
 import dev.egateza.myterm.core.profile.ProfileStore;
@@ -28,6 +33,7 @@ import javax.swing.WindowConstants;
 /** Window utama: host tree di kiri, tab terminal di kanan. */
 public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
+    private final AppContext ctx;
     private final ProfileStore store;
     private final ExecutorService io;
     private final HostTreePanel hostTree;
@@ -38,10 +44,11 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                     + "Ctrl+N: host baru &nbsp; Ctrl+F: cari host</center></html>", SwingConstants.CENTER);
     private final Runnable onExit;
 
-    public MainFrame(ProfileStore store, ExecutorService io, Runnable onExit) {
+    public MainFrame(AppContext ctx, Runnable onExit) {
         super("MyTerm");
-        this.store = store;
-        this.io = io;
+        this.ctx = ctx;
+        this.store = ctx.profiles();
+        this.io = ctx.io();
         this.onExit = onExit;
         this.hostTree = new HostTreePanel(this);
 
@@ -55,7 +62,14 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
         tabs.putClientProperty("JTabbedPane.tabClosable", true);
         tabs.putClientProperty("JTabbedPane.tabCloseToolTipText", "Tutup tab");
-        tabs.addChangeListener(e -> updateCenter());
+        tabs.putClientProperty("JTabbedPane.tabCloseCallback",
+                (BiConsumer<JTabbedPane, Integer>) (t, index) -> closeTab(index));
+        tabs.addChangeListener(e -> {
+            updateCenter();
+            if (tabs.getSelectedComponent() instanceof TerminalTab tab) {
+                SwingUtilities.invokeLater(tab::focusTerminal);
+            }
+        });
         welcome.setFont(welcome.getFont().deriveFont(Font.PLAIN, welcome.getFont().getSize2D() + 2));
         updateCenter();
 
@@ -91,7 +105,39 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         file.addSeparator();
         file.add(menuItem("Keluar", null, this::exit));
         bar.add(file);
+
+        var terminal = new JMenu("Terminal");
+        int ctrlShift = InputEvent.CTRL_DOWN_MASK | InputEvent.SHIFT_DOWN_MASK;
+        terminal.add(menuItem("Duplikat tab", KeyStroke.getKeyStroke(KeyEvent.VK_T, ctrlShift),
+                () -> currentTab().ifPresent(t -> open(t.profile()))));
+        terminal.add(menuItem("Reconnect", KeyStroke.getKeyStroke(KeyEvent.VK_F5, InputEvent.CTRL_DOWN_MASK),
+                () -> currentTab().ifPresent(TerminalTab::reconnect)));
+        terminal.add(menuItem("Tutup tab", KeyStroke.getKeyStroke(KeyEvent.VK_W, ctrlShift),
+                () -> closeTab(tabs.getSelectedIndex())));
+        bar.add(terminal);
         return bar;
+    }
+
+    private Optional<TerminalTab> currentTab() {
+        return tabs.getSelectedComponent() instanceof TerminalTab t ? Optional.of(t) : Optional.empty();
+    }
+
+    private void closeTab(int index) {
+        if (index < 0 || index >= tabs.getTabCount()) {
+            return;
+        }
+        if (tabs.getComponentAt(index) instanceof TerminalTab tab) {
+            tab.dispose();
+        }
+        tabs.removeTabAt(index);
+        updateCenter();
+    }
+
+    private static String tabTitle(HostProfile p) {
+        Color color = EnvColors.of(p.environment());
+        String name = p.name().replace("&", "&amp;").replace("<", "&lt;");
+        return color == null ? p.name()
+                : "<html><font color='#%06x'>&#9679;</font> %s</html>".formatted(color.getRGB() & 0xFFFFFF, name);
     }
 
     private static JMenuItem menuItem(String label, KeyStroke key, Runnable action) {
@@ -114,6 +160,9 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     }
 
     private void exit() {
+        while (tabs.getTabCount() > 0) {
+            closeTab(0);
+        }
         dispose();
         onExit.run();
     }
@@ -127,7 +176,13 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
     @Override
     public void open(HostProfile profile) {
-        Dialogs.info(this, "Belum tersedia", "Koneksi SSH belum diimplementasikan.");
+        var tab = new TerminalTab(profile, ctx.terminals(), ctx.sshOps(), ctx.terminalSettings());
+        tabs.addTab(tabTitle(profile), tab);
+        int index = tabs.indexOfComponent(tab);
+        tabs.setToolTipTextAt(index, profile.address());
+        tabs.setSelectedIndex(index);
+        updateCenter();
+        tab.connect();
     }
 
     @Override
