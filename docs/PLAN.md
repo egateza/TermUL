@@ -20,7 +20,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] `SshTtyConnector` + tab JediTerm, resize, dan close yang rapi
 - [x] Keep-alive + deteksi putus + tombol reconnect
 
-**Acceptance**: bisa connect ke 3 server berbeda di 3 tab, menjalankan `htop` dan `vim` dengan tampilan benar, dan resize window berfungsi. Menutup tab tidak meninggalkan thread atau koneksi yang bocor (dicek dengan jconsole/VisualVM).
+**Acceptance** ✔ (lulus uji manual user, 2026-10-01): bisa connect ke 3 server berbeda di 3 tab, menjalankan `htop` dan `vim` dengan tampilan benar, dan resize window berfungsi. Menutup tab tidak meninggalkan thread atau koneksi yang bocor (dicek dengan jconsole/VisualVM).
 
 ## Fase 2: Vault & inject password (±1 minggu)
 - [x] Putuskan desain vault (ADR 0002)
@@ -29,7 +29,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] Auth password dari vault
 - [x] Hotkey `Ctrl+Shift+P` inject sudo password, `Ctrl+Shift+R` inject root password
 
-**Acceptance**: `sudo su` dan `su -` bisa dijalankan tanpa mengetik password. Tidak ada secret di `profiles.json` maupun di log.
+**Acceptance** ✔ (lulus uji manual user, 2026-10-01): `sudo su` dan `su -` bisa dijalankan tanpa mengetik password. Tidak ada secret di `profiles.json` maupun di log.
 
 ## Fase 3: Panel SFTP (±2 minggu)
 - [x] `RemoteFileService` di atas `SftpClient` (memakai connection handle yang sama)
@@ -37,7 +37,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] Upload/download + drag & drop dari Explorer + progress/cancel
 - [x] Rename, mkdir, delete (konfirmasi), chmod
 
-**Acceptance**: transfer file 500 MB tidak membuat UI freeze dan bisa di-cancel.
+**Acceptance** ✔ (lulus uji manual user, 2026-10-01): transfer file 500 MB tidak membuat UI freeze dan bisa di-cancel.
 
 ## Fase 4: Edit dengan editor lokal (±2 minggu)
 - [x] Konfigurasi editor per ekstensi (default `code --wait`)
@@ -48,7 +48,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] Line ending guard (LF/CRLF)
 - [x] EditTracker panel (daftar file yang diedit + status)
 
-**Acceptance**: edit `~/app/config.yml` di VS Code, lalu Ctrl+S, dan file langsung ter-update di server dengan permission yang sama. Kalau file diubah di server sebelum save, dialog konflik muncul.
+**Acceptance** ✔ (lulus uji manual user, 2026-10-01): edit `~/app/config.yml` di VS Code, lalu Ctrl+S, dan file langsung ter-update di server dengan permission yang sama. Kalau file diubah di server sebelum save, dialog konflik muncul.
 
 ## Fase 5: Edit file root & auto-trigger (±2 minggu)
 - [x] `SudoWriter`: upload ke `/tmp`, lalu `sudo -S install` dengan owner/mode, lalu cleanup
@@ -56,7 +56,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] `PromptResponder` auto-trigger dengan semua guard + unit test (termasuk test spoofing: prompt palsu tanpa armed tidak boleh memicu)
 - [x] Toggle auto-trigger per host (default OFF untuk tag prod)
 
-**Acceptance**: edit `/etc/nginx/sites-available/x` dari VS Code berhasil dengan owner `root:root` tetap. Config yang invalid di-rollback otomatis.
+**Acceptance** ✔ (lulus uji manual user, 2026-10-01): edit `/etc/nginx/sites-available/x` dari VS Code berhasil dengan owner `root:root` tetap. Config yang invalid di-rollback otomatis.
 
 Catatan implementasi: satu `sudo sh -c` per upload (backup ke `/var/backups/termul`, `install` ke temp + `mv`, validasi, rollback) supaya rollback tetap jalan walau yang rusak `sudoers`. Hook validasi di **Pengaturan → Validasi file root (sudo)**. File di `/tmp` ditaruh di direktori privat mode 700.
 

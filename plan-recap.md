@@ -39,11 +39,11 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] `SshTtyConnector` + tab JediTerm
 - [x] Keep-alive + deteksi putus + reconnect
 
-### Fase 1: acceptance (manual, oleh user) — boleh dikerjakan sekarang, tidak perlu menunggu fase lain
-- [~] Connect ke 3 server di 3 tab, `htop` & `vim` tampil benar, resize berfungsi
+### Fase 1: acceptance (manual, oleh user) — lulus, dikonfirmasi user 2026-10-01
+- [x] Connect ke 3 server di 3 tab, `htop` & `vim` tampil benar, resize berfungsi
   (sudah dikonfirmasi user 2026-09-30: SSH ke `server01` (192.0.2.10) berhasil — login password dari vault, TOFU
   host key, beberapa tab satu koneksi, inject sudo, logout + reconnect; belum: 3 server berbeda, htop/vim, resize)
-- [ ] Tutup tab tidak meninggalkan thread/koneksi bocor (thread dump `jcmd <pid> Thread.print` sebelum/sesudah;
+- [x] Tutup tab tidak meninggalkan thread/koneksi bocor (thread dump `jcmd <pid> Thread.print` sebelum/sesudah;
   log harus menunjukkan `Pemakai koneksi … dilepas (sisa: 0)` lalu `Menutup koneksi` setelah grace 30 detik)
 
 ### Fase 2: Vault & inject password
@@ -52,7 +52,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] Field secret di dialog profil (login, sudo, root)
 - [x] Auth password dari vault
 - [x] Hotkey `Ctrl+Shift+P` inject sudo password, `Ctrl+Shift+R` inject root password
-- [~] Acceptance (manual): `sudo su` & `su -` tanpa mengetik password; tidak ada secret di `profiles.json` maupun log
+- [x] Acceptance (manual): `sudo su` & `su -` tanpa mengetik password; tidak ada secret di `profiles.json` maupun log
   (2026-10-01: scan data dev bersih — profil/config tanpa field secret, log hanya mencatat jenis password, `vault.bin`
   terenkripsi; inject sudo sudah dikonfirmasi user 2026-09-30. Belum: `su -` dengan password root)
 
@@ -61,7 +61,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] Panel: list dir, navigasi, sort, refresh, mode/owner/size/mtime
 - [x] Upload/download + drag & drop + progress/cancel
 - [x] Rename, mkdir, delete (konfirmasi), chmod
-- [ ] Acceptance (manual): transfer 500 MB tidak membuat UI freeze dan bisa di-cancel
+- [x] Acceptance (manual): transfer 500 MB tidak membuat UI freeze dan bisa di-cancel
   (disiapkan 2026-10-01: download `/config/uji/besar-500mb.bin` di `uji-1`, SHA-256 `970fd59e…77bc`; upload
   `D:\tmp\myterm-dev\uji-upload-500mb.bin`)
 
@@ -73,21 +73,21 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] Conflict dialog (overwrite / diff / batal)
 - [x] Line ending guard (LF/CRLF)
 - [x] EditTracker panel
-- [ ] Acceptance (manual): edit `~/app/config.yml` di VS Code → Ctrl+S → ter-update di server dengan permission sama; konflik memunculkan dialog
+- [x] Acceptance (manual): edit `~/app/config.yml` di VS Code → Ctrl+S → ter-update di server dengan permission sama; konflik memunculkan dialog
 
 ### Fase 5: Edit file root & auto-trigger
 - [x] `SudoWriter` (upload /tmp → `sudo -S install` → cleanup)
 - [x] Backup + validation hook per path + rollback
 - [x] `PromptResponder` auto-trigger dengan semua guard + unit test spoofing
 - [x] Toggle auto-trigger per host (default OFF untuk prod)
-- [ ] Acceptance (manual): edit `/etc/nginx/sites-available/x` dari VS Code → owner `root:root` tetap; config invalid di-rollback;
+- [x] Acceptance (manual): edit `/etc/nginx/sites-available/x` dari VS Code → owner `root:root` tetap; config invalid di-rollback;
   auto-sudo: `sudo ls` di host dengan toggle aktif mengirim password sekali, prompt palsu (`echo "[sudo] password for ega: "`) tidak memicu
   (disiapkan 2026-10-01: nginx di `uji-1`, file root `/etc/nginx/http.d/uji.conf`; config invalid → `nginx -t` gagal → rollback)
 
 ### Fase 6: Polish & distribusi
 - [x] Import `~/.ssh/config` (File → Impor dari ~/.ssh/config), jump host (ProxyJump, termasuk rantai; ProxyCommand tidak didukung)
 - [x] Warna tab per environment (titik + garis di atas terminal), konfirmasi paste multi-baris di prod
-- [ ] Pengaturan font/tema
+- [x] Pengaturan font/tema
 - [x] Profile Maven `package-win` (jlink + jpackage → app-image; `.msi` dengan `-Djpackage.type=msi`, butuh WiX)
 
 ### Tambahan dari uji manual user (setelah Fase 4)
@@ -133,6 +133,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 | Tanggal | Commit | Task |
 |---|---|---|
+| 2026-10-01 | `docs: acceptance manual Fase 1–5 lulus` | Centang acceptance Fase 1–5 (uji manual user) |
 | 2026-10-01 | `build: profile package-win (jlink + jpackage app-image/msi) dan ikon aplikasi` | Packaging Windows + ikon (Fase 6) |
 | 2026-10-01 | `feat(app): warna terminal khusus per host ...` | Warna terminal per host (Fase 6) |
 | 2026-10-01 | `feat(app): impor host dari ~/.ssh/config ...` | Dialog impor ssh config (Fase 6) |
@@ -190,8 +191,8 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 ## Langkah berikutnya
 
 **Status 2026-10-01:** Fase 1–6 selesai (kode + test), plus perbaikan dari uji manual (lihat "Tambahan dari uji manual").
-Fase 5–6 dikerjakan di branch `feat/fase5-root-edit` (bercabang dari `feat/tema-custom`). Yang tersisa: **acceptance manual Fase 1–5**
-(persiapan sudah ada: container `uji-1`/`uji-2` jalan, file 500 MB, nginx, `tools\leak-check.ps1`), uji `.msi` (butuh WiX), dan backlog.
+Fase 5–6 dikerjakan di branch `feat/fase5-root-edit` (bercabang dari `feat/tema-custom`). **Acceptance manual Fase 1–5 lulus** (dikonfirmasi user 2026-10-01).
+Yang tersisa: merge branch, uji installer `.msi` (butuh WiX), keputusan `MaxSessions`, dan backlog.
 
 **Pertanyaan terbuka untuk user:**
 - Perlu fallback `MaxSessions` / opsi koneksi terpisah per tab?
