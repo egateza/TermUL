@@ -83,6 +83,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 | Tanggal | Commit | Task |
 |---|---|---|
+| 2026-09-30 | `feat(app): zoom terminal per tab` | Zoom terminal Ctrl++/Ctrl+-/Ctrl+0 (permintaan user) |
 | 2026-09-30 | `feat(app): konfirmasi saat menutup tab ... dan saat keluar aplikasi` | Konfirmasi tutup tab & keluar aplikasi (permintaan user) |
 | 2026-09-30 | `feat(app): konfirmasi sebelum keluar ...` | Konfirmasi logout + Enter untuk reconnect (permintaan user) |
 | 2026-09-30 | `fix(terminal): tampilkan banner reconnect setelah logout` | Fix terminal terlihat hang setelah Ctrl+D/logout |
@@ -140,6 +141,9 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 | Ctrl+Shift+F | Panel SFTP |
 | Ctrl+Shift+E | File yang sedang diedit |
 | Ctrl+Shift+P / Ctrl+Shift+R | Inject password sudo / root dari vault |
+| Ctrl++ (atau Ctrl+=) / Ctrl+- / Ctrl+0 | Zoom in / zoom out / ukuran default (per tab) |
+| Ctrl+D di prompt, `exit`/`logout` | Konfirmasi keluar sesi |
+| Enter setelah sesi berakhir | Reconnect |
 
 ## Catatan / blocker
 
