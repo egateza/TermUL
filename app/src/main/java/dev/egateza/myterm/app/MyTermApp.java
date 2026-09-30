@@ -1,6 +1,7 @@
 package dev.egateza.myterm.app;
 
 import com.formdev.flatlaf.FlatDarkLaf;
+import dev.egateza.myterm.app.edit.EditManager;
 import dev.egateza.myterm.app.ssh.SwingCredentialProvider;
 import dev.egateza.myterm.app.ssh.SwingHostKeyPrompt;
 import dev.egateza.myterm.app.terminal.TerminalSettings;
@@ -14,6 +15,7 @@ import dev.egateza.myterm.core.config.ConfigStore;
 import dev.egateza.myterm.core.profile.ProfileStore;
 import dev.egateza.myterm.ssh.SessionManager;
 import dev.egateza.myterm.ssh.SshSettings;
+import dev.egateza.myterm.sftp.edit.EditCache;
 import dev.egateza.myterm.ssh.hostkey.KnownHostsStore;
 import dev.egateza.myterm.terminal.SshTerminalFactory;
 import dev.egateza.myterm.vault.Argon2Params;
@@ -59,12 +61,19 @@ public final class MyTermApp {
                 new SwingHostKeyPrompt(frameRef::get),
                 new VaultCredentialProvider(vault, new SwingCredentialProvider(frameRef::get)),
                 SshSettings.defaults());
+        EditManager edits;
+        try {
+            edits = new EditManager(sessions, new EditCache(paths.editCacheDir()), () -> config.current().editors(),
+                    sshOps, frameRef::get);
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException("WatchService tidak tersedia", e);
+        }
 
         SwingUtilities.invokeLater(() -> {
             FlatDarkLaf.setup();
             var ctx = new AppContext(paths, config, store, io, sshOps, sessions, new SshTerminalFactory(sessions),
-                    new TerminalSettings(config.current().terminalFontSize()), vault);
-            var frame = new MainFrame(ctx, () -> shutdown(io, sshOps, sessions, vault, log));
+                    new TerminalSettings(config.current().terminalFontSize()), vault, edits);
+            var frame = new MainFrame(ctx, () -> shutdown(io, sshOps, sessions, vault, edits, log));
             frameRef.set(frame);
             frame.setVisible(true);
             UiAsync.run(io, store::load, frame::showSnapshot,
@@ -73,8 +82,10 @@ public final class MyTermApp {
     }
 
     private static void shutdown(ExecutorService io, ExecutorService sshOps, SessionManager sessions, VaultGate vault,
+                                 EditManager edits,
                                  Logger log) {
         log.info("MyTerm keluar");
+        edits.close();
         sshOps.shutdownNow();
         sessions.close();
         vault.close();

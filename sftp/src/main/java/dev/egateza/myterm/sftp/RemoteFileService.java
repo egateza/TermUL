@@ -56,6 +56,11 @@ public final class RemoteFileService implements AutoCloseable {
         }
     }
 
+    /** true kalau channel SFTP dan koneksi SSH-nya masih hidup. */
+    public boolean isOpen() {
+        return sftp.isOpen() && !lease.isReleased() && lease.connection().isOpen();
+    }
+
     /** Direktori home user (path absolut). */
     public String home() throws RemoteFileException {
         return canonicalize(".");

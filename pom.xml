@@ -109,6 +109,12 @@
                 <version>${project.version}</version>
                 <type>test-jar</type>
             </dependency>
+            <dependency>
+                <groupId>dev.egateza.myterm</groupId>
+                <artifactId>myterm-sftp</artifactId>
+                <version>${project.version}</version>
+                <type>test-jar</type>
+            </dependency>
 
             <!-- SSH / SFTP -->
             <dependency>

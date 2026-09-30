@@ -1,6 +1,7 @@
 package dev.egateza.myterm.app.ui;
 
 import dev.egateza.myterm.app.AppContext;
+import dev.egateza.myterm.app.edit.EditTrackerDialog;
 import dev.egateza.myterm.app.edit.EditorSettingsDialog;
 import dev.egateza.myterm.app.sftp.SftpPanel;
 import dev.egateza.myterm.app.terminal.TerminalTab;
@@ -167,6 +168,8 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                 () -> closeTab(tabs.getSelectedIndex())));
         terminal.add(menuItem("Panel SFTP", KeyStroke.getKeyStroke(KeyEvent.VK_F, ctrlShift),
                 () -> currentTab().ifPresent(TerminalTab::toggleSftp)));
+        terminal.add(menuItem("File yang sedang diedit...", KeyStroke.getKeyStroke(KeyEvent.VK_E, ctrlShift),
+                this::showEditTracker));
         terminal.addSeparator();
         terminal.add(menuItem("Inject password sudo", KeyStroke.getKeyStroke(KeyEvent.VK_P, ctrlShift),
                 () -> currentTab().ifPresent(t -> t.injectSecret(SecretType.SUDO_PASSWORD, ctx.vault()))));
@@ -224,6 +227,16 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         });
         menu.add(remember);
         return menu;
+    }
+
+    private EditTrackerDialog editTracker;
+
+    private void showEditTracker() {
+        if (editTracker == null) {
+            editTracker = new EditTrackerDialog(this, ctx.edits());
+        }
+        editTracker.setVisible(true);
+        editTracker.toFront();
     }
 
     private Optional<TerminalTab> currentTab() {
@@ -285,7 +298,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     @Override
     public void open(HostProfile profile) {
         var tab = new TerminalTab(profile, ctx.terminals(), ctx.sshOps(), ctx.terminalSettings(),
-                p -> new SftpPanel(p, ctx.sessions(), ctx.sshOps()));
+                p -> new SftpPanel(p, ctx.sessions(), ctx.sshOps(), ctx.edits()::open));
         tabs.addTab(tabTitle(profile), tab);
         int index = tabs.indexOfComponent(tab);
         tabs.setToolTipTextAt(index, profile.address());

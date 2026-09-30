@@ -69,11 +69,15 @@ public class SftpPanel extends JPanel {
     protected String currentDir;                 // EDT
     private boolean connecting;                  // EDT
 
-    public SftpPanel(HostProfile profile, SessionManager sessions, ExecutorService sshOps) {
+    private final java.util.function.BiConsumer<HostProfile, String> openInEditor;
+
+    public SftpPanel(HostProfile profile, SessionManager sessions, ExecutorService sshOps,
+                     java.util.function.BiConsumer<HostProfile, String> openInEditor) {
         super(new BorderLayout());
         this.profile = profile;
         this.sessions = sessions;
         this.sshOps = sshOps;
+        this.openInEditor = openInEditor;
 
         toolbar.setFloatable(false);
         toolbar.add(button("↑", "Direktori induk (Backspace)", this::goUp));
@@ -427,9 +431,10 @@ public class SftpPanel extends JPanel {
         }
     }
 
-    /** Hook untuk membuka file (Fase 4: edit dengan editor lokal). */
+    /** Membuka file di editor lokal (auto-upload saat disimpan). */
     protected void openFile(RemoteEntry entry) {
-        status.setText(entry.name() + ": " + Formats.size(entry.size()));
+        status.setText("Membuka " + entry.name() + " di editor ...");
+        openInEditor.accept(profile, entry.path());
     }
 
     protected List<RemoteEntry> selectedEntries() {

@@ -1,5 +1,6 @@
 package dev.egateza.myterm.app;
 
+import dev.egateza.myterm.app.edit.EditManager;
 import dev.egateza.myterm.app.terminal.TerminalSettings;
 import dev.egateza.myterm.app.vault.VaultGate;
 import dev.egateza.myterm.core.AppPaths;
@@ -18,5 +19,5 @@ import java.util.concurrent.ExecutorService;
 public record AppContext(AppPaths paths, ConfigStore config, ProfileStore profiles, ExecutorService io,
                          ExecutorService sshOps,
                          SessionManager sessions, SshTerminalFactory terminals, TerminalSettings terminalSettings,
-                         VaultGate vault) {
+                         VaultGate vault, EditManager edits) {
 }

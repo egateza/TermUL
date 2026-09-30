@@ -62,9 +62,10 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] `RemoteEditSession`: download ke cache + baseline stat
 - [x] WatchService + debounce + hash compare
 - [x] Upload atomic + preserve mode
-- [~] Conflict dialog (overwrite / diff / batal) (logic konflik selesai, dialog UI belum)
+- [x] Conflict dialog (overwrite / diff / batal)
 - [x] Line ending guard (LF/CRLF)
-- [ ] EditTracker panel
+- [x] EditTracker panel
+- [ ] Acceptance (manual): edit `~/app/config.yml` di VS Code → Ctrl+S → ter-update di server dengan permission sama; konflik memunculkan dialog
 
 ### Fase 5: Edit file root & auto-trigger
 - [ ] `SudoWriter` (upload /tmp → `sudo -S install` → cleanup)
@@ -82,6 +83,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 | Tanggal | Commit | Task |
 |---|---|---|
+| 2026-09-30 | `feat(app): edit file remote dengan editor lokal, auto-upload saat disimpan, dialog konflik/CRLF, dan EditTracker` | EditManager + dialog konflik/CRLF + EditTracker |
 | 2026-09-30 | `refactor(sftp): RemoteEditSession bisa rebind ke koneksi SFTP baru untuk retry setelah reconnect` | Refactor Uploader + rebind |
 | 2026-09-30 | `feat(sftp): tambah EditWatcher dengan WatchService dan debounce per file` | EditWatcher (WatchService + debounce) |
 | 2026-09-30 | `feat(sftp): tambah RemoteEditSession dengan cache aman, hash compare, deteksi konflik, dan guard line ending` | RemoteEditSession + EditCache + LineEndings |
@@ -107,7 +109,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 ## Langkah berikutnya
 
-- EditManager di app: buka file dari panel SFTP, auto-upload saat save, dialog konflik & CRLF, EditTracker.
+- Review hasil Fase 1–4 oleh user + acceptance test manual. Setelah itu Fase 5 (SudoWriter, PromptResponder auto-sudo dengan guard) lalu Fase 6.
 
 ## Catatan / blocker
 

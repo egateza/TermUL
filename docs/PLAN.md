@@ -44,9 +44,9 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] `RemoteEditSession`: download ke cache + baseline stat
 - [x] WatchService + debounce + hash compare
 - [x] Upload atomic + preserve mode
-- [ ] Conflict dialog (overwrite / diff / batal)
+- [x] Conflict dialog (overwrite / diff / batal)
 - [x] Line ending guard (LF/CRLF)
-- [ ] EditTracker panel (daftar file yang diedit + status)
+- [x] EditTracker panel (daftar file yang diedit + status)
 
 **Acceptance**: edit `~/app/config.yml` di VS Code, lalu Ctrl+S, dan file langsung ter-update di server dengan permission yang sama. Kalau file diubah di server sebelum save, dialog konflik muncul.
 
