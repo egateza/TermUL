@@ -10,6 +10,7 @@ import dev.egateza.myterm.app.ui.UiAsync;
 import dev.egateza.myterm.app.vault.VaultCredentialProvider;
 import dev.egateza.myterm.app.vault.VaultGate;
 import dev.egateza.myterm.core.AppPaths;
+import dev.egateza.myterm.core.config.ConfigStore;
 import dev.egateza.myterm.core.profile.ProfileStore;
 import dev.egateza.myterm.ssh.SessionManager;
 import dev.egateza.myterm.ssh.SshSettings;
@@ -46,6 +47,8 @@ public final class MyTermApp {
         ExecutorService io = Executors.newSingleThreadExecutor(Thread.ofPlatform().name("io").daemon().factory());
         ExecutorService sshOps = Executors.newThreadPerTaskExecutor(Thread.ofVirtual().name("ssh-ops-", 0).factory());
         var store = new ProfileStore(paths.profilesFile());
+        var config = new ConfigStore(paths.configFile());
+        config.load();
 
         var frameRef = new AtomicReference<Component>();
         var vault = new VaultGate(
@@ -59,8 +62,8 @@ public final class MyTermApp {
 
         SwingUtilities.invokeLater(() -> {
             FlatDarkLaf.setup();
-            var ctx = new AppContext(paths, store, io, sshOps, sessions, new SshTerminalFactory(sessions),
-                    new TerminalSettings(14f), vault);
+            var ctx = new AppContext(paths, config, store, io, sshOps, sessions, new SshTerminalFactory(sessions),
+                    new TerminalSettings(config.current().terminalFontSize()), vault);
             var frame = new MainFrame(ctx, () -> shutdown(io, sshOps, sessions, vault, log));
             frameRef.set(frame);
             frame.setVisible(true);

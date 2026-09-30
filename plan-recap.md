@@ -58,7 +58,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [ ] Acceptance (manual): transfer 500 MB tidak membuat UI freeze dan bisa di-cancel
 
 ### Fase 4: Edit dengan editor lokal
-- [ ] Konfigurasi editor per ekstensi (default `code --wait`)
+- [x] Konfigurasi editor per ekstensi (default `code --wait`)
 - [ ] `RemoteEditSession`: download ke cache + baseline stat
 - [ ] WatchService + debounce + hash compare
 - [ ] Upload atomic + preserve mode
@@ -82,6 +82,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 | Tanggal | Commit | Task |
 |---|---|---|
+| 2026-09-30 | `feat: tambah konfigurasi editor lokal per ekstensi (config.json) dan launcher editor Windows` | Konfigurasi editor per ekstensi |
 | 2026-09-30 | `feat(app): tambah upload/download dengan antrean + progress/cancel, drag & drop, rename, mkdir, delete, chmod di panel SFTP` | Operasi SFTP: transfer queue, DnD, rename/mkdir/delete/chmod |
 | 2026-09-30 | `feat(app): tambah panel SFTP (browse, sort, refresh) per tab dan perbaiki shortcut agar jalan saat fokus di terminal` | Panel SFTP browse + dispatcher shortcut |
 | 2026-09-30 | `feat(sftp): tambah RemoteFileService dengan upload atomic, progress/cancel, dan integration test OpenSSH` | RemoteFileService (SFTP) |
@@ -103,7 +104,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 ## Langkah berikutnya
 
-- Fase 4: konfigurasi editor per ekstensi + RemoteEditSession (download ke cache + baseline stat) di modul sftp.
+- RemoteEditSession di modul sftp: download ke cache (nama disanitasi) + baseline stat, sync dengan hash compare, conflict check, line ending guard, upload atomic preserve mode.
 
 ## Catatan / blocker
 

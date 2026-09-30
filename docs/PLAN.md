@@ -40,7 +40,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 **Acceptance**: transfer file 500 MB tidak membuat UI freeze dan bisa di-cancel.
 
 ## Fase 4: Edit dengan editor lokal (±2 minggu)
-- [ ] Konfigurasi editor per ekstensi (default `code --wait`)
+- [x] Konfigurasi editor per ekstensi (default `code --wait`)
 - [ ] `RemoteEditSession`: download ke cache + baseline stat
 - [ ] WatchService + debounce + hash compare
 - [ ] Upload atomic + preserve mode

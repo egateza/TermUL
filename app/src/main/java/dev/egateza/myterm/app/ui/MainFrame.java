@@ -1,6 +1,7 @@
 package dev.egateza.myterm.app.ui;
 
 import dev.egateza.myterm.app.AppContext;
+import dev.egateza.myterm.app.edit.EditorSettingsDialog;
 import dev.egateza.myterm.app.sftp.SftpPanel;
 import dev.egateza.myterm.app.terminal.TerminalTab;
 import dev.egateza.myterm.app.ui.tree.HostTreePanel;
@@ -173,6 +174,13 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                 () -> currentTab().ifPresent(t -> t.injectSecret(SecretType.ROOT_PASSWORD, ctx.vault()))));
         bar.add(terminal);
         bar.add(buildVaultMenu());
+
+        var settings = new JMenu("Pengaturan");
+        settings.add(menuItem("Editor lokal...", null, () ->
+                EditorSettingsDialog.show(this, ctx.config().current().editors()).ifPresent(editors ->
+                        mutate("Gagal menyimpan pengaturan", () ->
+                                ctx.config().save(ctx.config().current().withEditors(editors))))));
+        bar.add(settings);
         return bar;
     }
 
