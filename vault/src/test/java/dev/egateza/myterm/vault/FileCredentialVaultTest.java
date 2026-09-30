@@ -69,6 +69,8 @@ class FileCredentialVaultTest {
         var reopened = vault(KeyProtector.UNAVAILABLE);
         assertThat(reopened.exists()).isTrue();
         assertThat(reopened.isUnlocked()).isFalse();
+        assertThat(reopened.has(a, SecretType.SUDO_PASSWORD)).isTrue(); // metadata terbaca walau terkunci
+        assertThatThrownBy(() -> reopened.get(a, SecretType.SUDO_PASSWORD)).isInstanceOf(VaultException.Locked.class);
         reopened.unlock(pw("master-123"));
 
         assertThat(reopened.get(a, SecretType.SUDO_PASSWORD)).containsExactly(pw("sudo-pässwörd"));

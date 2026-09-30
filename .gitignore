@@ -8,3 +8,4 @@ vault.bin
 profiles.json
 known_hosts
 .vscode/
+vault.bin.dpapi

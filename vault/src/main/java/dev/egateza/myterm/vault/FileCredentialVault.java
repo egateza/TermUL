@@ -188,7 +188,13 @@ public final class FileCredentialVault implements CredentialVault {
 
     @Override
     public synchronized boolean has(UUID profileId, SecretType type) {
-        return data != null && data.entries().containsKey(new EntryKey(profileId, type));
+        if (data == null) {
+            if (!Files.exists(file)) {
+                return false;
+            }
+            data = read(); // metadata (id + tipe) tidak rahasia; ciphertext tetap butuh DEK
+        }
+        return data.entries().containsKey(new EntryKey(profileId, type));
     }
 
     @Override
