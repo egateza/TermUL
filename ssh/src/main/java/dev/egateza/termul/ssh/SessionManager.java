@@ -14,9 +14,12 @@ import java.net.NoRouteToHostException;
 import java.net.UnknownHostException;
 import java.nio.channels.UnresolvedAddressException;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -25,11 +28,15 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
 import org.apache.sshd.client.SshClient;
 import org.apache.sshd.client.session.ClientSession;
+import org.apache.sshd.client.session.forward.ExplicitPortForwardingTracker;
+import org.apache.sshd.common.AttributeRepository;
 import org.apache.sshd.common.SshException;
 import org.apache.sshd.common.keyprovider.KeyIdentityProvider;
 import org.apache.sshd.client.auth.password.PasswordIdentityProvider;
+import org.apache.sshd.common.util.net.SshdSocketAddress;
 import org.apache.sshd.core.CoreModuleProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -68,6 +75,10 @@ public final class SessionManager implements AutoCloseable {
         }
     }
 
+    /** Batas panjang rantai jump host. */
+    static final int MAX_JUMPS = 4;
+
+    private final Function<UUID, Optional<HostProfile>> profiles;
     private final SshClient client;
     private final SshSettings settings;
     private final CredentialProvider credentials;
@@ -76,8 +87,16 @@ public final class SessionManager implements AutoCloseable {
     private final Map<UUID, Entry> entries = new HashMap<>(); // guarded by lock
     private final AtomicBoolean closed = new AtomicBoolean();
 
+    /** Tanpa jump host (profil dengan jump host ditolak dengan pesan jelas). */
     public SessionManager(KnownHostsStore knownHosts, HostKeyPrompt hostKeyPrompt, CredentialProvider credentials,
                           SshSettings settings) {
+        this(knownHosts, hostKeyPrompt, credentials, settings, id -> Optional.empty());
+    }
+
+    /** @param profiles mencari profil jump host berdasarkan id (versi terbaru dari store) */
+    public SessionManager(KnownHostsStore knownHosts, HostKeyPrompt hostKeyPrompt, CredentialProvider credentials,
+                          SshSettings settings, Function<UUID, Optional<HostProfile>> profiles) {
+        this.profiles = Objects.requireNonNull(profiles);
         this.settings = Objects.requireNonNull(settings);
         this.credentials = Objects.requireNonNull(credentials);
         this.scheduler = Executors.newSingleThreadScheduledExecutor(
@@ -100,6 +119,11 @@ public final class SessionManager implements AutoCloseable {
      * Pemanggil wajib {@link SshLease#close()} setelah selesai.
      */
     public SshLease acquire(HostProfile profile) throws SshConnectException {
+        return acquire(profile, List.of());
+    }
+
+    /** @param via profil yang sedang connect lewat profil ini (rantai jump host, untuk deteksi putaran) */
+    private SshLease acquire(HostProfile profile, List<UUID> via) throws SshConnectException {
         Objects.requireNonNull(profile, "profile");
         if (closed.get()) {
             throw new IllegalStateException("SessionManager sudah ditutup");
@@ -124,7 +148,7 @@ public final class SessionManager implements AutoCloseable {
 
         if (owner) {
             try {
-                entry.future.complete(connect(profile));
+                entry.future.complete(connect(profile, via));
             } catch (SshConnectException | RuntimeException e) {
                 entry.future.completeExceptionally(e);
                 synchronized (lock) {
@@ -188,14 +212,84 @@ public final class SessionManager implements AutoCloseable {
         });
     }
 
-    private SshConnection connect(HostProfile profile) throws SshConnectException {
-        if (profile.jumpHostId() != null) {
-            throw new SshConnectException("Jump host (ProxyJump) belum didukung.");
+    private SshConnection connect(HostProfile profile, List<UUID> via) throws SshConnectException {
+        if (profile.jumpHostId() == null) {
+            log.info("Connect ke {}", profile.address());
+            return connectTo(profile, profile.host(), profile.port(), null);
         }
-        log.info("Connect ke {}", profile.address());
+        return connectViaJump(profile, via);
+    }
+
+    /**
+     * ProxyJump: koneksi (bersama) ke jump host, lalu local forward {@code 127.0.0.1:<acak>} → host tujuan dilihat
+     * dari jump host. Host key diverifikasi terhadap host tujuan ({@link AppServerKeyVerifier#LOGICAL_TARGET}), bukan
+     * alamat tunnel. Tunnel dan lease jump host dilepas saat koneksi tujuan tertutup. Jump host boleh berantai.
+     */
+    private SshConnection connectViaJump(HostProfile profile, List<UUID> via) throws SshConnectException {
+        UUID jumpId = profile.jumpHostId();
+        var chain = new ArrayList<>(via);
+        chain.add(profile.id());
+        if (chain.contains(jumpId) || chain.size() > MAX_JUMPS) {
+            throw new SshConnectException("Rantai jump host untuk " + profile.address() + " berputar atau terlalu panjang.");
+        }
+        HostProfile jump = profiles.apply(jumpId).orElseThrow(() -> new SshConnectException(
+                "Jump host untuk " + profile.name() + " tidak ditemukan (profilnya sudah dihapus?)."));
+        SshLease jumpLease = acquire(jump, List.copyOf(chain));
+        ExplicitPortForwardingTracker tunnel = null;
+        try {
+            tunnel = jumpLease.connection().session().createLocalPortForwardingTracker(
+                    new SshdSocketAddress("127.0.0.1", 0), new SshdSocketAddress(profile.host(), profile.port()));
+            SshdSocketAddress local = tunnel.getBoundAddress();
+            log.info("Connect ke {} lewat jump host {} (tunnel {})", profile.address(), jump.address(), local);
+            var context = AttributeRepository.ofKeyValuePair(AppServerKeyVerifier.LOGICAL_TARGET,
+                    new SshdSocketAddress(profile.host(), profile.port()));
+            SshConnection connection;
+            try {
+                connection = connectTo(profile, local.getHostName(), local.getPort(), context);
+            } catch (HostKeyRejectedException e) {
+                throw e;
+            } catch (SshConnectException e) {
+                throw new SshConnectException(e.getMessage() + " (lewat jump host " + jump.address()
+                        + "; pastikan jump host mengizinkan TCP forwarding dan bisa menjangkau " + profile.host() + ")", e);
+            }
+            ExplicitPortForwardingTracker opened = tunnel;
+            connection.addCloseListener(c -> {
+                closeQuietly(opened);
+                jumpLease.close();
+            });
+            if (!connection.isOpen()) { // tertutup sebelum listener terpasang
+                closeQuietly(opened);
+                jumpLease.close();
+            }
+            return connection;
+        } catch (IOException e) {
+            closeQuietly(tunnel);
+            jumpLease.close();
+            throw new SshConnectException("Gagal membuat tunnel lewat jump host " + jump.address() + ": "
+                    + e.getMessage(), e);
+        } catch (SshConnectException | RuntimeException e) {
+            closeQuietly(tunnel);
+            jumpLease.close();
+            throw e;
+        }
+    }
+
+    private static void closeQuietly(ExplicitPortForwardingTracker tunnel) {
+        if (tunnel != null) {
+            try {
+                tunnel.close();
+            } catch (IOException | RuntimeException e) {
+                log.debug("Menutup tunnel: {}", e.toString());
+            }
+        }
+    }
+
+    /** @param context connection context (mis. host tujuan logis untuk tunnel), boleh null */
+    private SshConnection connectTo(HostProfile profile, String host, int port, AttributeRepository context)
+            throws SshConnectException {
         ClientSession session;
         try {
-            session = client.connect(profile.username(), profile.host(), profile.port())
+            session = client.connect(profile.username(), host, port, context, null)
                     .verify(settings.connectTimeout())
                     .getSession();
         } catch (IOException | RuntimeException e) {

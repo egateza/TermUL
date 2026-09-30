@@ -25,6 +25,18 @@ public final class AppServerKeyVerifier implements ServerKeyVerifier {
 
     public static final AttributeKey<HostKeyVerdict> VERDICT = new AttributeKey<>();
 
+    /**
+     * Host tujuan sebenarnya, diisi di connection context saat koneksi lewat tunnel (jump host): socket-nya ke
+     * {@code 127.0.0.1:<port lokal>}, tapi host key harus dicocokkan dengan host tujuan.
+     */
+    public static final AttributeKey<SshdSocketAddress> LOGICAL_TARGET = new AttributeKey<>();
+
+    static SshdSocketAddress targetOf(ClientSession session) {
+        var context = session.getConnectionContext();
+        SshdSocketAddress logical = context == null ? null : context.getAttribute(LOGICAL_TARGET);
+        return logical != null ? logical : SshdSocketAddress.toSshdSocketAddress(session.getConnectAddress());
+    }
+
     private static final Logger log = LoggerFactory.getLogger(AppServerKeyVerifier.class);
 
     private final KnownHostsStore store;
@@ -37,7 +49,7 @@ public final class AppServerKeyVerifier implements ServerKeyVerifier {
 
     @Override
     public boolean verifyServerKey(ClientSession session, SocketAddress remoteAddress, PublicKey serverKey) {
-        SshdSocketAddress target = SshdSocketAddress.toSshdSocketAddress(session.getConnectAddress());
+        SshdSocketAddress target = targetOf(session);
         HostKeyVerdict verdict = verify(target.getHostName(), target.getPort(), serverKey);
         session.setAttribute(VERDICT, verdict);
         return verdict instanceof HostKeyVerdict.Trusted;

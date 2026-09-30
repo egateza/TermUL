@@ -82,7 +82,7 @@ public final class TermULApp {
                 new KnownHostsStore(paths.knownHostsFile()),
                 new SwingHostKeyPrompt(frameRef::get),
                 new VaultCredentialProvider(vault, new SwingCredentialProvider(frameRef::get)),
-                SshSettings.defaults());
+                SshSettings.defaults(), id -> store.snapshot().find(id));
         var sftpLinks = new SftpLinks(sessions);
         EditManager edits;
         try {
