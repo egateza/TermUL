@@ -103,7 +103,14 @@ public final class HostDrawer {
                 layout();
             }
         };
-        layers.addComponentListener(relayout);
+        // Layered pane sengaja hanya didengarkan ukurannya: posisi anchor relatif terhadap layered pane tidak berubah
+        // saat layered pane itu digeser (mis. ShakeEffect), dan revalidate() di layout() akan mengembalikannya ke 0.
+        layers.addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentResized(ComponentEvent e) {
+                layout();
+            }
+        });
         anchor.addComponentListener(relayout);
         Toolkit.getDefaultToolkit().addAWTEventListener(outsideClick, AWTEvent.MOUSE_EVENT_MASK);
         toggle.setOpen(false);

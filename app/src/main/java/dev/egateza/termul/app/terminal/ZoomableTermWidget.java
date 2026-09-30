@@ -1,6 +1,8 @@
 package dev.egateza.termul.app.terminal;
 
 import com.jediterm.terminal.model.StyleState;
+import dev.egateza.termul.app.ui.ShakeEffect;
+import javax.swing.SwingUtilities;
 import com.jediterm.terminal.model.TerminalTextBuffer;
 import com.jediterm.terminal.ui.JediTermWidget;
 import com.jediterm.terminal.ui.TerminalPanel;
@@ -34,6 +36,13 @@ public final class ZoomableTermWidget extends JediTermWidget {
 
         void refreshFont() {
             reinitFontAndResize();
+        }
+
+        /** Dipanggil dari thread emulator saat server mengirim BEL: bunyi sistem lalu layar bergetar. */
+        @Override
+        public void beep() {
+            super.beep();
+            SwingUtilities.invokeLater(() -> ShakeEffect.shake(this));
         }
     }
 }
