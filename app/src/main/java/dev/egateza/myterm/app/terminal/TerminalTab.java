@@ -98,6 +98,16 @@ public final class TerminalTab extends JPanel {
         return profile;
     }
 
+    /** true kalau sesi sedang connect atau masih terhubung (menutup tab akan memutusnya). */
+    public boolean isSessionActive() {
+        return pending != null || (connector != null && connector.isConnected());
+    }
+
+    /** Jumlah transfer SFTP yang berjalan/antre di tab ini. */
+    public int activeTransfers() {
+        return sftp == null ? 0 : sftp.activeTransfers();
+    }
+
     public void connect() {
         if (disposed || pending != null) {
             return;

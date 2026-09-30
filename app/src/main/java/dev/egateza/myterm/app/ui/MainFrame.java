@@ -7,13 +7,16 @@ import dev.egateza.myterm.app.sftp.SftpPanel;
 import dev.egateza.myterm.app.terminal.TerminalTab;
 import dev.egateza.myterm.app.ui.tree.HostTreePanel;
 import java.awt.Color;
+import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import dev.egateza.myterm.core.profile.HostProfile;
 import dev.egateza.myterm.core.profile.ProfileSnapshot;
 import dev.egateza.myterm.core.profile.ProfileStore;
+import dev.egateza.myterm.sftp.edit.RemoteEditSession;
 import dev.egateza.myterm.vault.SecretType;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
@@ -31,6 +34,7 @@ import javax.swing.JLabel;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JSplitPane;
 import javax.swing.JTabbedPane;
@@ -250,15 +254,62 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         return tabs.getSelectedComponent() instanceof TerminalTab t ? Optional.of(t) : Optional.empty();
     }
 
+    /** Tutup tab dari tombol ✕ / menu: konfirmasi dulu kalau sesinya masih aktif. */
     private void closeTab(int index) {
         if (index < 0 || index >= tabs.getTabCount()) {
             return;
         }
+        if (tabs.getComponentAt(index) instanceof TerminalTab tab && (tab.isSessionActive() || tab.activeTransfers() > 0)) {
+            String transfers = tab.activeTransfers() > 0
+                    ? "\n\nMasih ada " + tab.activeTransfers() + " transfer SFTP yang akan dibatalkan." : "";
+            tabs.setSelectedIndex(index);
+            boolean yes = JOptionPane.showConfirmDialog(this,
+                    "Akhiri sesi ke " + tab.profile().name() + " (" + tab.profile().address() + ")?" + transfers,
+                    "Tutup tab", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE) == JOptionPane.YES_OPTION;
+            if (!yes) {
+                tab.focusTerminal();
+                return;
+            }
+        }
+        removeTab(index);
+    }
+
+    private void removeTab(int index) {
         if (tabs.getComponentAt(index) instanceof TerminalTab tab) {
             tab.dispose();
         }
         tabs.removeTabAt(index);
         updateCenter();
+    }
+
+    /** Ringkasan hal yang masih aktif (untuk konfirmasi keluar). Dipanggil di EDT, tanpa I/O. */
+    private List<String> activeWork() {
+        var items = new ArrayList<String>();
+        for (int i = 0; i < tabs.getTabCount(); i++) {
+            if (tabs.getComponentAt(i) instanceof TerminalTab tab) {
+                if (tab.isSessionActive()) {
+                    items.add("Sesi terminal: " + tab.profile().name() + " (" + tab.profile().address() + ")");
+                }
+                if (tab.activeTransfers() > 0) {
+                    items.add("Transfer SFTP berjalan di " + tab.profile().name() + ": " + tab.activeTransfers());
+                }
+            }
+        }
+        for (var edit : ctx.edits().entries()) {
+            var state = edit.session().state();
+            String status = state == RemoteEditSession.State.EDITING ? "tersinkron" : "BELUM TERSINKRON";
+            items.add("File diedit (" + status + "): " + edit.profile().name() + ":" + edit.session().remotePath());
+        }
+        return items;
+    }
+
+    private int firstActiveTab() {
+        for (int i = 0; i < tabs.getTabCount(); i++) {
+            if (tabs.getComponentAt(i) instanceof TerminalTab tab && (tab.isSessionActive() || tab.activeTransfers() > 0)) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     private static String tabTitle(HostProfile p) {
@@ -287,9 +338,31 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         }
     }
 
+    /** Keluar aplikasi: selalu konfirmasi; kalau masih ada sesi/transfer/edit, tampilkan daftarnya. */
     private void exit() {
+        List<String> active = activeWork();
+        String message;
+        if (active.isEmpty()) {
+            message = "Tutup MyTerm?";
+        } else {
+            var sb = new StringBuilder("Masih ada yang aktif:\n\n");
+            active.forEach(a -> sb.append("  • ").append(a).append('\n'));
+            sb.append("\nTutup MyTerm dan akhiri semuanya?\n(Pilih \"No\" untuk memeriksanya dulu.)");
+            message = sb.toString();
+        }
+        int choice = JOptionPane.showConfirmDialog(this, message, "Keluar MyTerm", JOptionPane.YES_NO_OPTION,
+                active.isEmpty() ? JOptionPane.QUESTION_MESSAGE : JOptionPane.WARNING_MESSAGE);
+        if (choice != JOptionPane.YES_OPTION) {
+            int first = firstActiveTab();
+            if (first >= 0) {
+                tabs.setSelectedIndex(first);
+            } else if (!ctx.edits().entries().isEmpty()) {
+                showEditTracker();
+            }
+            return;
+        }
         while (tabs.getTabCount() > 0) {
-            closeTab(0);
+            removeTab(0);
         }
         dispose();
         onExit.run();

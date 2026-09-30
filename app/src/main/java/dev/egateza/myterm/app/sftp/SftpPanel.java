@@ -377,6 +377,10 @@ public class SftpPanel extends JPanel {
     private record Start(RemoteFileService service, String dir) {
     }
 
+    public int activeTransfers() {
+        return transfers.activeCount();
+    }
+
     public boolean isConnected() {
         return service != null;
     }

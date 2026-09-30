@@ -120,6 +120,11 @@ public final class TransferQueue extends JPanel {
         });
     }
 
+    /** Jumlah transfer yang sedang berjalan + antre. */
+    public int activeCount() {
+        return queued.get();
+    }
+
     public void shutdown() {
         currentCancel.set(true);
         worker.shutdownNow();
