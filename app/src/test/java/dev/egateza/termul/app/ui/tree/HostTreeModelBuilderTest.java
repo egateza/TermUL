@@ -2,6 +2,7 @@ package dev.egateza.termul.app.ui.tree;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import dev.egateza.termul.app.ui.tree.HostTreeModelBuilder.BuiltinGroup;
 import dev.egateza.termul.app.ui.tree.HostTreeModelBuilder.GroupNode;
 import dev.egateza.termul.core.profile.HostProfile;
 import dev.egateza.termul.core.profile.ProfileSnapshot;
@@ -23,8 +24,8 @@ class HostTreeModelBuilderTest {
     void grupDitampilkanSebelumHostDanTerurut() {
         var root = HostTreeModelBuilder.build(snapshot, "");
 
-        assertThat(labels(root)).containsExactly("Produksi", "Staging", "lab");
-        var produksi = (DefaultMutableTreeNode) root.getChildAt(0);
+        assertThat(labels(root)).containsExactly("FAVORITES", "RECENT", "Produksi", "Staging", "lab");
+        var produksi = (DefaultMutableTreeNode) root.getChildAt(2);
         assertThat(labels(produksi)).containsExactly("Backend", "db-1");
     }
 
@@ -42,6 +43,31 @@ class HostTreeModelBuilderTest {
     void filterCaseInsensitivePadaUserDanGrup() {
         assertThat(labels(HostTreeModelBuilder.build(snapshot, "ROOT"))).containsExactly("lab");
         assertThat(HostTreeModelBuilder.matches(web, "backend")).isTrue();
+    }
+
+    @Test
+    void grupBawaanBerisiFavoritesDanLastUsedSesuaiUrutan() {
+        var s = new ProfileSnapshot(1, List.of("Staging"), List.of(web, db, lab),
+                List.of(lab.id(), web.id()), List.of(db.id(), lab.id()));
+
+        var root = HostTreeModelBuilder.build(s, "");
+
+        var favorites = (DefaultMutableTreeNode) root.getChildAt(0);
+        var recent = (DefaultMutableTreeNode) root.getChildAt(1);
+        assertThat(favorites.getUserObject()).isEqualTo(BuiltinGroup.FAVORITES);
+        assertThat(labels(favorites)).containsExactly("lab", "web-1");
+        assertThat(recent.getUserObject()).isEqualTo(BuiltinGroup.RECENT);
+        assertThat(labels(recent)).containsExactly("db-1", "lab");
+        // profil tetap ada di grup aslinya
+        assertThat(labels(root)).endsWith("lab");
+    }
+
+    @Test
+    void grupBawaanKosongDisembunyikanSaatFilter() {
+        var s = new ProfileSnapshot(1, List.of(), List.of(web, db, lab), List.of(lab.id()), List.of());
+
+        assertThat(labels(HostTreeModelBuilder.build(s, "root"))).containsExactly("FAVORITES", "lab");
+        assertThat(labels(HostTreeModelBuilder.build(s, "10.0.0.2"))).containsExactly("Produksi");
     }
 
     private static List<String> labels(DefaultMutableTreeNode node) {

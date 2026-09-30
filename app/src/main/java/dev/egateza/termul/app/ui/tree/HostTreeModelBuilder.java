@@ -23,6 +23,15 @@ public final class HostTreeModelBuilder {
         }
     }
 
+    /**
+     * User object grup bawaan yang selalu tampil di atas dan tidak bisa di-rename/hapus. Isinya referensi ke profil
+     * yang sama dengan di grup aslinya.
+     */
+    public enum BuiltinGroup {
+        FAVORITES,
+        RECENT
+    }
+
     private HostTreeModelBuilder() {
     }
 
@@ -49,6 +58,18 @@ public final class HostTreeModelBuilder {
             }
         }
         sortGroupsFirst(root);
+        int index = 0;
+        for (BuiltinGroup b : BuiltinGroup.values()) {
+            var members = switch (b) {
+                case FAVORITES -> snapshot.favoriteProfiles();
+                case RECENT -> snapshot.recentProfiles();
+            };
+            var node = new DefaultMutableTreeNode(b, true);
+            members.stream().filter(p -> matches(p, q)).forEach(p -> node.add(new DefaultMutableTreeNode(p, false)));
+            if (q.isEmpty() || node.getChildCount() > 0) {
+                root.insert(node, index++);
+            }
+        }
         return root;
     }
 

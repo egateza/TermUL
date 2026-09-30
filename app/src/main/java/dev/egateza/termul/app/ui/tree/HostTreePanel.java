@@ -4,6 +4,7 @@ import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.app.ui.AppIcon;
 import dev.egateza.termul.app.ui.EnvColors;
 import dev.egateza.termul.app.ui.OsIcons;
+import dev.egateza.termul.app.ui.tree.HostTreeModelBuilder.BuiltinGroup;
 import dev.egateza.termul.app.ui.tree.HostTreeModelBuilder.GroupNode;
 import dev.egateza.termul.core.profile.HostProfile;
 import dev.egateza.termul.core.profile.ProfileSnapshot;
@@ -57,6 +58,12 @@ public final class HostTreePanel extends JPanel {
         void renameGroup(String group);
 
         void deleteGroup(String group);
+
+        /** Tambah ({@code true}) atau keluarkan profil dari grup bawaan Favorites. */
+        void setFavorite(HostProfile profile, boolean favorite);
+
+        /** Kosongkan grup bawaan Last used. */
+        void clearRecent();
     }
 
     private final Actions actions;
@@ -123,7 +130,7 @@ public final class HostTreePanel extends JPanel {
                 actions.delete(p);
             } else if (selectedObject() instanceof GroupNode g && !g.path().isEmpty()) {
                 actions.deleteGroup(g.path());
-            }
+            } // grup bawaan (BuiltinGroup) sengaja tidak bisa dihapus
         });
         bindKey(KeyEvent.VK_F2, "edit", () -> {
             if (selectedObject() instanceof HostProfile p) {
@@ -165,8 +172,11 @@ public final class HostTreePanel extends JPanel {
     }
 
     private void rebuild() {
-        Set<String> expanded = expandedGroups();
-        Object selected = selectedObject();
+        Set<Object> expanded = expandedGroups();
+        TreePath selectedPath = tree.getSelectionPath();
+        Object selected = selectedPath == null ? null : userObject(selectedPath);
+        Object selectedParent = selectedPath == null || selectedPath.getParentPath() == null
+                ? null : userObject(selectedPath.getParentPath());
         boolean filtering = !search.getText().isBlank();
 
         var root = HostTreeModelBuilder.build(snapshot, search.getText());
@@ -175,24 +185,29 @@ public final class HostTreePanel extends JPanel {
         for (var node : Collections.list(root.depthFirstEnumeration())) {
             var n = (DefaultMutableTreeNode) node;
             var path = new TreePath(n.getPath());
-            if (n.getUserObject() instanceof GroupNode g
-                    && (filtering || expanded.contains(g.path()) || expanded.isEmpty())) {
+            Object uo = n.getUserObject();
+            if ((uo instanceof GroupNode || uo instanceof BuiltinGroup)
+                    && (filtering || expanded.contains(uo) || expanded.isEmpty())) {
                 tree.expandPath(path);
             }
-            if (isSame(n.getUserObject(), selected)) {
+            // profil bisa muncul dua kali (grup asli + Favorites/Last used): cocokkan juga parent-nya
+            var parent = (DefaultMutableTreeNode) n.getParent();
+            if (isSame(uo, selected) && parent != null && isSame(parent.getUserObject(), selectedParent)) {
                 tree.setSelectionPath(path);
             }
         }
     }
 
-    private Set<String> expandedGroups() {
-        var result = new HashSet<String>();
+    /** User object grup ({@link GroupNode}/{@link BuiltinGroup}) yang sedang terbuka. */
+    private Set<Object> expandedGroups() {
+        var result = new HashSet<Object>();
         var root = (DefaultMutableTreeNode) model.getRoot();
         var e = tree.getExpandedDescendants(new TreePath(root.getPath()));
         if (e != null) {
             for (var p : Collections.list(e)) {
-                if (userObject(p) instanceof GroupNode g) {
-                    result.add(g.path());
+                Object uo = userObject(p);
+                if (uo instanceof GroupNode || uo instanceof BuiltinGroup) {
+                    result.add(uo);
                 }
             }
         }
@@ -203,6 +218,7 @@ public final class HostTreePanel extends JPanel {
         return switch (a) {
             case HostProfile p when b instanceof HostProfile q -> p.id().equals(q.id());
             case GroupNode g when b instanceof GroupNode h -> g.path().equals(h.path());
+            case BuiltinGroup g -> g == b;
             case null, default -> false;
         };
     }
@@ -237,6 +253,9 @@ public final class HostTreePanel extends JPanel {
                 menu.addSeparator();
                 menu.add(item(null, I18n.t("tree.menu.edit"), () -> actions.edit(p)));
                 menu.add(item(null, I18n.t("tree.menu.duplicate"), () -> actions.duplicate(p)));
+                boolean favorite = snapshot.isFavorite(p.id());
+                menu.add(item(AppIcon.STAR, I18n.t(favorite ? "tree.menu.unfavorite" : "tree.menu.favorite"),
+                        () -> actions.setFavorite(p, !favorite)));
                 menu.add(item(null, I18n.t("tree.menu.delete"), () -> actions.delete(p)));
             }
             case GroupNode g -> {
@@ -245,6 +264,11 @@ public final class HostTreePanel extends JPanel {
                 menu.addSeparator();
                 menu.add(item(null, I18n.t("tree.menu.renameGroup"), () -> actions.renameGroup(g.path())));
                 menu.add(item(null, I18n.t("tree.menu.deleteGroup"), () -> actions.deleteGroup(g.path())));
+            }
+            case BuiltinGroup.RECENT -> {
+                var clear = item(AppIcon.BROOM, I18n.t("tree.menu.clearRecent"), actions::clearRecent);
+                clear.setEnabled(!snapshot.recent().isEmpty());
+                menu.add(clear);
             }
             case null, default -> {
                 menu.add(item(AppIcon.SERVER, I18n.t("tree.menu.newHost"), () -> actions.newHost("")));
@@ -284,12 +308,14 @@ public final class HostTreePanel extends JPanel {
         private static final javax.swing.Icon FOLDER = AppIcon.FOLDER.icon(AppIcon.SIZE, () -> AppIcon.FOLDER_COLOR);
         private static final javax.swing.Icon FOLDER_OPEN =
                 AppIcon.FOLDER_OPEN.icon(AppIcon.SIZE, () -> AppIcon.FOLDER_COLOR);
+        private static final javax.swing.Icon STAR = AppIcon.STAR.icon(AppIcon.SIZE, () -> AppIcon.FOLDER_COLOR);
+        private static final javax.swing.Icon HISTORY = AppIcon.HISTORY.icon();
 
         @Override
         public Component getTreeCellRendererComponent(JTree tree, Object value, boolean sel, boolean expanded,
                                                       boolean leaf, int row, boolean hasFocus) {
             Object uo = ((DefaultMutableTreeNode) value).getUserObject();
-            boolean isGroup = uo instanceof GroupNode;
+            boolean isGroup = uo instanceof GroupNode || uo instanceof BuiltinGroup;
             super.getTreeCellRendererComponent(tree, value, sel, expanded, !isGroup, row, hasFocus);
             if (uo instanceof HostProfile p) {
                 var color = EnvColors.of(p.environment());
@@ -298,6 +324,14 @@ public final class HostTreePanel extends JPanel {
                 setIcon(OsIcons.of(p.os()));
                 String os = escape(OsIcons.label(p.os()));
                 setToolTipText(p.notes() == null ? os : "<html>" + os + "<br>" + escape(p.notes()) + "</html>");
+            } else if (uo instanceof BuiltinGroup b) {
+                setText(switch (b) {
+                    case FAVORITES -> I18n.t("tree.group.favorites");
+                    case RECENT -> I18n.t("tree.group.recent");
+                });
+                setIcon(b == BuiltinGroup.FAVORITES ? STAR : HISTORY);
+                setToolTipText(b == BuiltinGroup.FAVORITES ? I18n.t("tree.group.favorites.tooltip")
+                        : I18n.t("tree.group.recent.tooltip", ProfileSnapshot.RECENT_LIMIT));
             } else {
                 if (isGroup) {
                     setIcon(expanded ? FOLDER_OPEN : FOLDER);

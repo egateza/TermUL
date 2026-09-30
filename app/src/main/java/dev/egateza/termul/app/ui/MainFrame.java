@@ -1076,6 +1076,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
     private void openTab(HostProfile profile, boolean sftpOnly) {
         drawer.setOpen(false); // mode tombol melayang: beri ruang penuh untuk terminal
+        mutate(I18n.t("main.error.recent"), () -> store.markUsed(profile.id()));
         var tab = new TerminalTab(profile, ctx.terminals(), ctx.sshOps(), ctx.terminalSettings(), ctx.sftpLinks(),
                 sftpOnly, p -> new SftpPanel(p, ctx.sftpLinks(), ctx.sshOps(), new SftpPanel.EditActions() {
                     @Override
@@ -1203,5 +1204,15 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         if (Dialogs.confirm(this, I18n.t("main.group.delete.title"), I18n.t("main.group.delete.confirm", group))) {
             mutate(I18n.t("main.error.deleteGroup"), () -> store.deleteGroup(group));
         }
+    }
+
+    @Override
+    public void setFavorite(HostProfile profile, boolean favorite) {
+        mutate(I18n.t("main.error.favorite"), () -> store.setFavorite(profile.id(), favorite));
+    }
+
+    @Override
+    public void clearRecent() {
+        mutate(I18n.t("main.error.recent"), store::clearRecent);
     }
 }
