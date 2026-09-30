@@ -1,0 +1,9 @@
+target/
+out/
+.idea/
+*.iml
+*.log
+# jangan pernah commit data runtime / secret
+vault.bin
+profiles.json
+known_hosts
