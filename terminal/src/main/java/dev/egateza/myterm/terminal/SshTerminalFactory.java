@@ -10,9 +10,13 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.sshd.client.channel.ChannelShell;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** Membuka sesi terminal: acquire koneksi → buka shell PTY → {@link SshTtyConnector}. */
 public final class SshTerminalFactory {
+
+    private static final Logger log = LoggerFactory.getLogger(SshTerminalFactory.class);
 
     public static final PtySize DEFAULT_SIZE = new PtySize(80, 24);
 
@@ -29,6 +33,7 @@ public final class SshTerminalFactory {
         try {
             ChannelShell shell = lease.connection().openShell(size, Map.of());
             var connector = new SshTtyConnector(lease, shell, profile.name() + "#" + counter.incrementAndGet());
+            log.info("Shell {} dibuka ke {}", connector.getName(), profile.address());
             if (profile.initialDirectory() != null) {
                 connector.write("cd " + ShellQuote.quote(profile.initialDirectory()) + "\r");
             }

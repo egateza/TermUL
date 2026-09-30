@@ -47,12 +47,14 @@ public final class SessionManager implements AutoCloseable {
     /** State per profil. Semua field di-guard oleh {@link SessionManager#lock}. */
     static final class Entry {
         final UUID profileId;
+        final String address;
         final CompletableFuture<SshConnection> future = new CompletableFuture<>();
         int refs; // guarded by lock
         ScheduledFuture<?> pendingClose; // guarded by lock
 
-        Entry(UUID profileId) {
+        Entry(UUID profileId, String address) {
             this.profileId = profileId;
+            this.address = address;
         }
 
         boolean isUsable() {
@@ -104,14 +106,16 @@ public final class SessionManager implements AutoCloseable {
         }
         Entry entry;
         boolean owner = false;
+        int refsNow;
         synchronized (lock) {
             entry = entries.get(profile.id());
             if (entry == null || !entry.isUsable()) {
-                entry = new Entry(profile.id());
+                entry = new Entry(profile.id(), profile.address());
                 entries.put(profile.id(), entry);
                 owner = true;
             }
             entry.refs++;
+            refsNow = entry.refs;
             if (entry.pendingClose != null) {
                 entry.pendingClose.cancel(false);
                 entry.pendingClose = null;
@@ -132,6 +136,9 @@ public final class SessionManager implements AutoCloseable {
 
         try {
             SshConnection connection = entry.future.join();
+            if (!owner) {
+                log.info("Memakai koneksi yang ada ke {} (pemakai: {})", profile.address(), refsNow);
+            }
             return new SshLease(this, entry, connection);
         } catch (CompletionException e) {
             synchronized (lock) {
@@ -147,6 +154,7 @@ public final class SessionManager implements AutoCloseable {
     void release(Entry entry) {
         synchronized (lock) {
             entry.refs--;
+            log.info("Pemakai koneksi {} dilepas (sisa: {})", entry.address, entry.refs);
             if (entry.refs > 0 || entries.get(entry.profileId) != entry) {
                 return;
             }

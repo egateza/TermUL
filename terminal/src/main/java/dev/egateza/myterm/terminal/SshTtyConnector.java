@@ -201,6 +201,7 @@ public final class SshTtyConnector implements TtyConnector {
         if (!closeNotified.compareAndSet(false, true)) {
             return;
         }
+        log.info("Shell {} ditutup ({})", name, closedByUser ? "tab ditutup" : "exit/logout/putus");
         writer.shutdown();
         lease.close();
         fireClosed();
