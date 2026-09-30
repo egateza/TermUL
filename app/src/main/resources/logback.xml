@@ -19,11 +19,17 @@
         </encoder>
     </appender>
 
+    <!-- Panel log di UI (menu Bantuan → Tampilkan log): ring buffer di memori, isi sama dengan file log -->
+    <appender name="UI" class="dev.egateza.myterm.app.log.UiLogAppender">
+        <pattern>%d{HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n</pattern>
+    </appender>
+
     <logger name="org.apache.sshd" level="WARN"/>
     <logger name="com.jediterm" level="WARN"/>
 
     <root level="INFO">
         <appender-ref ref="CONSOLE"/>
         <appender-ref ref="FILE"/>
+        <appender-ref ref="UI"/>
     </root>
 </configuration>

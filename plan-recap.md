@@ -94,6 +94,9 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
   (`HostProfile.os`), badge warna distro di host tree + tab, tooltip nama lengkap (permintaan user)
   - Ubuntu memakai logo resmi (PNG dari user, `app/src/main/resources/dev/egateza/myterm/app/icons/ubuntu.png`,
     varian 1x–4x untuk HiDPI); distro lain tetap badge. Tambah logo lain: taruh PNG + daftarkan di `OsIcons.LOGOS`
+- [x] Panel log aplikasi di bawah window: menu **Bantuan → Tampilkan log** (`Ctrl+Shift+L`), plus "Buka folder log"
+  dan "Tentang MyTerm" (permintaan user). `UiLogAppender` (logback) → ring buffer `LogBuffer` (2000 entry terakhir,
+  di memori) → `LogPanel` polling tiap 300 ms hanya saat terlihat; WARN/ERROR berwarna merah. Isi sama dengan file log
 - [ ] (usulan, menunggu keputusan user) Fallback koneksi kedua kalau server menolak channel (`MaxSessions`, default 10),
   atau opsi per profil "koneksi terpisah per tab"
 
@@ -101,6 +104,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 | Tanggal | Commit | Task |
 |---|---|---|
+| 2026-09-30 | `feat(app): panel log aplikasi di bawah window dan menu Bantuan` | Panel log + menu Bantuan (permintaan user) |
 | 2026-09-30 | `feat(app): pakai logo resmi Ubuntu untuk ikon OS` | Logo Ubuntu (permintaan user) |
 | 2026-09-30 | `feat(app): ikon OS otomatis (deteksi saat connect) di host tree dan tab` | Ikon OS otomatis (+ OsInfo, OsDetector) |
 | 2026-09-30 | `feat(ssh): log buka/tutup shell per tab dan jumlah pemakai koneksi bersama` | Logging koneksi bersama (pertanyaan user) |
@@ -180,6 +184,7 @@ Fase 5 & 6 **ditunda** atas permintaan user. Sedang berjalan: **acceptance Fase 
 | Ctrl++ (atau Ctrl+=) / Ctrl+- / Ctrl+0 | Zoom in / zoom out / ukuran default (per tab) |
 | Ctrl+D di prompt, `exit`/`logout` | Konfirmasi keluar sesi |
 | Enter setelah sesi berakhir | Reconnect |
+| Ctrl+Shift+L | Tampilkan/sembunyikan panel log |
 
 ## Catatan / blocker
 

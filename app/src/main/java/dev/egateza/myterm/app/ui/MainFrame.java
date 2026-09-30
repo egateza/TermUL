@@ -3,6 +3,8 @@ package dev.egateza.myterm.app.ui;
 import dev.egateza.myterm.app.AppContext;
 import dev.egateza.myterm.app.edit.EditTrackerDialog;
 import dev.egateza.myterm.app.edit.EditorSettingsDialog;
+import dev.egateza.myterm.app.log.LogBuffer;
+import dev.egateza.myterm.app.log.LogPanel;
 import dev.egateza.myterm.app.sftp.SftpPanel;
 import dev.egateza.myterm.app.terminal.TerminalTab;
 import dev.egateza.myterm.app.ui.tree.HostTreePanel;
@@ -60,6 +62,10 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                     + "Ctrl+N: host baru &nbsp; Ctrl+F: cari host</center></html>", SwingConstants.CENTER);
     private final Runnable onExit;
     private final KeyEventDispatcher hotkeys = this::dispatchHotkey;
+    private final LogPanel logPanel;
+    private final JSplitPane logSplit;
+    private final JCheckBoxMenuItem showLog = new JCheckBoxMenuItem("Tampilkan log");
+    private int logHeight = 220; // EDT
 
     public MainFrame(AppContext ctx, Runnable onExit) {
         super("MyTerm");
@@ -94,7 +100,14 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         split.setDividerLocation(260);
         split.setContinuousLayout(true);
         hostTree.setMinimumSize(new Dimension(160, 100));
-        getContentPane().add(split, BorderLayout.CENTER);
+        // panel log di bawah; disembunyikan dengan setVisible supaya tab terminal tidak di-reparent
+        logPanel = new LogPanel(LogBuffer.global(), ctx.paths().logDir(), io, () -> setLogVisible(false));
+        logPanel.setVisible(false);
+        logPanel.setMinimumSize(new Dimension(100, 60));
+        logSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, split, logPanel);
+        logSplit.setResizeWeight(1.0);
+        logSplit.setContinuousLayout(true);
+        getContentPane().add(logSplit, BorderLayout.CENTER);
         setJMenuBar(buildMenu());
 
         setSize(1280, 800);
@@ -206,7 +219,38 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                         mutate("Gagal menyimpan pengaturan", () ->
                                 ctx.config().save(ctx.config().current().withEditors(editors))))));
         bar.add(settings);
+
+        var help = new JMenu("Bantuan");
+        showLog.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_L, ctrlShift));
+        showLog.setToolTipText("Log aplikasi di bagian bawah window (sama dengan isi file log)");
+        showLog.addActionListener(e -> setLogVisible(showLog.isSelected()));
+        help.add(showLog);
+        help.add(menuItem("Buka folder log", null, () -> UiAsync.run(io, () -> LogPanel.openFolder(ctx.paths().logDir()),
+                err -> Dialogs.error(this, "Gagal membuka folder log", err))));
+        help.addSeparator();
+        help.add(menuItem("Tentang MyTerm", null, () -> Dialogs.info(this, "Tentang MyTerm",
+                "MyTerm — SSH client pribadi\n\nJava " + Runtime.version() + "\nFolder log: " + ctx.paths().logDir())));
+        bar.add(help);
         return bar;
+    }
+
+    /** Tampilkan/sembunyikan panel log di bawah, dengan tinggi terakhir yang dipakai. EDT. */
+    private void setLogVisible(boolean visible) {
+        showLog.setSelected(visible);
+        if (visible == logPanel.isVisible()) {
+            return;
+        }
+        if (!visible) {
+            logHeight = Math.max(80, logSplit.getHeight() - logSplit.getDividerLocation());
+        }
+        logPanel.setVisible(visible);
+        if (visible) {
+            logSplit.setDividerLocation(Math.max(100, logSplit.getHeight() - logHeight));
+        }
+        logSplit.revalidate();
+        if (!visible) {
+            currentTab().ifPresent(TerminalTab::focusTerminal);
+        }
     }
 
     private JMenu buildVaultMenu() {
