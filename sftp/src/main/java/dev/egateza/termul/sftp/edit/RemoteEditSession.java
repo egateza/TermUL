@@ -85,7 +85,7 @@ public final class RemoteEditSession {
     private final String remotePath;
     private final Path localFile;
     private final EditCache cache;
-    private final Uploader uploader;
+    private Uploader uploader;                 // guarded by this
     private final LineEndings.Style originalEnding;
     private final CopyOnWriteArrayList<Consumer<RemoteEditSession>> listeners = new CopyOnWriteArrayList<>();
     private Baseline baseline;                 // guarded by this
@@ -139,6 +139,14 @@ public final class RemoteEditSession {
     /** Memakai koneksi SFTP baru (mis. setelah reconnect) untuk sync berikutnya. */
     public void rebind(RemoteFileService newFiles) {
         this.files = Objects.requireNonNull(newFiles);
+    }
+
+    /**
+     * Mengganti cara upload untuk sync berikutnya (mis. sesi "lihat saja" dinaikkan ke sudo). File lokal,
+     * baseline, dan perubahan yang belum ter-upload tetap; tidak pernah di tengah upload (synchronized).
+     */
+    public synchronized void switchUploader(Uploader newUploader) {
+        this.uploader = Objects.requireNonNull(newUploader);
     }
 
     public RemoteFileService files() {

@@ -56,13 +56,15 @@ public final class EditManager implements AutoCloseable {
         private volatile Process editor;
         private volatile String template; // command editor pilihan user, null = sesuai pengaturan
         private final SftpConnection link; // koneksi bersama profil ini (dilepas saat sesi ditutup)
-        private final SudoWriter sudo;      // null = upload SFTP biasa
+        private volatile SudoWriter sudo;   // null = upload SFTP biasa; bisa dinaikkan ke sudo (Edit sebagai root)
+        private final boolean needsSudo;    // tidak bisa ditimpa user login: setiap "Edit" menanyakan sudo / lihat saja
 
-        Entry(HostProfile profile, RemoteEditSession session, SftpConnection link, SudoWriter sudo) {
+        Entry(HostProfile profile, RemoteEditSession session, SftpConnection link, SudoWriter sudo, boolean needsSudo) {
             this.profile = profile;
             this.session = session;
             this.link = link;
             this.sudo = sudo;
+            this.needsSudo = needsSudo;
         }
 
         public HostProfile profile() {
@@ -165,7 +167,7 @@ public final class EditManager implements AutoCloseable {
 
     /**
      * @param asRoot true = pasti lewat sudo; false = SFTP biasa, kecuali file tidak bisa ditulis user login
-     *               (user ditanya dulu)
+     *               (user ditanya sudo / lihat saja setiap kali dibuka, juga kalau sesinya sudah ada)
      */
     private void open(HostProfile profile, String remotePath, String template, boolean asRoot) {
         var key = new Key(profile.id(), remotePath);
@@ -177,10 +179,12 @@ public final class EditManager implements AutoCloseable {
                     SftpConnection link = links.acquire(profile);
                     RemoteEditSession session;
                     SudoWriter sudo = null;
+                    boolean needsSudo;
                     try {
                         var files = link.ensureLive();
-                        Boolean useSudo = asRoot ? Boolean.TRUE : files.canWrite(remotePath) ? Boolean.FALSE
-                                : askSudo(profile, remotePath);
+                        needsSudo = !files.canWrite(remotePath);
+                        Boolean useSudo = asRoot ? Boolean.TRUE : needsSudo ? askSudo(profile, remotePath)
+                                : Boolean.FALSE;
                         if (useSudo == null) {
                             links.release(profile);
                             return; // dibatalkan
@@ -194,7 +198,7 @@ public final class EditManager implements AutoCloseable {
                         links.release(profile);
                         throw e;
                     }
-                    var created = new Entry(profile, session, link, sudo);
+                    var created = new Entry(profile, session, link, sudo, needsSudo);
                     entry = created;
                     session.addListener(s -> {
                         fireChanged();
@@ -204,6 +208,21 @@ public final class EditManager implements AutoCloseable {
                     byLocal.put(session.localFile().toAbsolutePath().normalize(), entry);
                     watcher.watch(session.localFile());
                     fireChanged();
+                } else if (asRoot) {
+                    if (entry.sudo == null) {
+                        upgradeToSudo(entry);
+                    }
+                } else if (entry.needsSudo) {
+                    // pilihan sudo / lihat saja berlaku per buka, bukan per sesi: selalu ditanya lagi
+                    Boolean useSudo = askSudo(profile, remotePath);
+                    if (useSudo == null) {
+                        return; // dibatalkan: sesi tetap ada (tracker), editor tidak dibuka
+                    }
+                    if (useSudo && entry.sudo == null) {
+                        upgradeToSudo(entry);
+                    } else if (!useSudo && entry.sudo != null) {
+                        downgradeToViewOnly(entry);
+                    }
                 }
                 entry.template = template;
                 launchEditor(entry);
@@ -212,6 +231,28 @@ public final class EditManager implements AutoCloseable {
                 showError(I18n.t("edit.error.openFailed", remotePath), e);
             }
         });
+    }
+
+    /**
+     * File sudah dibuka tanpa sudo (mis. "lihat saja") lalu dipilih "Edit sebagai root": sesi yang sama dipakai
+     * dengan upload lewat sudo. Perubahan lokal yang tadi ditolak ikut terpasang pada save berikutnya.
+     */
+    private void upgradeToSudo(Entry entry) {
+        var sudo = new SudoWriter(sudoPasswords.apply(entry.profile), validationHooks);
+        entry.session.switchUploader(sudo);
+        entry.sudo = sudo;
+        log.info("Edit {} dialihkan ke sudo", entry.session.remotePath());
+        activity(entry.profile, Level.INFO, I18n.t("edit.activity.switchedToSudo", entry.session.remotePath()));
+        fireChanged();
+    }
+
+    /** Sesi sudo dibuka lagi dengan pilihan "Lihat saja": save berikutnya lewat SFTP biasa (dan ditolak). */
+    private void downgradeToViewOnly(Entry entry) {
+        entry.session.switchUploader(RemoteEditSession.SFTP_UPLOADER);
+        entry.sudo = null;
+        log.info("Edit {} dialihkan ke lihat saja (tanpa sudo)", entry.session.remotePath());
+        activity(entry.profile, Level.INFO, I18n.t("edit.activity.switchedToViewOnly", entry.session.remotePath()));
+        fireChanged();
     }
 
     /** File tidak bisa ditulis user login. @return true = sudo, false = tetap SFTP biasa, null = batal */
@@ -446,7 +487,23 @@ public final class EditManager implements AutoCloseable {
         }
     }
 
+    /** Dialog pilihan; @return index pilihan, -1 = ditutup. Diganti di test (tanpa UI). */
+    @FunctionalInterface
+    interface Asker {
+        int ask(String title, String message, Object[] choices);
+    }
+
+    private volatile Asker asker = this::showOptions;
+
+    void setAsker(Asker asker) {
+        this.asker = asker;
+    }
+
     private int ask(String title, String message, Object[] choices) {
+        return asker.ask(title, message, choices);
+    }
+
+    private int showOptions(String title, String message, Object[] choices) {
         var result = new AtomicInteger(-1);
         Edt.runAndWait(() -> result.set(JOptionPane.showOptionDialog(parent.get(), message, title,
                 JOptionPane.DEFAULT_OPTION, JOptionPane.WARNING_MESSAGE, null, choices, choices[choices.length - 1])));

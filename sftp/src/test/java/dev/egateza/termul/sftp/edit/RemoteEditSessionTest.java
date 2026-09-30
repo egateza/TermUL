@@ -151,6 +151,28 @@ class RemoteEditSessionTest {
     }
 
     @Test
+    void perubahanYangDitolakTerpasangSetelahUploaderDiganti() throws Exception {
+        RemoteEditSession.Uploader denied = (files, local, remote) -> {
+            throw new RemoteFileException("akses ditolak");
+        };
+        var viaSudo = new java.util.concurrent.atomic.AtomicInteger();
+        Files.writeString(fx.remoteRoot.resolve("root.conf"), "a");
+        var session = RemoteEditSession.open(fx.files, cache, fx.profile.id(), "/root.conf", denied);
+        Files.writeString(session.localFile(), "b");
+        assertThatThrownBy(() -> session.sync(SyncOptions.DEFAULT)).hasMessageContaining("akses ditolak");
+
+        session.switchUploader((files, local, remote) -> {
+            viaSudo.incrementAndGet();
+            RemoteEditSession.SFTP_UPLOADER.upload(files, local, remote);
+        });
+
+        assertThat(session.sync(SyncOptions.DEFAULT)).isInstanceOf(SyncResult.Uploaded.class);
+        assertThat(viaSudo).hasValue(1);
+        assertThat(fx.remoteRoot.resolve("root.conf")).hasContent("b");
+        assertThat(session.hasPendingChanges()).isFalse();
+    }
+
+    @Test
     void namaCacheDisanitasi() {
         assertThat(EditCache.safeName("/srv/a&calc.exe b.yml")).isEqualTo("a_calc.exe_b.yml");
         assertThat(EditCache.safeName("/etc/nginx/sites-available/default")).isEqualTo("default");

@@ -9,6 +9,7 @@ import dev.egateza.termul.sftp.SftpFixture;
 import dev.egateza.termul.sftp.SftpLinks;
 import dev.egateza.termul.sftp.edit.EditCache;
 import dev.egateza.termul.sftp.edit.RemoteEditSession.State;
+import dev.egateza.termul.sftp.edit.SudoWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -41,7 +42,17 @@ class EditManagerTest {
         var fakeEditor = new EditorConfig("cmd.exe /c exit 0", Map.of());
         links = new SftpLinks(fx.sessions);
         edits = new EditManager(links, new EditCache(tmp.resolve("cache")), () -> fakeEditor, sshOps, () -> null,
-                p -> { throw new UnsupportedOperationException(); }, ValidationHooks::defaults);
+                p -> new SudoWriter.SudoPassword() { // hanya dibuat, tidak dipakai (tidak ada upload sudo di test ini)
+                    @Override
+                    public char[] stored() {
+                        throw new UnsupportedOperationException();
+                    }
+
+                    @Override
+                    public char[] prompt() {
+                        throw new UnsupportedOperationException();
+                    }
+                }, ValidationHooks::defaults);
     }
 
     @AfterEach
@@ -76,6 +87,86 @@ class EditManagerTest {
         edits.close(entry);
         assertThat(edits.entries()).isEmpty();
         assertThat(local).doesNotExist();
+    }
+
+    @Test
+    void editSebagaiRootPadaFileYangSudahDibukaTanpaSudoMemakaiSudo() throws Exception {
+        Files.writeString(fx.remoteRoot.resolve("root.conf"), "a=1\n");
+        edits.open(fx.profile, "/root.conf");
+        await().atMost(Duration.ofSeconds(10)).until(() -> edits.entries().size() == 1);
+        var entry = edits.entries().getFirst();
+        assertThat(entry.isSudo()).isFalse();
+
+        edits.openAsRoot(fx.profile, "/root.conf");
+
+        await().atMost(Duration.ofSeconds(10)).until(entry::isSudo);
+        assertThat(edits.entries()).containsExactly(entry); // sesi & file lokal yang sama, tidak dobel
+    }
+
+    @Test
+    void fileYangDibukaLihatSajaDitanyaLagiSaatDibukaUlang() throws Exception {
+        fx.server.server().setCommandFactory((channel, command) -> new ExitWith(1)); // test -w/-O: tidak bisa ditulis
+        Files.writeString(fx.remoteRoot.resolve("root.conf"), "a=1\n");
+        var answers = new java.util.concurrent.LinkedBlockingQueue<>(java.util.List.of(1, 0, 1, 0)); // 1 = lihat saja, 0 = sudo
+        var asked = new java.util.concurrent.atomic.AtomicInteger();
+        edits.setAsker((title, message, choices) -> {
+            asked.incrementAndGet();
+            return answers.remove();
+        });
+
+        edits.open(fx.profile, "/root.conf");
+        await().atMost(Duration.ofSeconds(10)).until(() -> edits.entries().size() == 1);
+        var entry = edits.entries().getFirst();
+        assertThat(entry.isSudo()).isFalse();
+
+        edits.open(fx.profile, "/root.conf"); // "Edit" biasa lagi: pilihan muncul lagi
+        await().atMost(Duration.ofSeconds(10)).until(entry::isSudo);
+        assertThat(asked).hasValue(2);
+
+        edits.open(fx.profile, "/root.conf"); // ketiga: tetap ditanya; pilih lihat saja -> sudo dilepas
+        await().atMost(Duration.ofSeconds(10)).until(() -> !entry.isSudo());
+        assertThat(asked).hasValue(3);
+
+        edits.open(fx.profile, "/root.conf"); // keempat: ditanya lagi; pilih sudo
+        await().atMost(Duration.ofSeconds(10)).until(entry::isSudo);
+        assertThat(asked).hasValue(4);
+        assertThat(edits.entries()).containsExactly(entry);
+    }
+
+    /** Command exec yang langsung selesai dengan exit status tertentu. */
+    private static final class ExitWith implements org.apache.sshd.server.command.Command {
+        private final int status;
+        private org.apache.sshd.server.ExitCallback callback;
+
+        ExitWith(int status) {
+            this.status = status;
+        }
+
+        @Override
+        public void setInputStream(java.io.InputStream in) {
+        }
+
+        @Override
+        public void setOutputStream(java.io.OutputStream out) {
+        }
+
+        @Override
+        public void setErrorStream(java.io.OutputStream err) {
+        }
+
+        @Override
+        public void setExitCallback(org.apache.sshd.server.ExitCallback callback) {
+            this.callback = callback;
+        }
+
+        @Override
+        public void start(org.apache.sshd.server.channel.ChannelSession channel, org.apache.sshd.server.Environment env) {
+            callback.onExit(status);
+        }
+
+        @Override
+        public void destroy(org.apache.sshd.server.channel.ChannelSession channel) {
+        }
     }
 
     @Test
