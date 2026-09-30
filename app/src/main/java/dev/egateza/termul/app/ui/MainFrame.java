@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.BiConsumer;
+import dev.egateza.termul.core.config.AppConfig;
 import dev.egateza.termul.core.profile.HostProfile;
 import dev.egateza.termul.core.profile.ProfileSnapshot;
 import dev.egateza.termul.core.profile.OsInfo;
@@ -64,19 +65,23 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private final JTabbedPane tabs = new JTabbedPane(JTabbedPane.TOP, JTabbedPane.SCROLL_TAB_LAYOUT);
     private final JPanel center = new JPanel(new BorderLayout());
     private final JLabel welcome = new JLabel(
-            "<html><center><b>TermUL</b><br><br>Double-click host di kiri untuk membuka terminal.<br>"
-                    + "Ctrl+N: host baru &nbsp; Ctrl+F: cari host</center></html>", SwingConstants.CENTER);
+            "", SwingConstants.CENTER);
     private final Runnable onExit;
     private final KeyEventDispatcher hotkeys = this::dispatchHotkey;
     private final LogPanel logPanel;
     private final JSplitPane logSplit;
     private final JCheckBoxMenuItem showLog = new JCheckBoxMenuItem("Tampilkan log");
     private int logHeight = 220; // EDT
-    private final JSplitPane hostSplit;
+    private int logDividerSize;
     private static final int HOST_HANDLE_WIDTH = 18;
     private static final int HOST_TOGGLE_HEIGHT = 44;
+    /** Isi area utama: split (mode panel) atau area terminal saja (mode tombol melayang). */
+    private final JPanel body = new JPanel(new BorderLayout());
     private final JPanel hostSide = new JPanel(new BorderLayout());
     private final JButton hostToggle = new JButton();
+    private final HostDrawer drawer;
+    private JSplitPane hostSplit; // hanya di mode panel, selain itu null. EDT
+    private String hostMode = AppConfig.HOST_DOCKED; // EDT
     private int hostWidth = 260; // EDT
 
     public MainFrame(AppContext ctx, Runnable onExit) {
@@ -114,31 +119,37 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         hostToggle.putClientProperty("JButton.buttonType", "toolBarButton");
         hostToggle.putClientProperty("FlatLaf.style", "arc: 6; margin: 0,0,0,0");
         hostToggle.setPreferredSize(new Dimension(HOST_HANDLE_WIDTH, HOST_TOGGLE_HEIGHT));
-        hostToggle.addActionListener(e -> setHostPanelVisible(!hostTree.isVisible()));
+        hostToggle.addActionListener(e -> setDockedVisible(!hostTree.isVisible()));
         updateHostToggle();
         var handle = new JPanel(new java.awt.GridBagLayout());
         handle.add(hostToggle);
+        handle.setBackground(javax.swing.UIManager.getColor("Tree.background")); // satu warna dengan daftar host
         handle.setMinimumSize(new Dimension(HOST_HANDLE_WIDTH, 0)); // lebar minimum sisi kiri saat host tree tertutup
-        hostSide.add(hostTree, BorderLayout.CENTER);
         hostSide.add(handle, BorderLayout.EAST);
-        hostSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, hostSide, center);
-        hostSplit.setDividerLocation(hostWidth);
-        hostSplit.setContinuousLayout(true);
         hostTree.setMinimumSize(new Dimension(160, 100));
+        // mode tombol melayang: daftar host tampil di atas area terminal (terminal tidak di-resize)
+        drawer = new HostDrawer(getLayeredPane(), center, hostTree,
+                () -> currentTab().ifPresent(TerminalTab::focusTerminal));
+        drawer.setOpacity(ctx.config().current().hostButtonOpacity());
         // panel log di bawah; disembunyikan dengan setVisible supaya tab terminal tidak di-reparent
         logPanel = new LogPanel(LogBuffer.global(), ctx.paths().logDir(), io, () -> setLogVisible(false));
         logPanel.setVisible(false);
         logPanel.setMinimumSize(new Dimension(100, 60));
-        logSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, hostSplit, logPanel);
+        logSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, body, logPanel);
         logSplit.setResizeWeight(1.0);
         logSplit.setContinuousLayout(true);
+        logDividerSize = logSplit.getDividerSize();
+        logSplit.setDividerSize(0); // panel log tersembunyi: tanpa divider (tidak ada garis/titik di tepi bawah)
         getContentPane().add(logSplit, BorderLayout.CENTER);
+        applyHostMode(ctx.config().current().hostPanelMode());
         setJMenuBar(buildMenu());
 
         setSize(1280, 800);
         setLocationRelativeTo(null);
 
         store.addListener(s -> SwingUtilities.invokeLater(() -> hostTree.setSnapshot(s)));
+        // belum ada tab: langsung tampilkan daftar host (mode tombol melayang), menutup otomatis saat host dibuka
+        SwingUtilities.invokeLater(() -> drawer.setOpen(true));
         KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(hotkeys);
     }
 
@@ -187,6 +198,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     @Override
     public void dispose() {
         KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(hotkeys);
+        drawer.dispose();
         super.dispose();
     }
 
@@ -206,8 +218,8 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         file.add(menuItem(AppIcon.FOLDER_PLUS, "Grup baru...", null, () -> newGroup(hostTree.selectedGroup())));
         file.add(menuItem(null, "Cari host", KeyStroke.getKeyStroke(KeyEvent.VK_F, InputEvent.CTRL_DOWN_MASK),
                 () -> {
-                    setHostPanelVisible(true);
-                    hostTree.focusSearch();
+                    showHostList();
+                    SwingUtilities.invokeLater(hostTree::focusSearch);
                 }));
         file.addSeparator();
         file.add(menuItem(null, "Keluar", null, this::exit));
@@ -246,6 +258,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                 EditorSettingsDialog.show(this, ctx.config().current().editors()).ifPresent(editors ->
                         mutate("Gagal menyimpan pengaturan", () ->
                                 ctx.config().save(ctx.config().current().withEditors(editors))))));
+        settings.add(buildHostPanelMenu());
         settings.add(buildIconSetMenu());
         bar.add(settings);
 
@@ -267,9 +280,51 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         return bar;
     }
 
-    /** Buka/tutup panel host di kiri (tombol laci), dengan lebar terakhir yang dipakai. EDT. */
-    private void setHostPanelVisible(boolean visible) {
-        if (visible == hostTree.isVisible()) {
+    private boolean floatingMode() {
+        return AppConfig.HOST_FLOATING.equals(hostMode);
+    }
+
+    /** Pasang panel host sesuai mode: panel di samping (split) atau tombol melayang. EDT. */
+    private void applyHostMode(String mode) {
+        hostMode = AppConfig.HOST_FLOATING.equals(mode) ? AppConfig.HOST_FLOATING : AppConfig.HOST_DOCKED;
+        body.removeAll();
+        if (floatingMode()) {
+            hostSide.remove(hostTree);
+            hostSplit = null;
+            hostTree.setVisible(true);
+            body.add(center, BorderLayout.CENTER);
+            drawer.activate();
+        } else {
+            drawer.deactivate();
+            hostSide.add(hostTree, BorderLayout.CENTER);
+            hostTree.setVisible(true);
+            hostSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, hostSide, center);
+            hostSplit.setContinuousLayout(true);
+            hostSplit.setDividerLocation(hostWidth);
+            body.add(hostSplit, BorderLayout.CENTER);
+            updateHostToggle();
+        }
+        welcome.setText("<html><center><b>TermUL</b><br><br>Double-click host untuk membuka terminal.<br>"
+                + "Ctrl+N: host baru &nbsp; Ctrl+F: cari host"
+                + (floatingMode() ? "<br><br>Klik tombol &raquo; di tepi kiri untuk menampilkan daftar host." : "")
+                + "</center></html>");
+        body.revalidate();
+        body.repaint();
+        SwingUtilities.invokeLater(drawer::layout);
+    }
+
+    /** Pastikan daftar host terlihat (untuk Ctrl+F): membuka laci atau panel di samping. */
+    private void showHostList() {
+        if (floatingMode()) {
+            drawer.setOpen(true);
+        } else {
+            setDockedVisible(true);
+        }
+    }
+
+    /** Mode panel: buka/tutup panel host di kiri (tombol pada strip), dengan lebar terakhir yang dipakai. EDT. */
+    private void setDockedVisible(boolean visible) {
+        if (hostSplit == null || visible == hostTree.isVisible()) {
             return;
         }
         if (!visible) {
@@ -290,6 +345,47 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         boolean open = hostTree.isVisible();
         hostToggle.setIcon((open ? AppIcon.ANGLES_LEFT : AppIcon.ANGLES_RIGHT).icon(16));
         hostToggle.setToolTipText(open ? "Sembunyikan panel host" : "Tampilkan panel host");
+    }
+
+    /** Submenu: mode panel host (di samping / tombol melayang) dan transparansi tombol melayang. */
+    private JMenu buildHostPanelMenu() {
+        var menu = new JMenu("Panel host");
+        var modes = new ButtonGroup();
+        var config = ctx.config().current();
+        record Mode(String id, String label) {
+        }
+        for (var mode : new Mode[] {
+                new Mode(AppConfig.HOST_DOCKED, "Panel di samping (tetap)"),
+                new Mode(AppConfig.HOST_FLOATING, "Tombol melayang (hemat ruang)")}) {
+            var item = new JRadioButtonMenuItem(mode.label(), mode.id().equals(config.hostPanelMode()));
+            item.addActionListener(e -> {
+                if (mode.id().equals(hostMode)) {
+                    return;
+                }
+                applyHostMode(mode.id());
+                mutate("Gagal menyimpan pengaturan", () ->
+                        ctx.config().save(ctx.config().current().withHostPanelMode(mode.id())));
+            });
+            modes.add(item);
+            menu.add(item);
+        }
+        menu.addSeparator();
+        var opacity = new JMenu("Transparansi tombol melayang");
+        opacity.setToolTipText("Tombol kembali solid saat kursor berada di atasnya");
+        var levels = new ButtonGroup();
+        for (int percent : new int[] {100, 70, 40, 20}) {
+            var item = new JRadioButtonMenuItem(percent == 100 ? "Solid (100%)" : percent + "%",
+                    percent == config.hostButtonOpacity());
+            item.addActionListener(e -> {
+                drawer.setOpacity(percent);
+                mutate("Gagal menyimpan pengaturan", () ->
+                        ctx.config().save(ctx.config().current().withHostButtonOpacity(percent)));
+            });
+            levels.add(item);
+            opacity.add(item);
+        }
+        menu.add(opacity);
+        return menu;
     }
 
     /** Submenu pilihan set ikon; ganti langsung terlihat (repaint) dan disimpan di config.json. */
@@ -325,6 +421,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             logHeight = Math.max(80, logSplit.getHeight() - logSplit.getDividerLocation());
         }
         logPanel.setVisible(visible);
+        logSplit.setDividerSize(visible ? logDividerSize : 0);
         if (visible) {
             logSplit.setDividerLocation(Math.max(100, logSplit.getHeight() - logHeight));
         }
@@ -544,6 +641,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
     @Override
     public void open(HostProfile profile) {
+        drawer.setOpen(false); // mode tombol melayang: beri ruang penuh untuk terminal
         var tab = new TerminalTab(profile, ctx.terminals(), ctx.sshOps(), ctx.terminalSettings(),
                 p -> new SftpPanel(p, ctx.sessions(), ctx.sshOps(), ctx.edits()::open));
         tabs.addTab(tabTitle(profile), tab);

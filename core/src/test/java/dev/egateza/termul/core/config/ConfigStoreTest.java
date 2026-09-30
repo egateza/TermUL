@@ -13,22 +13,37 @@ class ConfigStoreTest {
     Path dir;
 
     @Test
-    void oldConfigWithoutIconSetUsesDefault() throws Exception {
+    void oldConfigWithoutNewFieldsUsesDefaults() throws Exception {
         Path file = dir.resolve("config.json");
         Files.writeString(file, "{\"terminalFontSize\": 16}");
 
         var config = new ConfigStore(file).load();
 
         assertThat(config.iconSet()).isEqualTo(AppConfig.DEFAULT_ICON_SET);
+        assertThat(config.hostButtonOpacity()).isEqualTo(AppConfig.DEFAULT_OPACITY);
+        assertThat(config.hostPanelMode()).isEqualTo(AppConfig.HOST_DOCKED);
         assertThat(config.terminalFontSize()).isEqualTo(16f);
     }
 
     @Test
-    void iconSetSurvivesSaveAndLoad() {
+    void settingsSurviveSaveAndLoad() {
         Path file = dir.resolve("config.json");
-        var store = new ConfigStore(file);
-        store.save(AppConfig.defaults().withIconSet("material"));
+        new ConfigStore(file).save(AppConfig.defaults().withIconSet("material").withHostButtonOpacity(40)
+                .withHostPanelMode(AppConfig.HOST_FLOATING));
 
-        assertThat(new ConfigStore(file).load().iconSet()).isEqualTo("material");
+        var loaded = new ConfigStore(file).load();
+
+        assertThat(loaded.iconSet()).isEqualTo("material");
+        assertThat(loaded.hostButtonOpacity()).isEqualTo(40);
+        assertThat(loaded.hostPanelMode()).isEqualTo(AppConfig.HOST_FLOATING);
+    }
+
+    @Test
+    void invalidValuesFallBackToDefaults() {
+        var config = AppConfig.defaults().withHostButtonOpacity(3).withHostPanelMode("aneh");
+
+        assertThat(config.hostButtonOpacity()).isEqualTo(AppConfig.DEFAULT_OPACITY);
+        assertThat(config.hostPanelMode()).isEqualTo(AppConfig.HOST_DOCKED);
+        assertThat(config.withHostButtonOpacity(500).hostButtonOpacity()).isEqualTo(AppConfig.DEFAULT_OPACITY);
     }
 }

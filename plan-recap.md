@@ -108,6 +108,13 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] Dua set ikon yang bisa dipilih di **Pengaturan → Set ikon** (Font Awesome / Material Symbols Rounded), ganti langsung
   tanpa restart, disimpan di `config.json` (`iconSet`). Tambah/ganti ikon: `java tools/AddIcon.java NAMA fa-nama material_nama`
   (lihat `docs/SETUP.md`) (permintaan user)
+- [x] Panel host punya dua mode, dipilih di **Pengaturan → Panel host** (ganti langsung, disimpan di `config.json`
+  `hostPanelMode`): *Panel di samping (tetap)* = split + strip tombol seperti sebelumnya (default); *Tombol melayang* =
+  hanya tombol kapsul di tepi kiri area terminal (`HostDrawer`), klik menampilkan daftar host DI ATAS terminal (terminal
+  tidak di-resize). Laci menutup lewat tombol, Esc, klik di luar, atau saat host dibuka; lebarnya bisa digeser.
+  Transparansi tombol: 100/70/40/20% (`hostButtonOpacity`), solid lagi saat di-hover. Diverifikasi lewat screenshot.
+  Juga: strip mode panel satu warna dengan daftar host; divider panel log disembunyikan bersama panelnya
+  (sebelumnya meninggalkan titik-titik di tepi bawah window)
 - [ ] (usulan, menunggu keputusan user) Fallback koneksi kedua kalau server menolak channel (`MaxSessions`, default 10),
   atau opsi per profil "koneksi terpisah per tab"
 
@@ -115,6 +122,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 | Tanggal | Commit | Task |
 |---|---|---|
+| 2026-09-30 | `feat(app): mode tombol melayang untuk panel host dengan opsi transparansi` | Panel host: mode melayang + panel di samping (permintaan user) |
 | 2026-09-30 | `feat(app): pilihan set ikon Font Awesome / Material Symbols dan tool AddIcon` | Dua set ikon + tool tambah ikon (permintaan user) |
 | 2026-09-30 | `feat(app): tombol laci untuk buka/tutup panel host` | Buka/tutup panel host (permintaan user) |
 | 2026-09-30 | `refactor(app): ikon menu hanya untuk host/grup baru dan Tentang` | Kurangi ikon menu (permintaan user) |
