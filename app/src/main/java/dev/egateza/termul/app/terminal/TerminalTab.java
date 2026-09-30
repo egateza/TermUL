@@ -512,6 +512,13 @@ public final class TerminalTab extends JPanel {
         }
     }
 
+    /** Pakai warna terminal yang baru dipilih (pengaturan bersama) di tab ini. EDT. */
+    public void reloadColors() {
+        if (widget != null) {
+            widget.refreshColors();
+        }
+    }
+
     private boolean confirmExit() {
         boolean yes = JOptionPane.showConfirmDialog(this,
                 I18n.t("tab.exit.confirm", profile.address()),
