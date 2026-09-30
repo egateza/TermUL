@@ -87,6 +87,11 @@ public record HostProfile(
                 jumpHostId, environment, initialDirectory, notes, autoSudo, os);
     }
 
+    public HostProfile withJumpHostId(UUID newJumpHostId) {
+        return new HostProfile(id, name, group, host, port, username, authMethod, privateKeyPath,
+                newJumpHostId, environment, initialDirectory, notes, autoSudo, os);
+    }
+
     public HostProfile withOs(OsInfo newOs) {
         return new HostProfile(id, name, group, host, port, username, authMethod, privateKeyPath,
                 jumpHostId, environment, initialDirectory, notes, autoSudo, newOs);
