@@ -26,8 +26,8 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 ### Fase 0: Perencanaan
 - [x] Dokumentasi awal
 - [x] Keputusan D1 (nama & package)
-- [~] Server uji `openssh-server` — container Docker sudah dipakai integration test; menunggu konfirmasi user apakah
-  `server01` (192.0.2.10) server uji/staging, atau jalankan container uji manual di `localhost:2222`
+- [x] Server uji `openssh-server` — container Docker untuk integration test + server **staging** `server01`
+  (192.0.2.10, dikonfirmasi user 2026-09-30) untuk uji manual
 
 ### Fase 1: Skeleton & terminal SSH pertama
 - [x] Maven multi-module + wrapper + enforcer
@@ -133,7 +133,6 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 Fase 5 & 6 **ditunda** atas permintaan user. Sedang berjalan: **acceptance Fase 0 & 1**.
 
 **Pertanyaan terbuka untuk user:**
-- `server01` (192.0.2.10) server uji/staging atau produksi? (menentukan item server uji Fase 0)
 - Perlu dijalankan container server uji di `localhost:2222` untuk server ke-2/ke-3 acceptance Fase 1?
 - Perlu fallback `MaxSessions` / opsi koneksi terpisah per tab?
 

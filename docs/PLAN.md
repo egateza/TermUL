@@ -8,7 +8,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] Konteks project (`CLAUDE.md`)
 - [x] Requirements, arsitektur, security, plan, setup
 - [x] Putuskan nama aplikasi & base package: `MyTerm`, `dev.egateza.myterm`
-- [ ] Siapkan VM/container uji `openssh-server` (lihat `SETUP.md`)
+- [x] Siapkan VM/container uji `openssh-server` (lihat `SETUP.md`): container Docker (IT) + staging `server01`
 
 ## Fase 1: Skeleton & terminal SSH pertama (±2 minggu)
 - [x] Maven multi-module (`core`, `vault`, `ssh`, `terminal`, `sftp`, `app`): parent POM dengan `dependencyManagement`/`pluginManagement`, Maven Wrapper, enforcer (Java 25, Maven ≥ 3.9)
