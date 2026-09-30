@@ -92,6 +92,8 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] Log per shell (buka/tutup) dan jumlah pemakai koneksi bersama
 - [x] Ikon OS otomatis: `cat /etc/os-release` lewat exec channel sekali per profil per run → disimpan di profil
   (`HostProfile.os`), badge warna distro di host tree + tab, tooltip nama lengkap (permintaan user)
+  - Ubuntu memakai logo resmi (PNG dari user, `app/src/main/resources/dev/egateza/myterm/app/icons/ubuntu.png`,
+    varian 1x–4x untuk HiDPI); distro lain tetap badge. Tambah logo lain: taruh PNG + daftarkan di `OsIcons.LOGOS`
 - [ ] (usulan, menunggu keputusan user) Fallback koneksi kedua kalau server menolak channel (`MaxSessions`, default 10),
   atau opsi per profil "koneksi terpisah per tab"
 
@@ -99,6 +101,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 | Tanggal | Commit | Task |
 |---|---|---|
+| 2026-09-30 | `feat(app): pakai logo resmi Ubuntu untuk ikon OS` | Logo Ubuntu (permintaan user) |
 | 2026-09-30 | `feat(app): ikon OS otomatis (deteksi saat connect) di host tree dan tab` | Ikon OS otomatis (+ OsInfo, OsDetector) |
 | 2026-09-30 | `feat(ssh): log buka/tutup shell per tab dan jumlah pemakai koneksi bersama` | Logging koneksi bersama (pertanyaan user) |
 | 2026-09-30 | `feat(app): zoom terminal per tab` | Zoom terminal Ctrl++/Ctrl+-/Ctrl+0 (permintaan user) |
