@@ -260,7 +260,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                     SwingUtilities.invokeLater(hostTree::focusSearch);
                 }));
         file.addSeparator();
-        file.add(menuItem(null, I18n.t("main.menu.file.exit"), null, this::exit));
+        file.add(menuItem(AppIcon.EXIT, I18n.t("main.menu.file.exit"), KeyStroke.getKeyStroke(KeyEvent.VK_F4, InputEvent.ALT_DOWN_MASK), this::exit));
         bar.add(file);
 
         var terminal = new JMenu(I18n.t("main.menu.terminal"));

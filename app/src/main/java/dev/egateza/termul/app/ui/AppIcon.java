@@ -26,6 +26,7 @@ public enum AppIcon {
     ARROW_UP,
     BROOM,
     DOWNLOAD,
+    EXIT,
     FILE,
     FOLDER,
     FOLDER_OPEN,
@@ -38,6 +39,8 @@ public enum AppIcon {
     RECONNECT,
     REFRESH,
     SERVER,
+    SFTP,
+    TERMINAL,
     TRASH,
     UPLOAD,
     XMARK;

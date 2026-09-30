@@ -232,8 +232,8 @@ public final class HostTreePanel extends JPanel {
         var menu = new JPopupMenu();
         switch (target) {
             case HostProfile p -> {
-                menu.add(item(null, I18n.t("tree.menu.openTerminal"), () -> actions.open(p)));
-                menu.add(item(null, I18n.t("tree.menu.openSftp"), () -> actions.openSftp(p)));
+                menu.add(item(AppIcon.TERMINAL, I18n.t("tree.menu.openTerminal"), () -> actions.open(p)));
+                menu.add(item(AppIcon.SFTP, I18n.t("tree.menu.openSftp"), () -> actions.openSftp(p)));
                 menu.addSeparator();
                 menu.add(item(null, I18n.t("tree.menu.edit"), () -> actions.edit(p)));
                 menu.add(item(null, I18n.t("tree.menu.duplicate"), () -> actions.duplicate(p)));
