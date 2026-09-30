@@ -61,7 +61,16 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 ## Fase 6: Polish & distribusi
 - [ ] Import `~/.ssh/config`, jump host (ProxyJump)
 - [ ] Warna tab per environment, konfirmasi paste multi-baris di prod
-- [ ] Pengaturan font/tema
+- [x] Pengaturan font/tema (font + tema bawaan)
+- [ ] Tema custom (user mengatur palet sendiri):
+  - [x] `CustomTheme` + `ThemeStore` di `core` (JSON per tema di `%APPDATA%\TermUL\themes\`, warna sebagai hex, id divalidasi)
+  - [x] Terapkan palet UI (override FlatLaf di atas base terang/gelap) dan palet terminal (16 warna ANSI, background, foreground, selection; JediTerm tidak menyediakan warna cursor)
+  - [x] Opsi "terapkan ke UI dan terminal" (default aktif); kalau dimatikan, tema terminal dipilih terpisah
+  - [x] Dialog editor dengan preview terminal live, duplikat/hapus tema
+  - [x] Impor/ekspor `.json`, peringatan kontras (< 4.5:1)
+  - [x] Opsi wallpaper desktop sebagai gambar latar (Windows saja) dan pemilih gambar bawaan OS dengan thumbnail
+  - [x] Gambar latar terminal (per tema, keterlihatan diatur) dan transparansi jendela (Pengaturan > Transparansi jendela; aktif dari 100% butuh restart karena window memakai title bar FlatLaf)
+  - [ ] (opsional) warna terminal per profil host, mis. tanda server prod
 - [ ] Profile Maven `package-win`: `jlink` runtime yang di-trim + `jpackage` → installer `.msi`
 - [ ] (backlog) port forwarding, snippet library, session log dengan masking, follow cwd (OSC 7)
 

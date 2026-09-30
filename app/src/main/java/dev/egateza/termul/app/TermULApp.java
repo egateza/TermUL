@@ -4,9 +4,9 @@ import dev.egateza.termul.app.edit.EditManager;
 import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.app.ssh.SwingCredentialProvider;
 import dev.egateza.termul.app.ssh.SwingHostKeyPrompt;
+import dev.egateza.termul.app.terminal.BackgroundImages;
 import dev.egateza.termul.app.terminal.TerminalSettings;
 import dev.egateza.termul.app.ui.AppIcon;
-import dev.egateza.termul.app.ui.AppTheme;
 import dev.egateza.termul.app.ui.DialogSounds;
 import dev.egateza.termul.app.ui.Dialogs;
 import dev.egateza.termul.app.ui.IconSet;
@@ -15,10 +15,12 @@ import dev.egateza.termul.app.ui.FontCatalog;
 import dev.egateza.termul.app.ui.ThemeMode;
 import dev.egateza.termul.app.ui.UiAsync;
 import dev.egateza.termul.app.ui.UiFont;
+import dev.egateza.termul.app.ui.UiThemes;
 import dev.egateza.termul.app.vault.VaultCredentialProvider;
 import dev.egateza.termul.app.vault.VaultGate;
 import dev.egateza.termul.core.AppPaths;
 import dev.egateza.termul.core.config.ConfigStore;
+import dev.egateza.termul.core.theme.ThemeStore;
 import dev.egateza.termul.core.profile.ProfileStore;
 import dev.egateza.termul.sftp.SftpLinks;
 import dev.egateza.termul.ssh.SessionManager;
@@ -61,6 +63,13 @@ public final class TermULApp {
         var store = new ProfileStore(paths.profilesFile());
         var config = new ConfigStore(paths.configFile());
         config.load();
+        var themes = new ThemeStore(paths.themesDir());
+        var customThemes = themes.list(); // baca disk di sini, bukan di EDT
+        var startupTheme = UiThemes.resolve(config.current().theme(), customThemes);
+        var startupMode = ThemeMode.fromId(config.current().themeMode());
+        var startupPalette = UiThemes.terminalPalette(config.current(), customThemes, startupTheme.effectiveMode(startupMode));
+        var startupBackdrop = BackgroundImages.key(startupPalette) == null ? null
+                : BackgroundImages.loadFor(startupPalette); // baca disk di sini, bukan di EDT
         I18n.use(config.current().language());
         FontCatalog.preload(); // menyaring font monospace lambat; selesai di background sebelum dialog font dibuka
 
@@ -84,16 +93,18 @@ public final class TermULApp {
 
         SwingUtilities.invokeLater(() -> {
             UiFont.apply(config.current().uiFontFamily()); // sebelum tema dipasang
-            AppTheme.fromId(config.current().theme()).install(ThemeMode.fromId(config.current().themeMode()));
+            startupTheme.install(startupMode);
             AppIcon.use(IconSet.fromId(config.current().iconSet()));
             DialogSounds.install();
             var terminalSettings = new TerminalSettings(config.current().terminalFontFamily(),
                     config.current().terminalFontSize());
+            terminalSettings.setPalette(startupPalette);
+            terminalSettings.setBackgroundImage(startupBackdrop, startupPalette.imageVisibility());
             terminalSettings.bell().setSound(config.current().bellSound());
             terminalSettings.bell().setShake(config.current().bellShake());
             var ctx = new AppContext(paths, config, store, io, sshOps, sessions, new SshTerminalFactory(sessions),
-                    terminalSettings, vault, edits, sftpLinks);
-            var frame = new MainFrame(ctx, () -> shutdown(io, sshOps, sessions, vault, edits, log));
+                    terminalSettings, vault, edits, sftpLinks, themes);
+            var frame = new MainFrame(ctx, customThemes, () -> shutdown(io, sshOps, sessions, vault, edits, log));
             frameRef.set(frame);
             frame.setVisible(true);
             UiAsync.run(io, store::load, frame::showSnapshot,

@@ -8,6 +8,7 @@ import dev.egateza.termul.app.log.LogBuffer;
 import dev.egateza.termul.app.log.LogPanel;
 import dev.egateza.termul.app.sftp.ActivityBar;
 import dev.egateza.termul.app.sftp.SftpPanel;
+import dev.egateza.termul.app.terminal.BackgroundImages;
 import dev.egateza.termul.app.terminal.TerminalTab;
 import dev.egateza.termul.app.ui.tree.HostTreePanel;
 import java.awt.Color;
@@ -22,6 +23,7 @@ import dev.egateza.termul.core.profile.HostProfile;
 import dev.egateza.termul.core.profile.ProfileSnapshot;
 import dev.egateza.termul.core.profile.OsInfo;
 import dev.egateza.termul.core.profile.ProfileStore;
+import dev.egateza.termul.core.theme.CustomTheme;
 import dev.egateza.termul.ssh.OsDetector;
 import dev.egateza.termul.terminal.SshTtyConnector;
 import dev.egateza.termul.sftp.edit.RemoteEditSession;
@@ -93,22 +95,35 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private final JButton hostToggle = new JButton();
     private final JPanel handle = new JPanel(new java.awt.GridBagLayout());
     private final JButton modeToggle = new JButton(); // pojok kanan atas menu bar: terang/gelap
-    private AppTheme theme; // EDT
+    private UiTheme theme; // EDT
+    private List<CustomTheme> customThemes; // EDT; disegarkan setelah editor tema ditutup
+    private long backdropRequest; // EDT; nomor permintaan muat gambar latar terakhir, untuk membuang hasil yang usang
+    private String backdropPath; // EDT; path gambar latar yang sedang terpasang (atau sedang dimuat)
+    private java.awt.image.BufferedImage backdropImage; // EDT; gambar untuk backdropPath, null selama belum selesai dimuat
     private ThemeMode wantedMode; // EDT
     private final HostDrawer drawer;
     private JSplitPane hostSplit; // hanya di mode panel, selain itu null. EDT
     private String hostMode = AppConfig.HOST_DOCKED; // EDT
     private int hostWidth = 260; // EDT
 
-    public MainFrame(AppContext ctx, Runnable onExit) {
+    public MainFrame(AppContext ctx, List<CustomTheme> customThemes, Runnable onExit) {
         super("TermUL");
         this.ctx = ctx;
         this.store = ctx.profiles();
         this.io = ctx.io();
         this.onExit = onExit;
         this.hostTree = new HostTreePanel(this);
-        this.theme = AppTheme.fromId(ctx.config().current().theme());
+        this.customThemes = List.copyOf(customThemes);
+        this.theme = UiThemes.resolve(ctx.config().current().theme(), this.customThemes);
         this.wantedMode = ThemeMode.fromId(ctx.config().current().themeMode());
+
+        int opacity = ctx.config().current().windowOpacity();
+        if (opacity < 100) {
+            // Java menolak transparansi pada window berdekorasi native: pakai title bar FlatLaf
+            setUndecorated(true);
+            getRootPane().setWindowDecorationStyle(javax.swing.JRootPane.FRAME);
+            WindowOpacity.apply(this, opacity);
+        }
 
         setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
         addWindowListener(new WindowAdapter() {
@@ -311,6 +326,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         settings.add(buildHostPanelMenu());
         settings.add(buildThemeMenu());
         settings.add(menuItem(null, I18n.t("menu.settings.fonts"), null, this::configureFonts));
+        settings.add(menuItem(null, I18n.t("menu.settings.windowOpacity"), null, this::configureWindowOpacity));
         settings.add(buildLanguageMenu());
         settings.add(buildBellMenu());
         settings.add(buildIconSetMenu());
@@ -511,29 +527,177 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         return menu;
     }
 
-    /** Submenu pilihan tema; ganti langsung terlihat dan disimpan di config.json. */
+    /**
+     * Submenu tema: pilihan tema UI (bawaan dan custom), opsi menerapkan tema ke terminal, pilihan warna terminal
+     * terpisah, dan editor tema. Isinya dibangun ulang tiap menu dibuka karena daftar tema custom bisa berubah.
+     */
     private JMenu buildThemeMenu() {
         var menu = new JMenu(I18n.t("menu.settings.theme"));
+        fillThemeMenu(menu);
+        menu.addMenuListener(new javax.swing.event.MenuListener() {
+            @Override
+            public void menuSelected(javax.swing.event.MenuEvent e) {
+                fillThemeMenu(menu);
+            }
+
+            @Override
+            public void menuDeselected(javax.swing.event.MenuEvent e) {
+            }
+
+            @Override
+            public void menuCanceled(javax.swing.event.MenuEvent e) {
+            }
+        });
+        return menu;
+    }
+
+    private void fillThemeMenu(JMenu menu) {
+        menu.removeAll();
+        var config = ctx.config().current();
         var group = new ButtonGroup();
-        for (AppTheme t : AppTheme.values()) {
-            var item = new JRadioButtonMenuItem(t.label(), t == theme);
+        for (UiTheme t : UiThemes.all(customThemes)) {
+            var item = new JRadioButtonMenuItem(t.label(), t.id().equals(theme.id()));
             item.setToolTipText(I18n.t("main.menu.theme.modes", t.modes().stream().map(ThemeMode::label).collect(Collectors.joining(", "))));
             item.addActionListener(e -> {
-                if (t != theme) {
+                if (!t.id().equals(theme.id())) {
                     applyTheme(t, wantedMode);
                 }
             });
             group.add(item);
             menu.add(item);
         }
-        return menu;
+        menu.addSeparator();
+
+        var linked = new JCheckBoxMenuItem(I18n.t("menu.settings.theme.linked"), config.terminalThemeLinked());
+        linked.addActionListener(e -> {
+            var next = ctx.config().current().withTerminalThemeLinked(linked.isSelected());
+            applyTerminalColors(next);
+            mutate(I18n.t("error.saveSettings"), () -> ctx.config().save(next));
+        });
+        menu.add(linked);
+
+        var terminalMenu = new JMenu(I18n.t("menu.settings.theme.terminalColors"));
+        terminalMenu.setEnabled(!config.terminalThemeLinked());
+        var terminalGroup = new ButtonGroup();
+        String chosen = UiThemes.find(config.terminalTheme(), customThemes).map(CustomTheme::id).orElse(null);
+        terminalMenu.add(terminalColorItem(terminalGroup, I18n.t("menu.settings.theme.terminalDefault"), null,
+                chosen == null));
+        for (CustomTheme t : customThemes) {
+            terminalMenu.add(terminalColorItem(terminalGroup, t.name(), t.id(), t.id().equals(chosen)));
+        }
+        menu.add(terminalMenu);
+        menu.addSeparator();
+        menu.add(menuItem(null, I18n.t("menu.settings.theme.editor"), null, this::openThemeEditor));
+    }
+
+    private JRadioButtonMenuItem terminalColorItem(ButtonGroup group, String label, String themeId, boolean selected) {
+        var item = new JRadioButtonMenuItem(label, selected);
+        item.addActionListener(e -> {
+            var next = ctx.config().current().withTerminalTheme(themeId);
+            applyTerminalColors(next);
+            mutate(I18n.t("error.saveSettings"), () -> ctx.config().save(next));
+        });
+        group.add(item);
+        return item;
+    }
+
+    /**
+     * Pakai warna terminal dan gambar latar menurut {@code config} ke semua tab yang terbuka dan tab yang dibuka
+     * berikutnya. Warna langsung berlaku; gambar dimuat di thread lain (file bisa besar) lalu dipasang. EDT.
+     */
+    private void applyTerminalColors(AppConfig config) {
+        var settings = ctx.terminalSettings();
+        var palette = UiThemes.terminalPalette(config, customThemes, theme.effectiveMode(wantedMode));
+        settings.setPalette(palette);
+        String path = BackgroundImages.key(palette);
+        long request = ++backdropRequest;
+        if (path == null) {
+            backdropPath = null;
+            backdropImage = null;
+            settings.setBackgroundImage(null, 0);
+        } else if (path.equals(backdropPath) && backdropImage != null) {
+            // gambar yang sama sudah di memori: hanya keterlihatannya yang mungkin berubah
+            settings.setBackgroundImage(backdropImage, palette.imageVisibility());
+        } else {
+            backdropPath = path;
+            backdropImage = null;
+            settings.setBackgroundImage(null, 0); // jangan tampilkan gambar lama selama yang baru dimuat
+            int visibility = palette.imageVisibility();
+            UiAsync.run(ctx.sshOps(), () -> BackgroundImages.loadFor(palette), image -> {
+                if (request == backdropRequest && image != null) {
+                    backdropImage = image;
+                    settings.setBackgroundImage(image, visibility);
+                    reloadTerminalColors();
+                }
+            }, err -> { });
+        }
+        reloadTerminalColors();
+    }
+
+    private void reloadTerminalColors() {
+        for (int i = 0; i < tabs.getTabCount(); i++) {
+            if (tabs.getComponentAt(i) instanceof TerminalTab tab) {
+                tab.reloadColors();
+            }
+        }
+    }
+
+    /**
+     * Dialog transparansi seluruh jendela. Perubahan antar nilai di bawah 100% langsung terlihat; dari 100% ke bawahnya
+     * butuh restart karena window harus dibuat tanpa dekorasi native.
+     */
+    private void configureWindowOpacity() {
+        int original = ctx.config().current().windowOpacity();
+        var slider = new javax.swing.JSlider(AppConfig.MIN_WINDOW_OPACITY, 100, original);
+        var label = new JLabel(I18n.t("window.opacity.label", original));
+        slider.addChangeListener(e -> {
+            label.setText(I18n.t("window.opacity.label", slider.getValue()));
+            WindowOpacity.apply(this, slider.getValue()); // pratinjau langsung; diam-diam gagal di window berdekorasi
+        });
+        var hint = new JLabel("<html>" + I18n.t("window.opacity.hint") + "</html>");
+        hint.setPreferredSize(new Dimension(380, 70));
+        var panel = new JPanel(new BorderLayout(0, 6));
+        panel.add(label, BorderLayout.NORTH);
+        panel.add(slider, BorderLayout.CENTER);
+        panel.add(hint, BorderLayout.SOUTH);
+        int answer = JOptionPane.showConfirmDialog(this, panel, I18n.t("window.opacity.title"),
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        int chosen = answer == JOptionPane.OK_OPTION ? slider.getValue() : original;
+        WindowOpacity.apply(this, chosen); // batal: kembali ke nilai semula
+        if (chosen == original) {
+            return;
+        }
+        mutate(I18n.t("error.saveSettings"), () ->
+                ctx.config().save(ctx.config().current().withWindowOpacity(chosen)));
+        if (!isUndecorated() && chosen < 100) {
+            JOptionPane.showMessageDialog(this, I18n.t("window.opacity.restart"),
+                    I18n.t("window.opacity.title"), JOptionPane.INFORMATION_MESSAGE);
+        }
+    }
+
+    /** Buka editor tema; setelah ditutup, daftar tema dibaca ulang dan tema yang terpengaruh diterapkan ulang. */
+    private void openThemeEditor() {
+        var result = ThemeEditorDialog.show(this, ctx.themes(), ctx.terminalSettings().getTerminalFont(),
+                UiThemes.builtinIds(), theme.id());
+        customThemes = List.copyOf(ctx.themes().list()); // file kecil; dibaca sekali setelah dialog ditutup
+        if (result.applyId() != null) {
+            applyTheme(UiThemes.resolve(result.applyId(), customThemes), wantedMode);
+            return;
+        }
+        // tema yang sedang dipakai mungkin baru diubah atau dihapus (kembali ke bawaan)
+        var current = UiThemes.resolve(theme.id(), customThemes);
+        if (current instanceof CustomUiTheme || !current.id().equals(theme.id())) {
+            applyTheme(current, wantedMode);
+        } else {
+            applyTerminalColors(ctx.config().current());
+        }
     }
 
     /**
      * Pasang tema+mode ke seluruh window yang terbuka lalu simpan. Mode yang diminta disimpan apa adanya (bukan
      * mode efektif), supaya kembali ke mode favorit kalau user pindah ke tema yang mendukung keduanya. EDT.
      */
-    private void applyTheme(AppTheme newTheme, ThemeMode wanted) {
+    private void applyTheme(UiTheme newTheme, ThemeMode wanted) {
         theme = newTheme;
         wantedMode = wanted;
         theme.install(wanted);
@@ -541,8 +705,9 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         handle.setBackground(javax.swing.UIManager.getColor("Tree.background"));
         refreshLaf();
         updateModeToggle();
-        mutate(I18n.t("error.saveSettings"), () ->
-                ctx.config().save(ctx.config().current().withTheme(newTheme.id()).withThemeMode(wanted.id())));
+        var next = ctx.config().current().withTheme(newTheme.id()).withThemeMode(wanted.id());
+        applyTerminalColors(next);
+        mutate(I18n.t("error.saveSettings"), () -> ctx.config().save(next));
     }
 
     /** Terapkan ulang LaF (tema, font aplikasi) ke semua komponen, termasuk yang sedang terlepas dari window. EDT. */
