@@ -90,6 +90,8 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] Konfirmasi tutup tab (sesi aktif/transfer berjalan) dan keluar aplikasi (daftar sesi/transfer/edit aktif)
 - [x] Zoom terminal per tab: Ctrl++ / Ctrl+- / Ctrl+0
 - [x] Log per shell (buka/tutup) dan jumlah pemakai koneksi bersama
+- [x] Ikon OS otomatis: `cat /etc/os-release` lewat exec channel sekali per profil per run → disimpan di profil
+  (`HostProfile.os`), badge warna distro di host tree + tab, tooltip nama lengkap (permintaan user)
 - [ ] (usulan, menunggu keputusan user) Fallback koneksi kedua kalau server menolak channel (`MaxSessions`, default 10),
   atau opsi per profil "koneksi terpisah per tab"
 
@@ -97,6 +99,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 | Tanggal | Commit | Task |
 |---|---|---|
+| 2026-09-30 | `feat(app): ikon OS otomatis (deteksi saat connect) di host tree dan tab` | Ikon OS otomatis (+ OsInfo, OsDetector) |
 | 2026-09-30 | `feat(ssh): log buka/tutup shell per tab dan jumlah pemakai koneksi bersama` | Logging koneksi bersama (pertanyaan user) |
 | 2026-09-30 | `feat(app): zoom terminal per tab` | Zoom terminal Ctrl++/Ctrl+-/Ctrl+0 (permintaan user) |
 | 2026-09-30 | `feat(app): konfirmasi saat menutup tab ... dan saat keluar aplikasi` | Konfirmasi tutup tab & keluar aplikasi (permintaan user) |
