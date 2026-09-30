@@ -34,7 +34,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] Dialog tambah/edit profil
 - [x] `SessionManager` (connect, auth key/agent/password prompt)
 - [x] `HostKeyVerifier` (known_hosts + TOFU)
-- [ ] `SshTtyConnector` + tab JediTerm
+- [~] `SshTtyConnector` + tab JediTerm (connector selesai, UI tab belum)
 - [ ] Keep-alive + deteksi putus + reconnect
 
 ### Fase 2 – 6
@@ -44,6 +44,7 @@ Belum dimulai. Lihat `docs/PLAN.md`.
 
 | Tanggal | Commit | Task |
 |---|---|---|
+| 2026-09-30 | `feat(terminal): tambah SshTtyConnector JediTerm di atas ChannelShell dengan writer thread terpisah` | SshTtyConnector + SshTerminalFactory |
 | 2026-09-30 | `feat(ssh): tambah SessionManager dengan auth key/password, reference counting, dan keep-alive` | SessionManager (connect, auth key/password, ref-count, keep-alive) |
 | 2026-09-30 | `feat(ssh): tambah verifikasi host key strict dengan known_hosts aplikasi dan TOFU` | HostKeyVerifier (known_hosts + TOFU, logic) |
 | 2026-09-30 | `feat(app): tambah dialog tambah/edit profil host` | Dialog profil |
@@ -54,7 +55,7 @@ Belum dimulai. Lihat `docs/PLAN.md`.
 
 ## Langkah berikutnya
 
-- SshTtyConnector + tab JediTerm (modul terminal), lalu wiring connect di app (dialog TOFU & prompt password).
+- Tab terminal JediTerm di app + wiring SessionManager (dialog TOFU, prompt password, banner putus/reconnect).
 
 ## Catatan / blocker
 

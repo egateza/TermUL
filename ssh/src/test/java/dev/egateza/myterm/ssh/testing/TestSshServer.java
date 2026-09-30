@@ -111,18 +111,18 @@ public final class TestSshServer implements AutoCloseable {
             try {
                 out.write("welcome\r\n$ ".getBytes(StandardCharsets.UTF_8));
                 out.flush();
-                var line = new StringBuilder();
+                var line = new java.io.ByteArrayOutputStream();
                 int b;
                 while ((b = in.read()) >= 0) {
                     if (b == '\r' || b == '\n') {
-                        String cmd = line.toString();
-                        line.setLength(0);
+                        String cmd = line.toString(StandardCharsets.UTF_8);
+                        line.reset();
                         if (cmd.equals("exit")) {
                             break;
                         }
                         out.write(("\r\necho:" + cmd + "\r\n$ ").getBytes(StandardCharsets.UTF_8));
                     } else {
-                        line.append((char) b);
+                        line.write(b);
                         out.write(b);
                     }
                     out.flush();
