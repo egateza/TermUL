@@ -102,7 +102,8 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
   reconnect/batal. Di menu **hanya** Host baru, Grup baru, dan Tentang TermUL (keputusan user: menu lain tanpa ikon). Warna dibaca dari `UIManager` saat digambar → siap untuk dark/light theme.
   Tambah ikon: unduh SVG ke `app/src/main/resources/dev/egateza/termul/app/icons/fa/` (viewBox dibuat persegi) +
   konstanta di `AppIcon` (permintaan user)
-- [x] Tombol laci (« / ») besar (22×84 px) di tepi kanan panel host, di tengah vertikal, untuk buka/tutup panel host; lebar terakhir diingat selama aplikasi
+- [x] Tombol laci (« / ») pendek (44 px) di strip 18 px yang menempel di tepi kanan panel host (satu warna dengan panel), di
+  tengah vertikal, untuk buka/tutup panel host; strip tetap ada saat host tree tertutup (divider dikunci); lebar terakhir diingat selama aplikasi
   jalan, Ctrl+F (cari host) membuka panel kalau tertutup. Bukan checkbox menu (permintaan user)
 - [x] Dua set ikon yang bisa dipilih di **Pengaturan → Set ikon** (Font Awesome / Material Symbols Rounded), ganti langsung
   tanpa restart, disimpan di `config.json` (`iconSet`). Tambah/ganti ikon: `java tools/AddIcon.java NAMA fa-nama material_nama`

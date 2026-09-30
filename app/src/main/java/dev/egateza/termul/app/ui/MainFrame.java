@@ -73,8 +73,9 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private final JCheckBoxMenuItem showLog = new JCheckBoxMenuItem("Tampilkan log");
     private int logHeight = 220; // EDT
     private final JSplitPane hostSplit;
-    private static final int HOST_TOGGLE_WIDTH = 22;
-    private static final int HOST_TOGGLE_HEIGHT = 84;
+    private static final int HOST_HANDLE_WIDTH = 18;
+    private static final int HOST_TOGGLE_HEIGHT = 44;
+    private final JPanel hostSide = new JPanel(new BorderLayout());
     private final JButton hostToggle = new JButton();
     private int hostWidth = 260; // EDT
 
@@ -107,19 +108,20 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         welcome.setFont(welcome.getFont().deriveFont(Font.PLAIN, welcome.getFont().getSize2D() + 2));
         updateCenter();
 
-        // tombol laci di tepi kiri sisi terminal (= tepi kanan panel host), di tengah vertikal; ikut sisi
-        // terminal, jadi tetap terlihat saat panel host disembunyikan
+        // Strip tipis di tepi kanan panel host (satu warna dengan panel, jadi terasa satu kesatuan) berisi tombol
+        // laci di tengah. Strip bagian dari sisi kiri, jadi tetap terlihat saat host tree disembunyikan.
         hostToggle.setFocusable(false);
-        hostToggle.setPreferredSize(new Dimension(HOST_TOGGLE_WIDTH, HOST_TOGGLE_HEIGHT));
-        hostToggle.putClientProperty("FlatLaf.style", "arc: 10; margin: 2,0,2,0");
+        hostToggle.putClientProperty("JButton.buttonType", "toolBarButton");
+        hostToggle.putClientProperty("FlatLaf.style", "arc: 6; margin: 0,0,0,0");
+        hostToggle.setPreferredSize(new Dimension(HOST_HANDLE_WIDTH, HOST_TOGGLE_HEIGHT));
         hostToggle.addActionListener(e -> setHostPanelVisible(!hostTree.isVisible()));
         updateHostToggle();
         var handle = new JPanel(new java.awt.GridBagLayout());
         handle.add(hostToggle);
-        var rightSide = new JPanel(new BorderLayout());
-        rightSide.add(handle, BorderLayout.WEST);
-        rightSide.add(center, BorderLayout.CENTER);
-        hostSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, hostTree, rightSide);
+        handle.setMinimumSize(new Dimension(HOST_HANDLE_WIDTH, 0)); // lebar minimum sisi kiri saat host tree tertutup
+        hostSide.add(hostTree, BorderLayout.CENTER);
+        hostSide.add(handle, BorderLayout.EAST);
+        hostSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, hostSide, center);
         hostSplit.setDividerLocation(hostWidth);
         hostSplit.setContinuousLayout(true);
         hostTree.setMinimumSize(new Dimension(160, 100));
@@ -271,23 +273,22 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             return;
         }
         if (!visible) {
-            hostWidth = Math.max(160, hostSplit.getDividerLocation());
+            hostWidth = Math.max(160 + HOST_HANDLE_WIDTH, hostSplit.getDividerLocation());
             var owner = KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
             if (owner != null && SwingUtilities.isDescendingFrom(owner, hostTree)) {
                 currentTab().ifPresent(TerminalTab::focusTerminal);
             }
         }
         hostTree.setVisible(visible);
-        if (visible) {
-            hostSplit.setDividerLocation(hostWidth);
-        }
+        hostSplit.setEnabled(visible); // divider tidak bisa digeser saat hanya strip yang tersisa
         hostSplit.revalidate();
+        hostSplit.setDividerLocation(visible ? hostWidth : hostSide.getMinimumSize().width);
         updateHostToggle();
     }
 
     private void updateHostToggle() {
         boolean open = hostTree.isVisible();
-        hostToggle.setIcon((open ? AppIcon.ANGLES_LEFT : AppIcon.ANGLES_RIGHT).icon(18));
+        hostToggle.setIcon((open ? AppIcon.ANGLES_LEFT : AppIcon.ANGLES_RIGHT).icon(16));
         hostToggle.setToolTipText(open ? "Sembunyikan panel host" : "Tampilkan panel host");
     }
 
