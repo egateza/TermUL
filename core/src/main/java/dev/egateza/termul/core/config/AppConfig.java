@@ -14,10 +14,12 @@ package dev.egateza.termul.core.config;
  * @param language          tag bahasa UI (mis. {@code id}, {@code en}); diterjemahkan di modul app
  * @param bellSound         bunyikan suara sistem saat terminal menerima BEL (null di config lama = aktif)
  * @param bellShake         getarkan layar saat terminal menerima BEL (null di config lama = aktif)
+ * @param uiFontFamily      nama font aplikasi (menu, tabel, dialog); null = font bawaan tema
+ * @param terminalFontFamily nama font terminal; null = pilihan otomatis (font monospace pertama yang terpasang)
  */
 public record AppConfig(EditorConfig editors, float terminalFontSize, String iconSet, int hostButtonOpacity,
                         String hostPanelMode, String theme, String themeMode, String language, Boolean bellSound,
-                        Boolean bellShake) {
+                        Boolean bellShake, String uiFontFamily, String terminalFontFamily) {
 
     public static final String HOST_DOCKED = "docked";
     public static final String HOST_FLOATING = "floating";
@@ -60,55 +62,69 @@ public record AppConfig(EditorConfig editors, float terminalFontSize, String ico
         // Boolean (bukan boolean): field yang tidak ada di config lama terbaca null, bukan false
         bellSound = bellSound == null || bellSound;
         bellShake = bellShake == null || bellShake;
+        uiFontFamily = uiFontFamily == null || uiFontFamily.isBlank() ? null : uiFontFamily.strip();
+        terminalFontFamily = terminalFontFamily == null || terminalFontFamily.isBlank() ? null : terminalFontFamily.strip();
     }
 
     public static AppConfig defaults() {
         return new AppConfig(EditorConfig.defaults(), 14f, DEFAULT_ICON_SET, DEFAULT_OPACITY, HOST_DOCKED,
-                DEFAULT_THEME, MODE_DARK, DEFAULT_LANGUAGE, true, true);
+                DEFAULT_THEME, MODE_DARK, DEFAULT_LANGUAGE, true, true, null, null);
     }
 
     public AppConfig withEditors(EditorConfig e) {
         return new AppConfig(e, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
-                language, bellSound, bellShake);
+                language, bellSound, bellShake, uiFontFamily, terminalFontFamily);
     }
 
     public AppConfig withIconSet(String id) {
         return new AppConfig(editors, terminalFontSize, id, hostButtonOpacity, hostPanelMode, theme, themeMode,
-                language, bellSound, bellShake);
+                language, bellSound, bellShake, uiFontFamily, terminalFontFamily);
     }
 
     public AppConfig withHostButtonOpacity(int percent) {
         return new AppConfig(editors, terminalFontSize, iconSet, percent, hostPanelMode, theme, themeMode,
-                language, bellSound, bellShake);
+                language, bellSound, bellShake, uiFontFamily, terminalFontFamily);
     }
 
     public AppConfig withHostPanelMode(String mode) {
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, mode, theme, themeMode,
-                language, bellSound, bellShake);
+                language, bellSound, bellShake, uiFontFamily, terminalFontFamily);
     }
 
     public AppConfig withTheme(String id) {
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, id, themeMode,
-                language, bellSound, bellShake);
+                language, bellSound, bellShake, uiFontFamily, terminalFontFamily);
     }
 
     public AppConfig withThemeMode(String mode) {
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, mode,
-                language, bellSound, bellShake);
+                language, bellSound, bellShake, uiFontFamily, terminalFontFamily);
     }
 
     public AppConfig withLanguage(String tag) {
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
-                tag, bellSound, bellShake);
+                tag, bellSound, bellShake, uiFontFamily, terminalFontFamily);
     }
 
     public AppConfig withBellSound(boolean on) {
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
-                language, on, bellShake);
+                language, on, bellShake, uiFontFamily, terminalFontFamily);
     }
 
     public AppConfig withBellShake(boolean on) {
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
-                language, bellSound, on);
+                language, bellSound, on, uiFontFamily, terminalFontFamily);
+    }
+
+    /** @param family nama font aplikasi, atau null untuk font bawaan tema */
+    public AppConfig withUiFontFamily(String family) {
+        return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
+                language, bellSound, bellShake, family, terminalFontFamily);
+    }
+
+    /** @param family nama font terminal, atau null untuk pilihan otomatis */
+    public AppConfig withTerminalFontFamily(String family) {
+        return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
+                language, bellSound, bellShake, uiFontFamily, family);
     }
 }

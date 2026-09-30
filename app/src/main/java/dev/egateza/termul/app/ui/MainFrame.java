@@ -310,6 +310,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         settings.add(menuItem(null, I18n.t("main.menu.settings.editors"), null, this::configureEditors));
         settings.add(buildHostPanelMenu());
         settings.add(buildThemeMenu());
+        settings.add(menuItem(null, I18n.t("menu.settings.fonts"), null, this::configureFonts));
         settings.add(buildLanguageMenu());
         settings.add(buildBellMenu());
         settings.add(buildIconSetMenu());
@@ -538,6 +539,14 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         theme.install(wanted);
         // warna yang di-set manual tidak ikut berubah lewat updateUI
         handle.setBackground(javax.swing.UIManager.getColor("Tree.background"));
+        refreshLaf();
+        updateModeToggle();
+        mutate(I18n.t("error.saveSettings"), () ->
+                ctx.config().save(ctx.config().current().withTheme(newTheme.id()).withThemeMode(wanted.id())));
+    }
+
+    /** Terapkan ulang LaF (tema, font aplikasi) ke semua komponen, termasuk yang sedang terlepas dari window. EDT. */
+    private void refreshLaf() {
         com.formdev.flatlaf.FlatLaf.updateUI();
         // FlatLaf.updateUI hanya menjangkau komponen yang sedang ada di window; yang terlepas dari hierarki
         // (tabs saat belum ada tab, host tree di mode melayang, dst.) harus diperbarui sendiri
@@ -546,9 +555,31 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                 SwingUtilities.updateComponentTreeUI(detached);
             }
         }
-        updateModeToggle();
-        mutate(I18n.t("error.saveSettings"), () ->
-                ctx.config().save(ctx.config().current().withTheme(newTheme.id()).withThemeMode(wanted.id())));
+        // ukuran menu bar dan tab bergantung pada font; hitung ulang tata letaknya
+        getRootPane().revalidate();
+        getRootPane().repaint();
+    }
+
+    /** Dialog font aplikasi dan font terminal; langsung berlaku ke seluruh tampilan dan tab yang terbuka, lalu disimpan. */
+    private void configureFonts() {
+        var config = ctx.config().current();
+        FontSettingsDialog.show(this, config.uiFontFamily(), config.terminalFontFamily()).ifPresent(choice -> {
+            if (!java.util.Objects.equals(choice.uiFamily(), config.uiFontFamily())) {
+                UiFont.apply(choice.uiFamily());
+                refreshLaf();
+            }
+            if (!java.util.Objects.equals(choice.terminalFamily(), config.terminalFontFamily())) {
+                ctx.terminalSettings().setFamily(choice.terminalFamily());
+                for (int i = 0; i < tabs.getTabCount(); i++) {
+                    if (tabs.getComponentAt(i) instanceof TerminalTab tab) {
+                        tab.reloadFont();
+                    }
+                }
+            }
+            mutate(I18n.t("error.saveSettings"), () ->
+                    ctx.config().save(ctx.config().current().withUiFontFamily(choice.uiFamily())
+                            .withTerminalFontFamily(choice.terminalFamily())));
+        });
     }
 
     private void updateModeToggle() {

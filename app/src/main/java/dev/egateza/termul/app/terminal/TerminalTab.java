@@ -504,6 +504,14 @@ public final class TerminalTab extends JPanel {
         log.debug("Zoom terminal {}: {}pt", profile.address(), applied);
     }
 
+    /** Pakai family font terminal yang baru dipilih (pengaturan bersama), dengan ukuran zoom tab ini. EDT. */
+    public void reloadFont() {
+        settings.reloadFont();
+        if (widget != null) {
+            widget.refreshFont();
+        }
+    }
+
     private boolean confirmExit() {
         boolean yes = JOptionPane.showConfirmDialog(this,
                 I18n.t("tab.exit.confirm", profile.address()),

@@ -11,8 +11,10 @@ import dev.egateza.termul.app.ui.DialogSounds;
 import dev.egateza.termul.app.ui.Dialogs;
 import dev.egateza.termul.app.ui.IconSet;
 import dev.egateza.termul.app.ui.MainFrame;
+import dev.egateza.termul.app.ui.FontCatalog;
 import dev.egateza.termul.app.ui.ThemeMode;
 import dev.egateza.termul.app.ui.UiAsync;
+import dev.egateza.termul.app.ui.UiFont;
 import dev.egateza.termul.app.vault.VaultCredentialProvider;
 import dev.egateza.termul.app.vault.VaultGate;
 import dev.egateza.termul.core.AppPaths;
@@ -60,6 +62,7 @@ public final class TermULApp {
         var config = new ConfigStore(paths.configFile());
         config.load();
         I18n.use(config.current().language());
+        FontCatalog.preload(); // menyaring font monospace lambat; selesai di background sebelum dialog font dibuka
 
         var frameRef = new AtomicReference<Component>();
         var vault = new VaultGate(
@@ -80,10 +83,12 @@ public final class TermULApp {
         }
 
         SwingUtilities.invokeLater(() -> {
+            UiFont.apply(config.current().uiFontFamily()); // sebelum tema dipasang
             AppTheme.fromId(config.current().theme()).install(ThemeMode.fromId(config.current().themeMode()));
             AppIcon.use(IconSet.fromId(config.current().iconSet()));
             DialogSounds.install();
-            var terminalSettings = new TerminalSettings(config.current().terminalFontSize());
+            var terminalSettings = new TerminalSettings(config.current().terminalFontFamily(),
+                    config.current().terminalFontSize());
             terminalSettings.bell().setSound(config.current().bellSound());
             terminalSettings.bell().setShake(config.current().bellShake());
             var ctx = new AppContext(paths, config, store, io, sshOps, sessions, new SshTerminalFactory(sessions),
