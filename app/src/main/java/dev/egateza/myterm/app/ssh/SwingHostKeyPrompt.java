@@ -1,14 +1,13 @@
 package dev.egateza.myterm.app.ssh;
 
+import dev.egateza.myterm.app.ui.Edt;
 import dev.egateza.myterm.ssh.hostkey.HostKeyInfo;
 import dev.egateza.myterm.ssh.hostkey.HostKeyPrompt;
 import java.awt.Component;
-import java.lang.reflect.InvocationTargetException;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import javax.swing.JOptionPane;
-import javax.swing.SwingUtilities;
 
 /** Dialog TOFU host key. Dipanggil dari thread MINA; dialog ditampilkan di EDT (blocking). */
 public final class SwingHostKeyPrompt implements HostKeyPrompt {
@@ -22,7 +21,7 @@ public final class SwingHostKeyPrompt implements HostKeyPrompt {
     @Override
     public boolean confirmUnknownHost(HostKeyInfo info) {
         var accepted = new AtomicBoolean();
-        onEdt(() -> {
+        Edt.runAndWait(() -> {
             String message = """
                     Host %s belum pernah dikenal.
 
@@ -43,19 +42,5 @@ public final class SwingHostKeyPrompt implements HostKeyPrompt {
     @Override
     public void hostKeyChanged(HostKeyInfo presented, List<String> knownFingerprints) {
         // Koneksi selalu ditolak; peringatan keras ditampilkan dari HostKeyRejectedException di tab terminal.
-    }
-
-    static void onEdt(Runnable r) {
-        if (SwingUtilities.isEventDispatchThread()) {
-            r.run();
-            return;
-        }
-        try {
-            SwingUtilities.invokeAndWait(r);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        } catch (InvocationTargetException e) {
-            throw new IllegalStateException(e.getCause());
-        }
     }
 }

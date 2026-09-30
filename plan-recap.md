@@ -46,7 +46,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] ADR 0002 desain vault
 - [x] `CredentialVault` + implementasi + unit test (round-trip, tamper detection GCM)
 - [ ] Field secret di dialog profil (login, sudo, root)
-- [ ] Auth password dari vault
+- [x] Auth password dari vault
 - [ ] Hotkey `Ctrl+Shift+P` inject sudo password, `Ctrl+Shift+R` inject root password
 
 ### Fase 3: Panel SFTP
@@ -80,6 +80,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 | Tanggal | Commit | Task |
 |---|---|---|
+| 2026-09-30 | `feat(app): ambil password login/passphrase dari vault dengan unlock on-demand dan auto-lock idle` | Auth password dari vault + menu Vault |
 | 2026-09-30 | `feat(vault): tambah vault terenkripsi Argon2id + AES-256-GCM dengan opsi DPAPI` | CredentialVault + FileCredentialVault + DPAPI |
 | 2026-09-30 | `docs: tambah ADR 0002 desain vault (Argon2id + AES-256-GCM + opsi DPAPI)` | ADR 0002 desain vault |
 | 2026-09-30 | `test(ssh): tambah integration test heartbeat mendeteksi server hang` | Keep-alive + deteksi putus + reconnect |
@@ -95,7 +96,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 ## Langkah berikutnya
 
-- Field secret di dialog profil (login, sudo, root) + auth password dari vault (VaultCredentialProvider) + dialog unlock/buat vault di app.
+- Field secret di dialog profil (login, passphrase, sudo, root) yang disimpan ke vault.
 
 ## Catatan / blocker
 

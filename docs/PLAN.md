@@ -26,7 +26,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] Putuskan desain vault (ADR 0002)
 - [x] `CredentialVault` + implementasi + unit test (round-trip, tamper detection GCM)
 - [ ] Field secret di dialog profil (login, sudo, root)
-- [ ] Auth password dari vault
+- [x] Auth password dari vault
 - [ ] Hotkey `Ctrl+Shift+P` inject sudo password, `Ctrl+Shift+R` inject root password
 
 **Acceptance**: `sudo su` dan `su -` bisa dijalankan tanpa mengetik password. Tidak ada secret di `profiles.json` maupun di log.

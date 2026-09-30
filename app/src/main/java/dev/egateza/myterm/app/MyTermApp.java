@@ -7,13 +7,19 @@ import dev.egateza.myterm.app.terminal.TerminalSettings;
 import dev.egateza.myterm.app.ui.Dialogs;
 import dev.egateza.myterm.app.ui.MainFrame;
 import dev.egateza.myterm.app.ui.UiAsync;
+import dev.egateza.myterm.app.vault.VaultCredentialProvider;
+import dev.egateza.myterm.app.vault.VaultGate;
 import dev.egateza.myterm.core.AppPaths;
 import dev.egateza.myterm.core.profile.ProfileStore;
 import dev.egateza.myterm.ssh.SessionManager;
 import dev.egateza.myterm.ssh.SshSettings;
 import dev.egateza.myterm.ssh.hostkey.KnownHostsStore;
 import dev.egateza.myterm.terminal.SshTerminalFactory;
+import dev.egateza.myterm.vault.Argon2Params;
+import dev.egateza.myterm.vault.DpapiKeyProtector;
+import dev.egateza.myterm.vault.FileCredentialVault;
 import java.awt.Component;
+import java.time.Duration;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -42,17 +48,20 @@ public final class MyTermApp {
         var store = new ProfileStore(paths.profilesFile());
 
         var frameRef = new AtomicReference<Component>();
+        var vault = new VaultGate(
+                new FileCredentialVault(paths.vaultFile(), Argon2Params.defaults(), new DpapiKeyProtector()),
+                frameRef::get, Duration.ofMinutes(15));
         var sessions = new SessionManager(
                 new KnownHostsStore(paths.knownHostsFile()),
                 new SwingHostKeyPrompt(frameRef::get),
-                new SwingCredentialProvider(frameRef::get),
+                new VaultCredentialProvider(vault, new SwingCredentialProvider(frameRef::get)),
                 SshSettings.defaults());
 
         SwingUtilities.invokeLater(() -> {
             FlatDarkLaf.setup();
             var ctx = new AppContext(paths, store, io, sshOps, new SshTerminalFactory(sessions),
-                    new TerminalSettings(14f));
-            var frame = new MainFrame(ctx, () -> shutdown(io, sshOps, sessions, log));
+                    new TerminalSettings(14f), vault);
+            var frame = new MainFrame(ctx, () -> shutdown(io, sshOps, sessions, vault, log));
             frameRef.set(frame);
             frame.setVisible(true);
             UiAsync.run(io, store::load, frame::showSnapshot,
@@ -60,10 +69,12 @@ public final class MyTermApp {
         });
     }
 
-    private static void shutdown(ExecutorService io, ExecutorService sshOps, SessionManager sessions, Logger log) {
+    private static void shutdown(ExecutorService io, ExecutorService sshOps, SessionManager sessions, VaultGate vault,
+                                 Logger log) {
         log.info("MyTerm keluar");
         sshOps.shutdownNow();
         sessions.close();
+        vault.close();
         io.shutdown();
         try {
             io.awaitTermination(5, TimeUnit.SECONDS);

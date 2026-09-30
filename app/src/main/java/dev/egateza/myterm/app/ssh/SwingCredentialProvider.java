@@ -1,5 +1,6 @@
 package dev.egateza.myterm.app.ssh;
 
+import dev.egateza.myterm.app.ui.Edt;
 import dev.egateza.myterm.core.profile.HostProfile;
 import dev.egateza.myterm.ssh.auth.CredentialProvider;
 import java.awt.BorderLayout;
@@ -37,7 +38,7 @@ public final class SwingCredentialProvider implements CredentialProvider {
 
     private char[] ask(String title, String message) {
         var result = new AtomicReference<char[]>();
-        SwingHostKeyPrompt.onEdt(() -> {
+        Edt.runAndWait(() -> {
             var field = new JPasswordField(24);
             var panel = new JPanel(new BorderLayout(0, 6));
             panel.add(new JLabel(message), BorderLayout.NORTH);

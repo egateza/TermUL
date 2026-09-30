@@ -17,6 +17,7 @@ import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.util.concurrent.ExecutorService;
+import javax.swing.JCheckBoxMenuItem;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JMenu;
@@ -115,7 +116,50 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         terminal.add(menuItem("Tutup tab", KeyStroke.getKeyStroke(KeyEvent.VK_W, ctrlShift),
                 () -> closeTab(tabs.getSelectedIndex())));
         bar.add(terminal);
+        bar.add(buildVaultMenu());
         return bar;
+    }
+
+    private JMenu buildVaultMenu() {
+        var gate = ctx.vault();
+        var menu = new JMenu("Vault");
+        menu.add(menuItem("Buka vault...", null, () -> ctx.sshOps().execute(gate::ensureUnlocked)));
+        menu.add(menuItem("Kunci vault", null, () -> ctx.sshOps().execute(gate::lock)));
+        menu.add(menuItem("Ganti master password...", null,
+                () -> ctx.sshOps().execute(gate::changeMasterPasswordInteractive)));
+        menu.addSeparator();
+        var remember = new JCheckBoxMenuItem("Ingat di PC ini (Windows DPAPI)");
+        remember.setToolTipText("Vault terbuka otomatis dengan login Windows. Lebih nyaman, "
+                + "tapi malware yang berjalan sebagai user Anda bisa ikut membukanya.");
+        remember.addActionListener(e -> {
+            boolean wanted = remember.isSelected();
+            UiAsync.run(ctx.sshOps(), () -> {
+                if (wanted && !gate.ensureUnlocked()) {
+                    return false;
+                }
+                gate.vault().setRememberOnThisPc(wanted);
+                return true;
+            }, ok -> remember.setSelected(ok ? wanted : !wanted), err -> {
+                remember.setSelected(!wanted);
+                Dialogs.error(this, "Vault", err);
+            });
+        });
+        menu.addMenuListener(new javax.swing.event.MenuListener() {
+            @Override
+            public void menuSelected(javax.swing.event.MenuEvent e) {
+                remember.setSelected(gate.vault().isRememberedOnThisPc());
+            }
+
+            @Override
+            public void menuDeselected(javax.swing.event.MenuEvent e) {
+            }
+
+            @Override
+            public void menuCanceled(javax.swing.event.MenuEvent e) {
+            }
+        });
+        menu.add(remember);
+        return menu;
     }
 
     private Optional<TerminalTab> currentTab() {
