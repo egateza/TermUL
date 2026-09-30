@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 import dev.egateza.termul.core.config.EditorConfig;
+import dev.egateza.termul.core.config.ValidationHooks;
 import dev.egateza.termul.sftp.SftpFixture;
 import dev.egateza.termul.sftp.SftpLinks;
 import dev.egateza.termul.sftp.edit.EditCache;
@@ -39,7 +40,8 @@ class EditManagerTest {
         sshOps = Executors.newVirtualThreadPerTaskExecutor();
         var fakeEditor = new EditorConfig("cmd.exe /c exit 0", Map.of());
         links = new SftpLinks(fx.sessions);
-        edits = new EditManager(links, new EditCache(tmp.resolve("cache")), () -> fakeEditor, sshOps, () -> null);
+        edits = new EditManager(links, new EditCache(tmp.resolve("cache")), () -> fakeEditor, sshOps, () -> null,
+                p -> { throw new UnsupportedOperationException(); }, ValidationHooks::defaults);
     }
 
     @AfterEach

@@ -18,6 +18,7 @@ import dev.egateza.termul.app.ui.UiFont;
 import dev.egateza.termul.app.ui.UiThemes;
 import dev.egateza.termul.app.vault.VaultCredentialProvider;
 import dev.egateza.termul.app.vault.VaultGate;
+import dev.egateza.termul.app.vault.VaultSudoPassword;
 import dev.egateza.termul.core.AppPaths;
 import dev.egateza.termul.core.config.ConfigStore;
 import dev.egateza.termul.core.theme.ThemeStore;
@@ -86,7 +87,8 @@ public final class TermULApp {
         EditManager edits;
         try {
             edits = new EditManager(sftpLinks, new EditCache(paths.editCacheDir()), () -> config.current().editors(),
-                    sshOps, frameRef::get);
+                    sshOps, frameRef::get, p -> new VaultSudoPassword(vault, p, frameRef::get),
+                    () -> config.current().validationHooks());
         } catch (java.io.IOException e) {
             throw new java.io.UncheckedIOException("WatchService tidak tersedia", e);
         }

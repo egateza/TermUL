@@ -5,6 +5,7 @@ import dev.egateza.termul.app.ui.Dialogs;
 import dev.egateza.termul.app.ui.Edt;
 import dev.egateza.termul.app.sftp.ActivityBar.Level;
 import dev.egateza.termul.core.config.EditorConfig;
+import dev.egateza.termul.core.config.ValidationHooks;
 import dev.egateza.termul.core.profile.HostProfile;
 import dev.egateza.termul.sftp.RemoteFileException;
 import dev.egateza.termul.sftp.SftpConnection;
@@ -15,6 +16,9 @@ import dev.egateza.termul.sftp.edit.RemoteEditSession;
 import dev.egateza.termul.sftp.edit.RemoteEditSession.LineEndingPolicy;
 import dev.egateza.termul.sftp.edit.RemoteEditSession.SyncOptions;
 import dev.egateza.termul.sftp.edit.RemoteEditSession.SyncResult;
+import dev.egateza.termul.sftp.edit.RemoteValidationException;
+import dev.egateza.termul.sftp.edit.SudoAuthException;
+import dev.egateza.termul.sftp.edit.SudoWriter;
 import java.awt.Component;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -28,6 +32,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
@@ -51,11 +56,13 @@ public final class EditManager implements AutoCloseable {
         private volatile Process editor;
         private volatile String template; // command editor pilihan user, null = sesuai pengaturan
         private final SftpConnection link; // koneksi bersama profil ini (dilepas saat sesi ditutup)
+        private final SudoWriter sudo;      // null = upload SFTP biasa
 
-        Entry(HostProfile profile, RemoteEditSession session, SftpConnection link) {
+        Entry(HostProfile profile, RemoteEditSession session, SftpConnection link, SudoWriter sudo) {
             this.profile = profile;
             this.session = session;
             this.link = link;
+            this.sudo = sudo;
         }
 
         public HostProfile profile() {
@@ -64,6 +71,11 @@ public final class EditManager implements AutoCloseable {
 
         public RemoteEditSession session() {
             return session;
+        }
+
+        /** true kalau file dipasang lewat sudo (file root). */
+        public boolean isSudo() {
+            return sudo != null;
         }
     }
 
@@ -81,19 +93,29 @@ public final class EditManager implements AutoCloseable {
     private final ExecutorService sshOps;
     private final Supplier<Component> parent;
     private final EditWatcher watcher;
+    private final Function<HostProfile, SudoWriter.SudoPassword> sudoPasswords;
+    private final Supplier<ValidationHooks> validationHooks;
     private final Map<Key, Entry> entries = new ConcurrentHashMap<>();
     private final Map<Path, Entry> byLocal = new ConcurrentHashMap<>();
     private final CopyOnWriteArrayList<Runnable> listeners = new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<Subscriber> subscribers = new CopyOnWriteArrayList<>();
 
+    /**
+     * @param sudoPasswords   sumber password sudo per profil (edit file root)
+     * @param validationHooks hook validasi yang berlaku saat upload (dibaca setiap upload)
+     */
     public EditManager(SftpLinks links, EditCache cache, Supplier<EditorConfig> editorConfig,
-                       ExecutorService sshOps, Supplier<Component> parent) throws IOException {
+                       ExecutorService sshOps, Supplier<Component> parent,
+                       Function<HostProfile, SudoWriter.SudoPassword> sudoPasswords,
+                       Supplier<ValidationHooks> validationHooks) throws IOException {
         this.links = links;
         this.cache = cache;
         this.editorConfig = editorConfig;
         this.launcher = new EditorLauncher(editorConfig);
         this.sshOps = sshOps;
         this.parent = parent;
+        this.sudoPasswords = sudoPasswords;
+        this.validationHooks = validationHooks;
         this.watcher = new EditWatcher(Duration.ofMillis(400), this::onLocalChanged);
     }
 
@@ -133,6 +155,19 @@ public final class EditManager implements AutoCloseable {
 
     /** @param template command editor pilihan user (menu "Edit dengan"); null = sesuai pengaturan */
     public void open(HostProfile profile, String remotePath, String template) {
+        open(profile, remotePath, template, false);
+    }
+
+    /** Buka file untuk diedit sebagai root: perubahan dipasang lewat sudo (backup + validasi + rollback). */
+    public void openAsRoot(HostProfile profile, String remotePath) {
+        open(profile, remotePath, null, true);
+    }
+
+    /**
+     * @param asRoot true = pasti lewat sudo; false = SFTP biasa, kecuali file tidak bisa ditulis user login
+     *               (user ditanya dulu)
+     */
+    private void open(HostProfile profile, String remotePath, String template, boolean asRoot) {
         var key = new Key(profile.id(), remotePath);
         sshOps.execute(() -> {
             try {
@@ -141,17 +176,29 @@ public final class EditManager implements AutoCloseable {
                     activity(profile, Level.INFO, I18n.t("edit.activity.downloading", remotePath));
                     SftpConnection link = links.acquire(profile);
                     RemoteEditSession session;
+                    SudoWriter sudo = null;
                     try {
-                        session = RemoteEditSession.open(link.ensureLive(), cache, profile.id(), remotePath,
-                                RemoteEditSession.SFTP_UPLOADER);
+                        var files = link.ensureLive();
+                        Boolean useSudo = asRoot ? Boolean.TRUE : files.canWrite(remotePath) ? Boolean.FALSE
+                                : askSudo(profile, remotePath);
+                        if (useSudo == null) {
+                            links.release(profile);
+                            return; // dibatalkan
+                        }
+                        if (useSudo) {
+                            sudo = new SudoWriter(sudoPasswords.apply(profile), validationHooks);
+                        }
+                        session = RemoteEditSession.open(files, cache, profile.id(), remotePath,
+                                sudo != null ? sudo : RemoteEditSession.SFTP_UPLOADER);
                     } catch (Exception e) {
                         links.release(profile);
                         throw e;
                     }
-                    entry = new Entry(profile, session, link);
+                    var created = new Entry(profile, session, link, sudo);
+                    entry = created;
                     session.addListener(s -> {
                         fireChanged();
-                        publishState(profile, s);
+                        publishState(created, s);
                     });
                     entries.put(key, entry);
                     byLocal.put(session.localFile().toAbsolutePath().normalize(), entry);
@@ -165,6 +212,18 @@ public final class EditManager implements AutoCloseable {
                 showError(I18n.t("edit.error.openFailed", remotePath), e);
             }
         });
+    }
+
+    /** File tidak bisa ditulis user login. @return true = sudo, false = tetap SFTP biasa, null = batal */
+    private Boolean askSudo(HostProfile profile, String remotePath) {
+        Object[] choices = {I18n.t("edit.sudo.useSudo"), I18n.t("edit.sudo.withoutSudo"), I18n.t("edit.common.cancel")};
+        int choice = ask(I18n.t("edit.sudo.title", remotePath),
+                I18n.t("edit.sudo.message", remotePath, profile.username()), choices);
+        return switch (choice) {
+            case 0 -> Boolean.TRUE;
+            case 1 -> Boolean.FALSE;
+            default -> null;
+        };
     }
 
     /** Menjalankan editor untuk entry (juga dipakai "Buka lagi" dari EditTracker). */
@@ -207,13 +266,17 @@ public final class EditManager implements AutoCloseable {
     }
 
     /** Terjemahkan perubahan state sesi edit menjadi keterangan aktivitas. */
-    private void publishState(HostProfile profile, RemoteEditSession s) {
+    private void publishState(Entry entry, RemoteEditSession s) {
+        HostProfile profile = entry.profile;
         String path = s.remotePath();
         switch (s.state()) {
             case UPLOADING -> activity(profile, Level.INFO, I18n.t("edit.activity.uploading", path));
             case EDITING -> {
                 if ("Tersinkron".equals(s.lastMessage())) {
-                    activity(profile, Level.SUCCESS, I18n.t("edit.activity.uploaded", path));
+                    var installed = entry.sudo == null ? null : entry.sudo.lastInstalled();
+                    activity(profile, Level.SUCCESS, installed == null
+                            ? I18n.t("edit.activity.uploaded", path)
+                            : I18n.t("edit.activity.uploadedSudo", path, installed.backupPath()));
                 } else if ("Dibuka".equals(s.lastMessage())) {
                     activity(profile, Level.INFO, I18n.t("edit.activity.opened", path));
                 }
@@ -278,7 +341,14 @@ public final class EditManager implements AutoCloseable {
             }
             log.warn("Upload {} gagal: {}", session.remotePath(), e.getMessage());
             activity(entry.profile, Level.ERROR, I18n.t("edit.activity.uploadFailed", session.remotePath(), e.getMessage()));
-            showError(I18n.t("edit.error.uploadFailed", session.remotePath()), e);
+            String title = switch (e) {
+                case RemoteValidationException v when v.rolledBack() ->
+                        I18n.t("edit.error.validationFailed", session.remotePath());
+                case RemoteValidationException _ -> I18n.t("edit.error.rollbackFailed", session.remotePath());
+                case SudoAuthException _ -> I18n.t("edit.error.sudoAuth", session.remotePath());
+                default -> I18n.t("edit.error.uploadFailed", session.remotePath());
+            };
+            showError(title, e);
         }
     }
 

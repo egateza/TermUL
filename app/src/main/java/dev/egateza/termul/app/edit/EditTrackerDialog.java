@@ -118,7 +118,7 @@ public final class EditTrackerDialog extends JDialog {
             var s = e.session();
             return switch (col) {
                 case 0 -> e.profile().name();
-                case 1 -> s.remotePath();
+                case 1 -> e.isSudo() ? I18n.t("edit.tracker.sudoPath", s.remotePath()) : s.remotePath();
                 case 2 -> switch (s.state()) {
                     case OPENING -> I18n.t("edit.tracker.state.opening");
                     case EDITING -> I18n.t("edit.tracker.state.synced");

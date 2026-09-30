@@ -38,6 +38,11 @@ public final class SwingCredentialProvider implements CredentialProvider {
     }
 
     private char[] ask(String title, String message) {
+        return askPassword(parent, title, message);
+    }
+
+    /** Dialog satu field password (dijalankan di EDT, pemanggil menunggu). @return null kalau dibatalkan */
+    public static char[] askPassword(Supplier<Component> parent, String title, String message) {
         var result = new AtomicReference<char[]>();
         Edt.runAndWait(() -> {
             var field = new JPasswordField(24);

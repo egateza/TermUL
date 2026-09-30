@@ -3,6 +3,7 @@ package dev.egateza.termul.app.ui;
 import dev.egateza.termul.app.AppContext;
 import dev.egateza.termul.app.edit.EditTrackerDialog;
 import dev.egateza.termul.app.edit.EditorSettingsDialog;
+import dev.egateza.termul.app.edit.ValidationHooksDialog;
 import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.app.log.LogBuffer;
 import dev.egateza.termul.app.log.LogPanel;
@@ -323,6 +324,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
         var settings = new JMenu(I18n.t("menu.settings"));
         settings.add(menuItem(null, I18n.t("main.menu.settings.editors"), null, this::configureEditors));
+        settings.add(menuItem(null, I18n.t("main.menu.settings.validationHooks"), null, this::configureValidationHooks));
         settings.add(buildHostPanelMenu());
         settings.add(buildThemeMenu());
         settings.add(menuItem(null, I18n.t("menu.settings.fonts"), null, this::configureFonts));
@@ -362,6 +364,12 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         EditorSettingsDialog.show(this, ctx.config().current().editors()).ifPresent(editors ->
                 mutate(I18n.t("error.saveSettings"), () ->
                         ctx.config().save(ctx.config().current().withEditors(editors))));
+    }
+
+    private void configureValidationHooks() {
+        ValidationHooksDialog.show(this, ctx.config().current().validationHooks()).ifPresent(hooks ->
+                mutate(I18n.t("error.saveSettings"), () ->
+                        ctx.config().save(ctx.config().current().withValidationHooks(hooks))));
     }
 
     private boolean floatingMode() {
@@ -1031,6 +1039,11 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                     @Override
                     public void edit(HostProfile profile, String remotePath, String command) {
                         ctx.edits().open(profile, remotePath, command);
+                    }
+
+                    @Override
+                    public void editAsRoot(HostProfile profile, String remotePath) {
+                        ctx.edits().openAsRoot(profile, remotePath);
                     }
 
                     @Override

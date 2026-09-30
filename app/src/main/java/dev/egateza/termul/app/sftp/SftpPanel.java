@@ -85,6 +85,9 @@ public class SftpPanel extends JPanel {
         /** @param command template editor pilihan user; null = editor default sesuai ekstensi */
         void edit(HostProfile profile, String remotePath, String command);
 
+        /** Edit sebagai root: perubahan dipasang lewat sudo (backup, validasi, rollback). */
+        void editAsRoot(HostProfile profile, String remotePath);
+
         /** Editor bernama untuk submenu "Edit dengan"; dibaca setiap menu dibuka. */
         java.util.List<dev.egateza.termul.core.config.EditorConfig.NamedEditor> editors();
 
@@ -198,8 +201,10 @@ public class SftpPanel extends JPanel {
         var menu = new JPopupMenu();
         var edit = menuItem(I18n.t("sftp.menu.edit"), () -> editSelected(null));
         var editWith = new javax.swing.JMenu(I18n.t("sftp.menu.editWith"));
+        var editAsRoot = menuItem(I18n.t("sftp.menu.editAsRoot"), this::editSelectedAsRoot);
         menu.add(edit);
         menu.add(editWith);
+        menu.add(editAsRoot);
         menu.addSeparator();
         menu.addPopupMenuListener(new javax.swing.event.PopupMenuListener() {
             @Override
@@ -208,6 +213,7 @@ public class SftpPanel extends JPanel {
                 boolean file = selectedEntries().stream().anyMatch(en -> en.type() == RemoteEntry.Type.FILE);
                 edit.setEnabled(file);
                 editWith.setEnabled(file);
+                editAsRoot.setEnabled(file);
                 rebuildEditWith(editWith);
             }
 
@@ -604,6 +610,11 @@ public class SftpPanel extends JPanel {
         selectedEntries().stream().filter(e -> e.type() == RemoteEntry.Type.FILE).findFirst().ifPresent(entry -> {
             editActions.edit(profile, entry.path(), command);
         });
+    }
+
+    private void editSelectedAsRoot() {
+        selectedEntries().stream().filter(e -> e.type() == RemoteEntry.Type.FILE).findFirst()
+                .ifPresent(entry -> editActions.editAsRoot(profile, entry.path()));
     }
 
     protected List<RemoteEntry> selectedEntries() {
