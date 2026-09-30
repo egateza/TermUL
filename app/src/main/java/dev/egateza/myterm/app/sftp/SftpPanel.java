@@ -1,6 +1,7 @@
 package dev.egateza.myterm.app.sftp;
 
 import dev.egateza.myterm.app.ui.Dialogs;
+import dev.egateza.myterm.app.ui.Edt;
 import dev.egateza.myterm.app.ui.UiAsync;
 import dev.egateza.myterm.core.profile.HostProfile;
 import dev.egateza.myterm.sftp.RemoteEntry;
@@ -9,27 +10,40 @@ import dev.egateza.myterm.sftp.RemotePaths;
 import dev.egateza.myterm.ssh.SessionManager;
 import java.awt.BorderLayout;
 import java.awt.Component;
+import java.awt.Toolkit;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.datatransfer.StringSelection;
+import java.awt.datatransfer.UnsupportedFlavorException;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JComponent;
+import javax.swing.JFileChooser;
 import javax.swing.JLabel;
+import javax.swing.JMenuItem;
 import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.JToolBar;
 import javax.swing.KeyStroke;
 import javax.swing.ListSelectionModel;
+import javax.swing.TransferHandler;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableRowSorter;
 import org.slf4j.Logger;
@@ -109,9 +123,226 @@ public class SftpPanel extends JPanel {
         bind(KeyEvent.VK_BACK_SPACE, 0, "up", this::goUp);
         bind(KeyEvent.VK_F5, 0, "refresh", this::refresh);
 
-        add(new JScrollPane(table), BorderLayout.CENTER);
+        toolbar.add(button("⬆ Upload", "Upload file lokal ke direktori ini (atau drag & drop dari Explorer)", this::chooseUpload));
+        toolbar.add(button("⬇ Download", "Download file terpilih", this::downloadSelected));
+        toolbar.addSeparator();
+        toolbar.add(button("+📁", "Direktori baru (F7)", this::mkdir));
+        toolbar.add(button("✎", "Rename (F2)", this::renameSelected));
+        toolbar.add(button("chmod", "Ubah permission", this::chmodSelected));
+        toolbar.add(button("🗑", "Hapus (Delete)", this::deleteSelected));
+        bind(KeyEvent.VK_F2, 0, "rename", this::renameSelected);
+        bind(KeyEvent.VK_F7, 0, "mkdir", this::mkdir);
+        bind(KeyEvent.VK_DELETE, 0, "delete", this::deleteSelected);
+        table.setComponentPopupMenu(buildPopup());
+
+        var scroll = new JScrollPane(table);
+        var dnd = new FileDropHandler();
+        table.setTransferHandler(dnd);
+        scroll.setTransferHandler(dnd);
+        add(scroll, BorderLayout.CENTER);
+
+        transfers = new TransferQueue(profile.name());
         status.setBorder(BorderFactory.createEmptyBorder(2, 6, 2, 6));
-        add(status, BorderLayout.SOUTH);
+        var bottom = new JPanel(new BorderLayout());
+        bottom.add(transfers, BorderLayout.NORTH);
+        bottom.add(status, BorderLayout.SOUTH);
+        add(bottom, BorderLayout.SOUTH);
+    }
+
+    private final TransferQueue transfers;
+
+    private JPopupMenu buildPopup() {
+        var menu = new JPopupMenu();
+        menu.add(menuItem("Download...", this::downloadSelected));
+        menu.add(menuItem("Upload ke sini...", this::chooseUpload));
+        menu.addSeparator();
+        menu.add(menuItem("Rename...", this::renameSelected));
+        menu.add(menuItem("chmod...", this::chmodSelected));
+        menu.add(menuItem("Hapus...", this::deleteSelected));
+        menu.addSeparator();
+        menu.add(menuItem("Direktori baru...", this::mkdir));
+        menu.add(menuItem("Salin path", () -> selectedEntries().stream().findFirst().ifPresent(e ->
+                Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(e.path()), null))));
+        menu.add(menuItem("Refresh", this::refresh));
+        return menu;
+    }
+
+    private static JMenuItem menuItem(String label, Runnable action) {
+        var item = new JMenuItem(label);
+        item.addActionListener(e -> action.run());
+        return item;
+    }
+
+    // ------------------------------------------------------------------ transfer
+
+    private void chooseUpload() {
+        if (service == null || currentDir == null) {
+            return;
+        }
+        var chooser = new JFileChooser();
+        chooser.setMultiSelectionEnabled(true);
+        chooser.setDialogTitle("Upload ke " + currentDir);
+        if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+            upload(List.of(chooser.getSelectedFiles()).stream().map(File::toPath).toList());
+        }
+    }
+
+    /** Upload file ke direktori saat ini. Direktori lokal dilewati (belum didukung). */
+    public void upload(List<Path> files) {
+        if (service == null || currentDir == null) {
+            return;
+        }
+        String dir = currentDir;
+        var skipped = new ArrayList<String>();
+        for (Path file : files) {
+            if (!Files.isRegularFile(file)) {
+                skipped.add(file.getFileName().toString());
+                continue;
+            }
+            String target = RemotePaths.join(dir, file.getFileName().toString());
+            transfers.submit("Upload " + file.getFileName(), listener -> {
+                if (service.exists(target) && !confirmOverwrite(target)) {
+                    return;
+                }
+                service.upload(file, target, null, listener);
+            }, () -> {
+                if (dir.equals(currentDir)) {
+                    refresh();
+                }
+            }, err -> Dialogs.error(this, "Upload gagal", err));
+        }
+        if (!skipped.isEmpty()) {
+            Dialogs.info(this, "Upload", "Upload direktori belum didukung, dilewati: " + String.join(", ", skipped));
+        }
+    }
+
+    private boolean confirmOverwrite(String target) {
+        var ok = new AtomicBoolean();
+        Edt.runAndWait(() -> ok.set(Dialogs.confirm(this, "File sudah ada", "Timpa " + target + "?")));
+        return ok.get();
+    }
+
+    private void downloadSelected() {
+        var selected = selectedEntries().stream().filter(e -> e.type() == RemoteEntry.Type.FILE).toList();
+        if (selected.isEmpty()) {
+            return;
+        }
+        var chooser = new JFileChooser();
+        chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+        chooser.setDialogTitle("Download " + selected.size() + " file ke...");
+        if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) {
+            return;
+        }
+        Path targetDir = chooser.getSelectedFile().toPath();
+        for (RemoteEntry entry : selected) {
+            Path target = targetDir.resolve(entry.name());
+            transfers.submit("Download " + entry.name(), listener -> {
+                if (Files.exists(target) && !confirmOverwrite(target.toString())) {
+                    return;
+                }
+                service.download(entry.path(), target, listener);
+            }, () -> status.setText("Tersimpan: " + target), err -> Dialogs.error(this, "Download gagal", err));
+        }
+    }
+
+    // ------------------------------------------------------------------ operasi file
+
+    private void mkdir() {
+        if (service == null || currentDir == null) {
+            return;
+        }
+        String name = Dialogs.input(this, "Direktori baru", "Nama direktori di " + currentDir + ":", "");
+        if (name != null) {
+            String path = RemotePaths.join(currentDir, name);
+            call(() -> {
+                service.mkdir(path);
+                return path;
+            }, p -> refresh());
+        }
+    }
+
+    private void renameSelected() {
+        var selected = selectedEntries();
+        if (selected.size() != 1) {
+            return;
+        }
+        RemoteEntry entry = selected.getFirst();
+        String name = Dialogs.input(this, "Rename", "Nama baru untuk " + entry.name() + ":", entry.name());
+        if (name != null && !name.equals(entry.name())) {
+            String target = RemotePaths.join(RemotePaths.parent(entry.path()), name);
+            call(() -> {
+                service.rename(entry.path(), target);
+                return target;
+            }, t -> refresh());
+        }
+    }
+
+    private void chmodSelected() {
+        var selected = selectedEntries();
+        if (selected.isEmpty()) {
+            return;
+        }
+        String initial = String.format("%04o", selected.getFirst().mode());
+        String text = Dialogs.input(this, "chmod", "Mode oktal untuk " + selected.size() + " item (mis. 644, 0755):", initial);
+        if (text == null) {
+            return;
+        }
+        int mode;
+        try {
+            mode = Formats.parseMode(text);
+        } catch (IllegalArgumentException e) {
+            Dialogs.error(this, "chmod", e.getMessage());
+            return;
+        }
+        call(() -> {
+            for (RemoteEntry e : selected) {
+                service.chmod(e.path(), mode);
+            }
+            return selected.size();
+        }, n -> refresh());
+    }
+
+    private void deleteSelected() {
+        var selected = selectedEntries();
+        if (selected.isEmpty()) {
+            return;
+        }
+        long dirs = selected.stream().filter(RemoteEntry::isDirectory).count();
+        String what = selected.size() == 1 ? selected.getFirst().path() : selected.size() + " item";
+        String warning = dirs > 0 ? "\n\nPERHATIAN: direktori dihapus beserta seluruh isinya." : "";
+        if (!Dialogs.confirm(this, "Hapus", "Hapus " + what + " secara permanen?" + warning)) {
+            return;
+        }
+        call(() -> {
+            for (RemoteEntry e : selected) {
+                service.delete(e.path(), e.isDirectory());
+            }
+            return selected.size();
+        }, n -> refresh());
+    }
+
+    /** Drag & drop file dari Windows Explorer → upload ke direktori saat ini. */
+    private final class FileDropHandler extends TransferHandler {
+        @Override
+        public boolean canImport(TransferSupport support) {
+            return service != null && support.isDataFlavorSupported(DataFlavor.javaFileListFlavor);
+        }
+
+        @Override
+        public boolean importData(TransferSupport support) {
+            if (!canImport(support)) {
+                return false;
+            }
+            try {
+                @SuppressWarnings("unchecked")
+                var files = (List<File>) support.getTransferable().getTransferData(DataFlavor.javaFileListFlavor);
+                upload(files.stream().map(File::toPath).toList());
+                return true;
+            } catch (UnsupportedFlavorException | IOException e) {
+                log.warn("Drop gagal", e);
+                return false;
+            }
+        }
     }
 
     /** Connect (sekali) lalu buka direktori awal profil atau home. */
@@ -248,6 +479,7 @@ public class SftpPanel extends JPanel {
 
     /** Menutup SFTP (tab ditutup). */
     public void dispose() {
+        transfers.shutdown();
         var svc = service;
         service = null;
         if (svc != null) {

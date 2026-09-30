@@ -53,8 +53,9 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 ### Fase 3: Panel SFTP
 - [x] `RemoteFileService` di atas `SftpClient` (connection handle yang sama)
 - [x] Panel: list dir, navigasi, sort, refresh, mode/owner/size/mtime
-- [~] Upload/download + drag & drop + progress/cancel (service + test selesai, UI belum)
-- [~] Rename, mkdir, delete (konfirmasi), chmod (service + test selesai, UI belum)
+- [x] Upload/download + drag & drop + progress/cancel
+- [x] Rename, mkdir, delete (konfirmasi), chmod
+- [ ] Acceptance (manual): transfer 500 MB tidak membuat UI freeze dan bisa di-cancel
 
 ### Fase 4: Edit dengan editor lokal
 - [ ] Konfigurasi editor per ekstensi (default `code --wait`)
@@ -81,6 +82,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 | Tanggal | Commit | Task |
 |---|---|---|
+| 2026-09-30 | `feat(app): tambah upload/download dengan antrean + progress/cancel, drag & drop, rename, mkdir, delete, chmod di panel SFTP` | Operasi SFTP: transfer queue, DnD, rename/mkdir/delete/chmod |
 | 2026-09-30 | `feat(app): tambah panel SFTP (browse, sort, refresh) per tab dan perbaiki shortcut agar jalan saat fokus di terminal` | Panel SFTP browse + dispatcher shortcut |
 | 2026-09-30 | `feat(sftp): tambah RemoteFileService dengan upload atomic, progress/cancel, dan integration test OpenSSH` | RemoteFileService (SFTP) |
 | 2026-09-30 | `feat(app): tambah hotkey Ctrl+Shift+P/Ctrl+Shift+R untuk inject password sudo/root dari vault` | Hotkey inject sudo/root |
@@ -101,7 +103,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 ## Langkah berikutnya
 
-- Toolbar SFTP: upload/download (+ drag & drop Explorer, progress/cancel), rename, mkdir, delete, chmod.
+- Fase 4: konfigurasi editor per ekstensi + RemoteEditSession (download ke cache + baseline stat) di modul sftp.
 
 ## Catatan / blocker
 

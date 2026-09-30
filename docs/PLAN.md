@@ -34,8 +34,8 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 ## Fase 3: Panel SFTP (±2 minggu)
 - [x] `RemoteFileService` di atas `SftpClient` (memakai connection handle yang sama)
 - [x] Panel: list dir, navigasi, sort, refresh, tampilan mode/owner/size/mtime
-- [ ] Upload/download + drag & drop dari Explorer + progress/cancel
-- [ ] Rename, mkdir, delete (konfirmasi), chmod
+- [x] Upload/download + drag & drop dari Explorer + progress/cancel
+- [x] Rename, mkdir, delete (konfirmasi), chmod
 
 **Acceptance**: transfer file 500 MB tidak membuat UI freeze dan bisa di-cancel.
 
