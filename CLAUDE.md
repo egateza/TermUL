@@ -81,8 +81,8 @@ Arah dependensi: `app → terminal, sftp → ssh → core`, dan `vault → core`
 
 ## Status saat ini
 
-- **Fase 1 selesai (kode)**; acceptance test manual menunggu. Progres & langkah berikutnya selalu di `plan-recap.md`.
-- Langkah berikutnya: Fase 2 di `docs/PLAN.md` (vault & inject password).
+- **Fase 1–4 selesai (kode + test)**; acceptance manual & review user menunggu. Fase 5–6 ditunda. Progres & langkah berikutnya selalu di `plan-recap.md`.
+- Langkah berikutnya: review, lalu Fase 5 di `docs/PLAN.md` (edit file root & auto-sudo).
 
 ## Peta dokumen
 
