@@ -10,12 +10,25 @@ class OsIconsTest {
 
     @Test
     void distroDikenalMemakaiWarnaKhas() {
-        var ubuntu = OsIcons.of(new OsInfo("ubuntu", "24.04", "Ubuntu 24.04 LTS"));
-        int center = paintCenter(ubuntu);
+        var debian = OsIcons.of(new OsInfo("debian", "12", "Debian GNU/Linux 12"));
+        int center = paintCenter(debian);
 
         assertThat(center & 0xFFFFFF).isNotEqualTo(0); // badge terisi, bukan transparan
-        assertThat(OsIcons.of(new OsInfo("ubuntu", null, null))).isSameAs(ubuntu); // cache per id
+        assertThat(OsIcons.of(new OsInfo("debian", null, null))).isSameAs(debian); // cache per id
         assertThat(OsIcons.STYLES).containsKeys("ubuntu", "debian", "alpine", "centos", "rocky", "rhel");
+    }
+
+    @Test
+    void ubuntuMemakaiLogoMultiResolusi() {
+        var img = OsIcons.loadLogo(OsIcons.LOGOS.get("ubuntu"));
+        assertThat(img).isInstanceOf(java.awt.image.MultiResolutionImage.class);
+        var variants = ((java.awt.image.MultiResolutionImage) img).getResolutionVariants();
+        assertThat(variants).extracting(v -> v.getWidth(null)).containsExactly(14, 28, 42, 56);
+
+        var icon = OsIcons.of(new OsInfo("ubuntu", "24.04", null));
+        assertThat(icon.getClass().getSimpleName()).isEqualTo("Logo");
+        assertThat(icon.getIconWidth()).isEqualTo(14);
+        assertThat(OsIcons.loadLogo("/tidak/ada.png")).isNull(); // fallback ke badge
     }
 
     @Test
