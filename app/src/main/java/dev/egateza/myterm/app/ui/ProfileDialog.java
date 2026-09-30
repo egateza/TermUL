@@ -3,6 +3,7 @@ package dev.egateza.myterm.app.ui;
 import dev.egateza.myterm.core.profile.AuthMethod;
 import dev.egateza.myterm.core.profile.EnvironmentTag;
 import dev.egateza.myterm.core.profile.HostProfile;
+import dev.egateza.myterm.core.profile.OsInfo;
 import dev.egateza.myterm.core.profile.ProfileSnapshot;
 import dev.egateza.myterm.vault.SecretType;
 import java.awt.BorderLayout;
@@ -51,6 +52,7 @@ public final class ProfileDialog extends JDialog {
     }
 
     private final UUID id;
+    private final OsInfo os; // hasil deteksi otomatis, dipertahankan saat edit
     private final JTextField name = new JTextField(24);
     private final JComboBox<String> group = new JComboBox<>();
     private final JTextField host = new JTextField(24);
@@ -77,6 +79,7 @@ public final class ProfileDialog extends JDialog {
                           Set<SecretType> storedSecrets) {
         super(owner, title, ModalityType.APPLICATION_MODAL);
         this.id = initial == null ? UUID.randomUUID() : initial.id();
+        this.os = initial == null ? null : initial.os();
         this.storedSecrets = Set.copyOf(storedSecrets);
         for (SecretType type : SecretType.values()) {
             secretFields.put(type, new JPasswordField(20));
@@ -194,7 +197,7 @@ public final class ProfileDialog extends JDialog {
                     host.getText(), (Integer) port.getValue(), username.getText(),
                     (AuthMethod) auth.getSelectedItem(), keyPath.getText(),
                     jump == null || jump.profile() == null ? null : jump.profile().id(),
-                    env, initialDir.getText(), notes.getText(), autoSudo.isSelected());
+                    env, initialDir.getText(), notes.getText(), autoSudo.isSelected(), os);
             result = new Result(profile, collectSecretChanges());
             dispose();
         } catch (IllegalArgumentException e) {

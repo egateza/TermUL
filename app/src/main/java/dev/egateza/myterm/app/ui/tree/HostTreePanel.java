@@ -1,6 +1,7 @@
 package dev.egateza.myterm.app.ui.tree;
 
 import dev.egateza.myterm.app.ui.EnvColors;
+import dev.egateza.myterm.app.ui.OsIcons;
 import dev.egateza.myterm.app.ui.tree.HostTreeModelBuilder.GroupNode;
 import dev.egateza.myterm.core.profile.HostProfile;
 import dev.egateza.myterm.core.profile.ProfileSnapshot;
@@ -284,7 +285,9 @@ public final class HostTreePanel extends JPanel {
                 var color = EnvColors.of(p.environment());
                 String dot = color == null ? "" : "<font color='#%06x'>&#9679;</font> ".formatted(color.getRGB() & 0xFFFFFF);
                 setText("<html>" + dot + escape(p.name()) + " <font color='gray'>" + escape(p.address()) + "</font></html>");
-                setToolTipText(p.notes());
+                setIcon(OsIcons.of(p.os()));
+                String os = escape(OsIcons.label(p.os()));
+                setToolTipText(p.notes() == null ? os : "<html>" + os + "<br>" + escape(p.notes()) + "</html>");
             } else {
                 setToolTipText(null);
             }

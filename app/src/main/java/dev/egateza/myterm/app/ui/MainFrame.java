@@ -15,7 +15,10 @@ import java.util.Set;
 import java.util.function.BiConsumer;
 import dev.egateza.myterm.core.profile.HostProfile;
 import dev.egateza.myterm.core.profile.ProfileSnapshot;
+import dev.egateza.myterm.core.profile.OsInfo;
 import dev.egateza.myterm.core.profile.ProfileStore;
+import dev.egateza.myterm.ssh.OsDetector;
+import dev.egateza.myterm.terminal.SshTtyConnector;
 import dev.egateza.myterm.sftp.edit.RemoteEditSession;
 import dev.egateza.myterm.vault.SecretType;
 import java.awt.BorderLayout;
@@ -248,6 +251,36 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         return menu;
     }
 
+    /** Profil yang OS-nya sudah dideteksi pada run ini (sekali per profil per run). EDT. */
+    private final Set<java.util.UUID> osDetected = new java.util.HashSet<>();
+
+    /** Deteksi OS di background setelah connect; hasil disimpan ke profil (untuk ikon tree & tab). */
+    private void detectOs(java.util.UUID profileId, SshTtyConnector tty) {
+        if (!osDetected.add(profileId)) {
+            return;
+        }
+        UiAsync.run(ctx.sshOps(), () -> {
+            try {
+                return OsDetector.detect(tty.lease().connection());
+            } catch (IllegalStateException e) { // lease sudah dilepas (tab keburu ditutup)
+                return java.util.Optional.<OsInfo>empty();
+            }
+        }, os -> os.ifPresentOrElse(detected -> {
+            updateTabIcons(profileId, detected);
+            mutate("Gagal menyimpan info OS", () -> store.snapshot().find(profileId)
+                    .filter(current -> !detected.equals(current.os()))
+                    .ifPresent(current -> store.save(current.withOs(detected))));
+        }, () -> osDetected.remove(profileId)), err -> osDetected.remove(profileId));
+    }
+
+    private void updateTabIcons(java.util.UUID profileId, OsInfo os) {
+        for (int i = 0; i < tabs.getTabCount(); i++) {
+            if (tabs.getComponentAt(i) instanceof TerminalTab t && t.profile().id().equals(profileId)) {
+                tabs.setIconAt(i, OsIcons.of(os));
+            }
+        }
+    }
+
     private EditTrackerDialog editTracker;
 
     private void showEditTracker() {
@@ -390,6 +423,8 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         tabs.addTab(tabTitle(profile), tab);
         int index = tabs.indexOfComponent(tab);
         tabs.setToolTipTextAt(index, profile.address());
+        tabs.setIconAt(index, OsIcons.of(profile.os()));
+        tab.setConnectedListener(tty -> detectOs(profile.id(), tty));
         tabs.setSelectedIndex(index);
         updateCenter();
         tab.connect();

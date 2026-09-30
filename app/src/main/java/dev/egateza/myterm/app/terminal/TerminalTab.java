@@ -69,6 +69,13 @@ public final class TerminalTab extends JPanel {
         add(content, BorderLayout.CENTER);
     }
 
+    private java.util.function.Consumer<SshTtyConnector> connectedListener; // EDT
+
+    /** Dipanggil (di EDT) setiap kali terminal berhasil connect, termasuk setelah reconnect. */
+    public void setConnectedListener(java.util.function.Consumer<SshTtyConnector> listener) {
+        this.connectedListener = listener;
+    }
+
     /** Menampilkan/menyembunyikan panel SFTP di kiri terminal (koneksi SSH yang sama). */
     public void toggleSftp() {
         if (split != null) {
@@ -137,6 +144,9 @@ public final class TerminalTab extends JPanel {
         tty.addCloseListener(c -> SwingUtilities.invokeLater(() -> onClosed(c)));
         showCenter(widget);
         widget.start();
+        if (connectedListener != null) {
+            connectedListener.accept(tty);
+        }
         widget.requestFocusInWindow();
     }
 
