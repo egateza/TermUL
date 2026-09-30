@@ -31,7 +31,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] Maven multi-module + wrapper + enforcer
 - [x] Main window FlatLaf (host tree | tab area)
 - [x] `HostProfile` + `ProfileStore` (JSON, atomic write)
-- [ ] Dialog tambah/edit profil
+- [x] Dialog tambah/edit profil
 - [ ] `SessionManager` (connect, auth key/agent/password prompt)
 - [ ] `HostKeyVerifier` (known_hosts + TOFU)
 - [ ] `SshTtyConnector` + tab JediTerm
@@ -44,6 +44,7 @@ Belum dimulai. Lihat `docs/PLAN.md`.
 
 | Tanggal | Commit | Task |
 |---|---|---|
+| 2026-09-30 | `feat(app): tambah dialog tambah/edit profil host` | Dialog profil |
 | 2026-09-30 | `feat(app): tambah main window FlatLaf dengan host tree, grup, dan pencarian` | Main window + host tree |
 | 2026-09-30 | `feat(core): tambah HostProfile, AppPaths, dan ProfileStore JSON dengan atomic write` | HostProfile + ProfileStore |
 | 2026-09-30 | `build: tambah skeleton Maven multi-module, wrapper, dan enforcer` | Skeleton Maven multi-module |
@@ -51,7 +52,7 @@ Belum dimulai. Lihat `docs/PLAN.md`.
 
 ## Langkah berikutnya
 
-- Dialog tambah/edit profil (ProfileDialog) di modul app.
+- SessionManager dengan MINA SSHD + HostKeyVerifier (modul ssh).
 
 ## Catatan / blocker
 

@@ -14,7 +14,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] Maven multi-module (`core`, `vault`, `ssh`, `terminal`, `sftp`, `app`): parent POM dengan `dependencyManagement`/`pluginManagement`, Maven Wrapper, enforcer (Java 25, Maven ≥ 3.9)
 - [x] Main window FlatLaf: split host tree | tab area
 - [x] `HostProfile` record + `ProfileStore` (JSON, atomic write)
-- [ ] Dialog tambah/edit profil
+- [x] Dialog tambah/edit profil
 - [ ] `SessionManager` dengan MINA: connect, auth key/agent/password (prompt manual dulu)
 - [ ] `HostKeyVerifier`: known_hosts + dialog TOFU
 - [ ] `SshTtyConnector` + tab JediTerm, resize, dan close yang rapi

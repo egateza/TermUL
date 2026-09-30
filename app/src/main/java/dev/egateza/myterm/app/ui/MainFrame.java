@@ -132,12 +132,14 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
     @Override
     public void newHost(String group) {
-        Dialogs.info(this, "Belum tersedia", "Dialog profil belum diimplementasikan.");
+        ProfileDialog.create(this, group, store.snapshot())
+                .ifPresent(p -> mutate("Gagal menyimpan profil", () -> store.save(p)));
     }
 
     @Override
     public void edit(HostProfile profile) {
-        Dialogs.info(this, "Belum tersedia", "Dialog profil belum diimplementasikan.");
+        ProfileDialog.edit(this, profile, store.snapshot())
+                .ifPresent(p -> mutate("Gagal menyimpan profil", () -> store.save(p)));
     }
 
     @Override
