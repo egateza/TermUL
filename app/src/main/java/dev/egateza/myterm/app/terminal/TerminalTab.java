@@ -1,6 +1,5 @@
 package dev.egateza.myterm.app.terminal;
 
-import com.jediterm.terminal.ui.JediTermWidget;
 import dev.egateza.myterm.app.sftp.SftpPanel;
 import dev.egateza.myterm.app.ui.Dialogs;
 import dev.egateza.myterm.app.ui.UiAsync;
@@ -47,7 +46,7 @@ public final class TerminalTab extends JPanel {
     private final Executor sshOps;
     private final TerminalSettings settings;
     private final JPanel banner = new JPanel(new BorderLayout());
-    private JediTermWidget widget;       // hanya diakses di EDT
+    private ZoomableTermWidget widget;   // hanya diakses di EDT
     private SshTtyConnector connector;   // hanya diakses di EDT
     private CompletableFuture<SshTtyConnector> pending; // hanya diakses di EDT
     private boolean disposed;            // hanya diakses di EDT
@@ -63,7 +62,7 @@ public final class TerminalTab extends JPanel {
         this.profile = profile;
         this.factory = factory;
         this.sshOps = sshOps;
-        this.settings = settings;
+        this.settings = settings.copy(); // zoom per tab
         this.sftpFactory = sftpFactory;
         content.add(banner, BorderLayout.NORTH);
         banner.setVisible(false);
@@ -133,7 +132,7 @@ public final class TerminalTab extends JPanel {
             return;
         }
         connector = tty;
-        widget = new JediTermWidget(settings);
+        widget = new ZoomableTermWidget(settings);
         widget.setTtyConnector(tty);
         tty.addCloseListener(c -> SwingUtilities.invokeLater(() -> onClosed(c)));
         showCenter(widget);
@@ -205,6 +204,11 @@ public final class TerminalTab extends JPanel {
     private boolean swallowTyped; // EDT
 
     private boolean handlePressed(KeyEvent e) {
+        Integer zoom = zoomDirection(e);
+        if (zoom != null) {
+            zoom(zoom);
+            return true;
+        }
         boolean enter = e.getKeyCode() == KeyEvent.VK_ENTER && e.getModifiersEx() == 0;
         boolean ctrlD = e.getKeyCode() == KeyEvent.VK_D
                 && e.getModifiersEx() == InputEvent.CTRL_DOWN_MASK;
@@ -231,6 +235,35 @@ public final class TerminalTab extends JPanel {
             return true;
         }
         return false;
+    }
+
+    /**
+     * Arah zoom dari shortcut: Ctrl + (+, =, numpad +) → 1, Ctrl + (-, numpad -) → -1, Ctrl+0 → 0 (reset).
+     * Shift boleh (di keyboard US, '+' = Shift+'='); Alt tidak.
+     */
+    static Integer zoomDirection(KeyEvent e) {
+        int mods = e.getModifiersEx() & ~InputEvent.SHIFT_DOWN_MASK;
+        if (mods != InputEvent.CTRL_DOWN_MASK) {
+            return null;
+        }
+        return switch (e.getKeyCode()) {
+            case KeyEvent.VK_EQUALS, KeyEvent.VK_PLUS, KeyEvent.VK_ADD -> 1;
+            case KeyEvent.VK_MINUS, KeyEvent.VK_SUBTRACT -> e.isShiftDown() && e.getKeyCode() == KeyEvent.VK_MINUS
+                    ? null // Ctrl+Shift+- = Ctrl+_ (undo readline), biarkan ke terminal
+                    : -1;
+            case KeyEvent.VK_0, KeyEvent.VK_NUMPAD0 -> e.isShiftDown() ? null : 0;
+            default -> null;
+        };
+    }
+
+    /** @param direction 1 = perbesar, -1 = perkecil, 0 = ukuran default */
+    public void zoom(int direction) {
+        float size = direction == 0 ? settings.defaultSize() : settings.getTerminalFontSize() + direction;
+        float applied = settings.setFontSize(size);
+        if (widget != null) {
+            widget.refreshFont();
+        }
+        log.debug("Zoom terminal {}: {}pt", profile.address(), applied);
     }
 
     private boolean confirmExit() {

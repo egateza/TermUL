@@ -179,6 +179,14 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                 () -> closeTab(tabs.getSelectedIndex())));
         terminal.add(menuItem("Panel SFTP", KeyStroke.getKeyStroke(KeyEvent.VK_F, ctrlShift),
                 () -> currentTab().ifPresent(TerminalTab::toggleSftp)));
+        terminal.addSeparator();
+        terminal.add(menuItem("Zoom in", KeyStroke.getKeyStroke(KeyEvent.VK_EQUALS, InputEvent.CTRL_DOWN_MASK),
+                () -> currentTab().ifPresent(t -> t.zoom(1))));
+        terminal.add(menuItem("Zoom out", KeyStroke.getKeyStroke(KeyEvent.VK_MINUS, InputEvent.CTRL_DOWN_MASK),
+                () -> currentTab().ifPresent(t -> t.zoom(-1))));
+        terminal.add(menuItem("Ukuran font default", KeyStroke.getKeyStroke(KeyEvent.VK_0, InputEvent.CTRL_DOWN_MASK),
+                () -> currentTab().ifPresent(t -> t.zoom(0))));
+        terminal.addSeparator();
         terminal.add(menuItem("File yang sedang diedit...", KeyStroke.getKeyStroke(KeyEvent.VK_E, ctrlShift),
                 this::showEditTracker));
         terminal.addSeparator();
