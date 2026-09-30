@@ -55,12 +55,13 @@ public final class AuthSetup {
                 session.setKeyIdentityProvider(keyProvider(List.of(key), profile, credentials, cancelled));
             }
             case AGENT -> {
-                // Sementara: fallback ke key default di ~/.ssh (agent Windows menyusul, lihat plan-recap.md)
+                // Seperti klien ssh biasa: coba key default di ~/.ssh (kalau ada), lalu password.
+                // (Agent Windows sungguhan menyusul, lihat plan-recap.md)
                 var keys = defaultKeyFiles();
-                if (keys.isEmpty()) {
-                    throw new SshConnectException("Tidak ada key di ~/.ssh (id_ed25519/id_ecdsa/id_rsa) untuk auth agent/default");
+                if (!keys.isEmpty()) {
+                    session.setKeyIdentityProvider(keyProvider(keys, profile, credentials, cancelled));
                 }
-                session.setKeyIdentityProvider(keyProvider(keys, profile, credentials, cancelled));
+                session.setUserInteraction(new PasswordInteraction(profile, credentials, new AtomicInteger(), cancelled));
             }
             case PASSWORD -> {
                 var attempts = new AtomicInteger();

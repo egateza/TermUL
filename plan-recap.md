@@ -83,6 +83,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 | Tanggal | Commit | Task |
 |---|---|---|
+| 2026-09-30 | `fix(ssh): auth default mencoba key ~/.ssh lalu jatuh ke password seperti klien ssh biasa` | Fix auth default tanpa key |
 | 2026-09-30 | `feat(app): edit file remote dengan editor lokal, auto-upload saat disimpan, dialog konflik/CRLF, dan EditTracker` | EditManager + dialog konflik/CRLF + EditTracker |
 | 2026-09-30 | `refactor(sftp): RemoteEditSession bisa rebind ke koneksi SFTP baru untuk retry setelah reconnect` | Refactor Uploader + rebind |
 | 2026-09-30 | `feat(sftp): tambah EditWatcher dengan WatchService dan debounce per file` | EditWatcher (WatchService + debounce) |
@@ -109,22 +110,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 ## Langkah berikutnya
 
-**Status 2026-09-30:** Fase 1–4 selesai (kode + test). Fase 5 & 6 **ditunda** atas permintaan user, menunggu review.
-
-1. **Review oleh user** (urutan saran, per modul):
-   - `core/` → `HostProfile`, `ProfileStore`, `config/EditorConfig`
-   - `vault/` → `FileCredentialVault` (format file di `docs/adr/0002-vault-design.md`)
-   - `ssh/` → `SessionManager`, `auth/AuthSetup` (batas String MINA), `hostkey/AppServerKeyVerifier`
-   - `terminal/` → `SshTtyConnector`
-   - `sftp/` → `RemoteFileService`, `edit/RemoteEditSession`, `edit/EditWatcher`, `edit/EditCache`
-   - `app/` → `MyTermApp` (wiring), `ui/MainFrame`, `terminal/TerminalTab`, `sftp/SftpPanel`, `edit/EditManager`
-2. **Acceptance test manual** Fase 1–4 (checkbox "Acceptance" di atas), dengan data dev terpisah:
-   `mvnw.cmd -pl app exec:java -Dmyterm.home=D:\tmp\myterm-dev`
-3. Setelah review: **Fase 5** — `SudoWriter` (upload `/tmp` → `sudo -S install`), backup + validation hook + rollback,
-   `PromptResponder` auto-sudo dengan semua guard (lihat `docs/SECURITY.md`), toggle per host. Hook yang sudah disiapkan:
-   `RemoteEditSession.Uploader` (ganti uploader untuk file root), `SshTtyConnector.addOutputListener` (tap output),
-   `SshTtyConnector.writeSecret`, field `HostProfile.autoSudo`.
-4. Lalu **Fase 6** (lihat checklist di atas).
+- Review hasil Fase 1–4 oleh user + acceptance test manual. Setelah itu Fase 5 lalu Fase 6.
 
 ## Shortcut aplikasi (untuk uji manual)
 
@@ -140,7 +126,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 ## Catatan / blocker
 
 - JediTerm 3.76 tidak ada di Maven Central → pakai repo `https://packages.jetbrains.team/maven/p/ij/intellij-dependencies`.
-- Auth `AGENT` **sementara** memakai key default `~/.ssh/id_ed25519|id_ecdsa|id_rsa` (bukan agent sungguhan). Agent Windows (named pipe `\\.\pipe\openssh-ssh-agent`) bisa dibuat dengan subclass `AbstractAgentProxy` MINA — belum dikerjakan.
+- Auth `AGENT` (label "Default") **sementara** memakai key default `~/.ssh/id_ed25519|id_ecdsa|id_rsa` lalu jatuh ke password (bukan agent sungguhan). Agent Windows (named pipe `\\.\pipe\openssh-ssh-agent`) bisa dibuat dengan subclass `AbstractAgentProxy` MINA — belum dikerjakan.
 - Jump host (ProxyJump) ditolak dengan pesan jelas; dijadwalkan Fase 6.
 - Password login/passphrase harus jadi `String` di batas API MINA — dicatat di `docs/SECURITY.md` bagian "Keterbatasan yang diketahui".
 - Integration test (`*IT`) butuh Docker Desktop menyala; tanpa Docker otomatis di-skip.

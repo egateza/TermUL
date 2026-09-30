@@ -215,6 +215,18 @@ class SessionManagerTest {
     }
 
     @Test
+    void authDefaultTanpaKeyJatuhKePassword() throws Exception {
+        String originalHome = System.getProperty("user.home");
+        System.setProperty("user.home", dir.resolve("home-tanpa-key").toString());
+        try (var lease = manager.acquire(profile(AuthMethod.AGENT, null))) {
+            assertThat(lease.connection().isOpen()).isTrue();
+            assertThat(passwordPrompts).hasValue(1);
+        } finally {
+            System.setProperty("user.home", originalHome);
+        }
+    }
+
+    @Test
     void keyFileTidakAda() {
         assertThatThrownBy(() -> manager.acquire(profile(AuthMethod.KEY, dir.resolve("nope").toString())))
                 .isInstanceOf(SshConnectException.class)

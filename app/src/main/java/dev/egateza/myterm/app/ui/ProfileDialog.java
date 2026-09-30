@@ -92,7 +92,7 @@ public final class ProfileDialog extends JDialog {
                 .forEach(p -> jumpHost.addItem(new JumpChoice(p)));
         auth.setRenderer(labelRenderer(v -> switch ((AuthMethod) v) {
             case KEY -> "Private key";
-            case AGENT -> "SSH agent";
+            case AGENT -> "Default (key ~/.ssh, lalu password)";
             case PASSWORD -> "Password";
         }));
         environment.setRenderer(labelRenderer(v -> EnvColors.label((EnvironmentTag) v)));
