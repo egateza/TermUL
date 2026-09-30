@@ -74,6 +74,8 @@ Rekomendasi operasional (di luar aplikasi): untuk server prod, pertimbangkan aks
 
 - Auto-sudo meng-arm hanya kalau baris kursor dikenali sebagai prompt shell (heuristik `ExitGuard`); prompt dengan spasi (mis. `(venv) user@host:~$`) dan prompt `sudo-rs` (`[sudo: authenticate] Password:`, tanpa username) tidak dikenali, jadi auto-sudo tidak jalan (fail-safe). Hotkey tetap bisa dipakai.
 - Selama validasi berjalan (antara `mv` dan rollback), file baru yang invalid sempat terpasang sebentar.
+- ProxyJump memakai local forward `127.0.0.1:<port acak>` selama koneksi tujuan hidup. Proses lain di PC yang sama bisa memakai port itu untuk menjangkau port SSH host tujuan lewat jump host (tetap harus lolos auth SSH tujuan). Listener hanya di loopback dan ditutup bersama koneksi. Host key tujuan diverifikasi dengan alamat aslinya, bukan alamat tunnel.
+- Paste multi-baris ke host `PROD` selalu dikonfirmasi (preview + jumlah baris); host non-prod tidak.
 - **Password login & passphrase key di MINA berupa `String`.** API Apache MINA SSHD (`UserInteraction`, `FilePasswordProvider`) hanya menerima `String`. Konversi `char[] → String` dibatasi di satu tempat (`ssh/.../auth/AuthSetup.java`), dilakukan tepat saat MINA memintanya, dan `char[]` asal langsung di-zero. String itu tidak disimpan di field, tidak di-log, dan menjadi garbage setelah paket auth terkirim. Password sudo/su (inject ke terminal) tetap `char[]`/`byte[]` penuh.
 
 ## Logging

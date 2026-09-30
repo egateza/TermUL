@@ -81,8 +81,8 @@ Arah dependensi: `app → terminal, sftp → ssh → core`, dan `vault → core`
 
 ## Status saat ini
 
-- **Fase 1–5 selesai (kode + test)**; acceptance manual & review user menunggu. Fase 6 sebagian (tema). Progres & langkah berikutnya selalu di `plan-recap.md`.
-- Langkah berikutnya: acceptance manual Fase 1–5, lalu sisa Fase 6 di `docs/PLAN.md`.
+- **Fase 1–6 selesai (kode + test)**; acceptance manual & review user menunggu (backlog Fase 6 belum). Progres & langkah berikutnya selalu di `plan-recap.md`.
+- Langkah berikutnya: acceptance manual Fase 1–5, uji installer `.msi`, lalu backlog di `docs/PLAN.md`.
 
 ## Peta dokumen
 

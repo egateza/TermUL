@@ -133,6 +133,13 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 | Tanggal | Commit | Task |
 |---|---|---|
+| 2026-10-01 | `build: profile package-win (jlink + jpackage app-image/msi) dan ikon aplikasi` | Packaging Windows + ikon (Fase 6) |
+| 2026-10-01 | `feat(app): warna terminal khusus per host ...` | Warna terminal per host (Fase 6) |
+| 2026-10-01 | `feat(app): impor host dari ~/.ssh/config ...` | Dialog impor ssh config (Fase 6) |
+| 2026-10-01 | `feat(core): parser ~/.ssh/config ...` | Parser + rencana impor (Fase 6) |
+| 2026-10-01 | `feat(ssh): ProxyJump lewat jump host ...` | ProxyJump + test MINA/OpenSSH (Fase 6) |
+| 2026-10-01 | `feat(app): konfirmasi paste multi-baris di host prod ...` | Paste guard + garis warna environment (Fase 6) |
+| 2026-10-01 | `test: skrip leak-check ...` | Persiapan acceptance Fase 1–3, 5 |
 | 2026-10-01 | `feat(app): auto-inject password sudo/su per host lewat PromptResponder ...` | Wiring auto-sudo di tab (Fase 5) |
 | 2026-10-01 | `feat(terminal): PromptResponder auto-inject sudo/su dengan guard ...` | PromptResponder + AnsiStripper + test spoofing (Fase 5) |
 | 2026-10-01 | `feat(app): edit file root lewat sudo ...` | Edit sebagai root, tawaran sudo untuk file read-only, dialog validasi (Fase 5) |
@@ -182,8 +189,9 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 ## Langkah berikutnya
 
-**Status 2026-10-01:** Fase 1–5 selesai (kode + test), plus perbaikan dari uji manual (lihat "Tambahan dari uji manual").
-Fase 5 dikerjakan di branch `feat/fase5-root-edit` (bercabang dari `feat/tema-custom`). Fase 6 sebagian (tema). Menunggu: **acceptance manual Fase 1–5**.
+**Status 2026-10-01:** Fase 1–6 selesai (kode + test), plus perbaikan dari uji manual (lihat "Tambahan dari uji manual").
+Fase 5–6 dikerjakan di branch `feat/fase5-root-edit` (bercabang dari `feat/tema-custom`). Yang tersisa: **acceptance manual Fase 1–5**
+(persiapan sudah ada: container `uji-1`/`uji-2` jalan, file 500 MB, nginx, `tools\leak-check.ps1`), uji `.msi` (butuh WiX), dan backlog.
 
 **Pertanyaan terbuka untuk user:**
 - Perlu fallback `MaxSessions` / opsi koneksi terpisah per tab?
