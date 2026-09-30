@@ -83,6 +83,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 | Tanggal | Commit | Task |
 |---|---|---|
+| 2026-09-30 | `fix(terminal): tampilkan banner reconnect setelah logout` | Fix terminal terlihat hang setelah Ctrl+D/logout |
 | 2026-09-30 | `fix(ssh): auth default mencoba key ~/.ssh lalu jatuh ke password seperti klien ssh biasa` | Fix auth default tanpa key |
 | 2026-09-30 | `feat(app): edit file remote dengan editor lokal, auto-upload saat disimpan, dialog konflik/CRLF, dan EditTracker` | EditManager + dialog konflik/CRLF + EditTracker |
 | 2026-09-30 | `refactor(sftp): RemoteEditSession bisa rebind ke koneksi SFTP baru untuk retry setelah reconnect` | Refactor Uploader + rebind |
