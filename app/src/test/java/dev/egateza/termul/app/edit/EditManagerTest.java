@@ -79,6 +79,24 @@ class EditManagerTest {
     }
 
     @Test
+    void closeProfileMenutupSesiEditDanMenghapusCache() throws Exception {
+        Files.writeString(fx.remoteRoot.resolve("a.conf"), "a=1\n");
+        edits.open(fx.profile, "/a.conf");
+        await().atMost(Duration.ofSeconds(10)).until(() -> edits.entries().size() == 1);
+        var entry = edits.entries().getFirst();
+        Path local = entry.session().localFile();
+        assertThat(edits.openCount(fx.profile.id())).isEqualTo(1);
+        assertThat(edits.openCount(java.util.UUID.randomUUID())).isZero();
+
+        edits.closeProfile(fx.profile.id());
+
+        await().atMost(Duration.ofSeconds(10)).until(() -> edits.entries().isEmpty());
+        assertThat(local).doesNotExist();
+        edits.close(entry); // ditutup dua kali (tracker + tab): tidak error, koneksi tidak dilepas dua kali
+        assertThat(entry.session().state()).isEqualTo(State.CLOSED);
+    }
+
+    @Test
     void koneksiPutusSaatEditLaluSimpanSambungUlangDanTerupload() throws Exception {
         Files.writeString(fx.remoteRoot.resolve("app.conf"), "a=1\n");
         edits.open(fx.profile, "/app.conf");

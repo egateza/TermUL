@@ -941,23 +941,42 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         if (index < 0 || index >= tabs.getTabCount()) {
             return;
         }
-        if (tabs.getComponentAt(index) instanceof TerminalTab tab && (tab.isSessionActive() || tab.activeTransfers() > 0)) {
-            String transfers = tab.activeTransfers() > 0
-                    ? I18n.t("main.tab.close.transfers", String.valueOf(tab.activeTransfers())) : "";
-            tabs.setSelectedIndex(index);
-            boolean yes = JOptionPane.showConfirmDialog(this,
-                    I18n.t("main.tab.close.confirm", tab.profile().name(), tab.profile().address()) + transfers,
-                    I18n.t("main.tab.close"), JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE) == JOptionPane.YES_OPTION;
-            if (!yes) {
-                tab.focusTerminal();
-                return;
+        if (tabs.getComponentAt(index) instanceof TerminalTab tab) {
+            int edits = isLastTabOf(tab) ? ctx.edits().openCount(tab.profile().id()) : 0;
+            if (tab.isSessionActive() || tab.activeTransfers() > 0 || edits > 0) {
+                String transfers = tab.activeTransfers() > 0
+                        ? I18n.t("main.tab.close.transfers", String.valueOf(tab.activeTransfers())) : "";
+                String editNote = edits > 0 ? I18n.t("main.tab.close.edits", String.valueOf(edits)) : "";
+                tabs.setSelectedIndex(index);
+                boolean yes = JOptionPane.showConfirmDialog(this,
+                        I18n.t("main.tab.close.confirm", tab.profile().name(), tab.profile().address()) + transfers + editNote,
+                        I18n.t("main.tab.close"), JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE) == JOptionPane.YES_OPTION;
+                if (!yes) {
+                    tab.focusTerminal();
+                    return;
+                }
             }
         }
-        removeTab(index);
+        removeTab(index, true);
     }
 
-    private void removeTab(int index) {
+    /** true kalau tidak ada tab terminal lain untuk profil yang sama. */
+    private boolean isLastTabOf(TerminalTab tab) {
+        for (int i = 0; i < tabs.getTabCount(); i++) {
+            if (tabs.getComponentAt(i) instanceof TerminalTab other && other != tab
+                    && other.profile().id().equals(tab.profile().id())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** @param closeEdits true = tab terakhir host ini ikut menutup sesi edit-nya (saat keluar: lewat EditManager.close) */
+    private void removeTab(int index, boolean closeEdits) {
         if (tabs.getComponentAt(index) instanceof TerminalTab tab) {
+            if (closeEdits && isLastTabOf(tab)) {
+                ctx.edits().closeProfile(tab.profile().id());
+            }
             tab.dispose();
         }
         tabs.removeTabAt(index);
@@ -1051,7 +1070,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             return;
         }
         while (tabs.getTabCount() > 0) {
-            removeTab(0);
+            removeTab(0, false);
         }
         dispose();
         onExit.run();

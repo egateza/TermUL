@@ -402,12 +402,33 @@ public final class EditManager implements AutoCloseable {
         }
     }
 
-    /** Tutup sesi edit (cache dihapus kalau tersinkron). */
+    /** Jumlah file yang sedang diedit untuk profil ini. */
+    public int openCount(java.util.UUID profileId) {
+        return (int) entries.values().stream().filter(e -> e.profile.id().equals(profileId)).count();
+    }
+
+    /**
+     * Tutup semua sesi edit profil ini (tab terminal terakhirnya ditutup), seperti WinSCP: save berikutnya di
+     * editor tidak di-upload lagi. Cache yang tersinkron dihapus; yang belum ter-upload dipertahankan (N4).
+     */
+    public void closeProfile(java.util.UUID profileId) {
+        sshOps.execute(() -> {
+            for (var entry : entries.values()) {
+                if (entry.profile.id().equals(profileId)) {
+                    close(entry);
+                }
+            }
+        });
+    }
+
+    /** Tutup sesi edit (cache dihapus kalau tersinkron). Aman dipanggil lebih dari sekali. */
     public void close(Entry entry) {
         var session = entry.session;
+        if (!entries.remove(new Key(entry.profile.id(), session.remotePath()), entry)) {
+            return; // sudah ditutup (mis. dari tracker dan dari tab sekaligus)
+        }
         watcher.unwatch(session.localFile());
         boolean removed = session.close();
-        entries.remove(new Key(entry.profile.id(), session.remotePath()));
         byLocal.remove(session.localFile().toAbsolutePath().normalize());
         cleanupDiffCopy(session.localFile());
         links.release(entry.profile);
@@ -447,7 +468,11 @@ public final class EditManager implements AutoCloseable {
     @Override
     public void close() {
         watcher.close();
-        for (Entry e : entries.values()) {
+        for (var item : entries.entrySet()) {
+            Entry e = item.getValue();
+            if (!entries.remove(item.getKey(), e)) {
+                continue; // sedang/sudah ditutup lewat close(entry)
+            }
             try {
                 e.session.close();
                 links.release(e.profile);
@@ -455,6 +480,5 @@ public final class EditManager implements AutoCloseable {
                 log.warn("Menutup sesi edit gagal", ex);
             }
         }
-        entries.clear();
     }
 }
