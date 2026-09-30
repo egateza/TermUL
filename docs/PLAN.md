@@ -41,11 +41,11 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 ## Fase 4: Edit dengan editor lokal (±2 minggu)
 - [x] Konfigurasi editor per ekstensi (default `code --wait`)
-- [ ] `RemoteEditSession`: download ke cache + baseline stat
+- [x] `RemoteEditSession`: download ke cache + baseline stat
 - [ ] WatchService + debounce + hash compare
-- [ ] Upload atomic + preserve mode
+- [x] Upload atomic + preserve mode
 - [ ] Conflict dialog (overwrite / diff / batal)
-- [ ] Line ending guard (LF/CRLF)
+- [x] Line ending guard (LF/CRLF)
 - [ ] EditTracker panel (daftar file yang diedit + status)
 
 **Acceptance**: edit `~/app/config.yml` di VS Code, lalu Ctrl+S, dan file langsung ter-update di server dengan permission yang sama. Kalau file diubah di server sebelum save, dialog konflik muncul.

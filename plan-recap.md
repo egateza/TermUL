@@ -59,11 +59,11 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 ### Fase 4: Edit dengan editor lokal
 - [x] Konfigurasi editor per ekstensi (default `code --wait`)
-- [ ] `RemoteEditSession`: download ke cache + baseline stat
+- [x] `RemoteEditSession`: download ke cache + baseline stat
 - [ ] WatchService + debounce + hash compare
-- [ ] Upload atomic + preserve mode
-- [ ] Conflict dialog (overwrite / diff / batal)
-- [ ] Line ending guard (LF/CRLF)
+- [x] Upload atomic + preserve mode
+- [~] Conflict dialog (overwrite / diff / batal) (logic konflik selesai, dialog UI belum)
+- [x] Line ending guard (LF/CRLF)
 - [ ] EditTracker panel
 
 ### Fase 5: Edit file root & auto-trigger
@@ -82,6 +82,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 | Tanggal | Commit | Task |
 |---|---|---|
+| 2026-09-30 | `feat(sftp): tambah RemoteEditSession dengan cache aman, hash compare, deteksi konflik, dan guard line ending` | RemoteEditSession + EditCache + LineEndings |
 | 2026-09-30 | `feat: tambah konfigurasi editor lokal per ekstensi (config.json) dan launcher editor Windows` | Konfigurasi editor per ekstensi |
 | 2026-09-30 | `feat(app): tambah upload/download dengan antrean + progress/cancel, drag & drop, rename, mkdir, delete, chmod di panel SFTP` | Operasi SFTP: transfer queue, DnD, rename/mkdir/delete/chmod |
 | 2026-09-30 | `feat(app): tambah panel SFTP (browse, sort, refresh) per tab dan perbaiki shortcut agar jalan saat fokus di terminal` | Panel SFTP browse + dispatcher shortcut |
@@ -104,7 +105,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 ## Langkah berikutnya
 
-- RemoteEditSession di modul sftp: download ke cache (nama disanitasi) + baseline stat, sync dengan hash compare, conflict check, line ending guard, upload atomic preserve mode.
+- EditWatcher (WatchService + debounce) lalu EditManager di app: buka file dari panel SFTP, dialog konflik/CRLF, EditTracker.
 
 ## Catatan / blocker
 
