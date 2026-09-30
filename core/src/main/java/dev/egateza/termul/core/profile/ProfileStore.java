@@ -80,6 +80,28 @@ public final class ProfileStore {
         return mutate(s -> s.withoutProfile(id));
     }
 
+    /** Menambah/menghapus profil dari grup bawaan Favorites. */
+    public ProfileSnapshot setFavorite(UUID id, boolean favorite) {
+        Objects.requireNonNull(id, "id");
+        return mutate(s -> {
+            if (s.find(id).isEmpty() || s.isFavorite(id) == favorite) {
+                return s;
+            }
+            return s.withFavorite(id, favorite);
+        });
+    }
+
+    /** Mencatat profil baru saja dipakai (grup bawaan Last used, maksimal {@link ProfileSnapshot#RECENT_LIMIT}). */
+    public ProfileSnapshot markUsed(UUID id) {
+        Objects.requireNonNull(id, "id");
+        return mutate(s -> s.find(id).isEmpty() || (!s.recent().isEmpty() && s.recent().getFirst().equals(id))
+                ? s : s.withUsed(id));
+    }
+
+    public ProfileSnapshot clearRecent() {
+        return mutate(s -> s.recent().isEmpty() ? s : s.withoutRecent());
+    }
+
     public ProfileSnapshot addGroup(String group) {
         return mutate(s -> {
             var groups = new ArrayList<>(s.groups());
@@ -123,6 +145,9 @@ public final class ProfileStore {
         ProfileSnapshot updated;
         synchronized (lock) {
             updated = change.apply(snapshot);
+            if (updated == snapshot) {
+                return updated;
+            }
             write(updated);
             snapshot = updated;
         }
