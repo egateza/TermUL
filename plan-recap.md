@@ -83,6 +83,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 | Tanggal | Commit | Task |
 |---|---|---|
+| 2026-09-30 | `feat(app): konfirmasi saat menutup tab ... dan saat keluar aplikasi` | Konfirmasi tutup tab & keluar aplikasi (permintaan user) |
 | 2026-09-30 | `feat(app): konfirmasi sebelum keluar ...` | Konfirmasi logout + Enter untuk reconnect (permintaan user) |
 | 2026-09-30 | `fix(terminal): tampilkan banner reconnect setelah logout` | Fix terminal terlihat hang setelah Ctrl+D/logout |
 | 2026-09-30 | `fix(ssh): auth default mencoba key ~/.ssh lalu jatuh ke password seperti klien ssh biasa` | Fix auth default tanpa key |
