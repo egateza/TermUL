@@ -1,4 +1,4 @@
-package dev.egateza.termul.terminal;
+package dev.egateza.termul.ssh;
 
 /** Quoting argumen untuk shell POSIX (sh/bash) di sisi remote. */
 public final class ShellQuote {

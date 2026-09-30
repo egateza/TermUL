@@ -3,6 +3,7 @@ package dev.egateza.termul.terminal;
 import dev.egateza.termul.core.profile.HostProfile;
 import dev.egateza.termul.ssh.PtySize;
 import dev.egateza.termul.ssh.SessionManager;
+import dev.egateza.termul.ssh.ShellQuote;
 import dev.egateza.termul.ssh.SshConnectException;
 import dev.egateza.termul.ssh.SshLease;
 import java.io.IOException;

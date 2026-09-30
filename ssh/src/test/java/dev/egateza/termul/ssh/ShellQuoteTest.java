@@ -1,4 +1,4 @@
-package dev.egateza.termul.terminal;
+package dev.egateza.termul.ssh;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

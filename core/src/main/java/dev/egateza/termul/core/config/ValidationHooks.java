@@ -54,7 +54,7 @@ public record ValidationHooks(List<Hook> hooks) {
                 new Hook("/etc/apache2/**", "apache2ctl configtest")));
     }
 
-    /** Hook pertama yang cocok dengan path (absolut, sudah di-resolve dari symlink). */
+    /** Hook pertama yang cocok dengan path absolut file yang diedit. */
     public Optional<Hook> find(String remotePath) {
         return hooks.stream().filter(h -> h.matches(remotePath)).findFirst();
     }

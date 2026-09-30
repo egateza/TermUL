@@ -1,5 +1,8 @@
 package dev.egateza.termul.sftp;
 
+import dev.egateza.termul.ssh.RemoteExec;
+import dev.egateza.termul.ssh.ShellQuote;
+import dev.egateza.termul.ssh.SshConnection;
 import dev.egateza.termul.ssh.SshLease;
 import java.io.IOException;
 import java.io.InputStream;
@@ -9,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HexFormat;
@@ -37,6 +41,7 @@ public final class RemoteFileService implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(RemoteFileService.class);
     private static final int BUFFER = 32 * 1024;
     private static final SecureRandom RANDOM = new SecureRandom();
+    private static final Duration CHECK_TIMEOUT = Duration.ofSeconds(15);
 
     private final SshLease lease;
     private final SftpClient sftp;
@@ -59,6 +64,47 @@ public final class RemoteFileService implements AutoCloseable {
     /** true kalau channel SFTP dan koneksi SSH-nya masih hidup. */
     public boolean isOpen() {
         return sftp.isOpen() && !lease.isReleased() && lease.connection().isOpen();
+    }
+
+    /** Koneksi SSH di bawah SFTP ini (untuk exec channel, mis. sudo). Jangan di-close. */
+    public SshConnection connection() {
+        return lease.connection();
+    }
+
+    /**
+     * Apakah user login bisa menulis file ini ({@code test -w} di server: memperhitungkan group dan ACL).
+     * Kalau pengecekan gagal dijalankan, dianggap bisa (upload biasa yang akan melaporkan errornya).
+     */
+    public boolean canWrite(String path) {
+        try {
+            return RemoteExec.run(connection(), "test -w " + ShellQuote.quote(path), null, CHECK_TIMEOUT).ok();
+        } catch (IOException | RuntimeException e) {
+            log.debug("test -w {} gagal: {}", path, e.toString());
+            return true;
+        }
+    }
+
+    /**
+     * Membuat direktori baru {@code <parent>/termul-<acak>} dengan mode 700, <b>sebelum</b> ada file di dalamnya,
+     * supaya user lain tidak bisa membuka file sementara (mis. salinan config sebelum dipasang dengan sudo).
+     *
+     * @return path direktori
+     */
+    public String createPrivateDir(String parent) throws RemoteFileException {
+        String dir = RemotePaths.join(parent, "termul-" + randomSuffix());
+        try {
+            sftp.mkdir(dir); // gagal kalau sudah ada (termasuk symlink yang disiapkan orang lain)
+            chmod(dir, 0700);
+            Attributes attrs = sftp.lstat(dir);
+            if (!attrs.isDirectory() || (attrs.getPermissions() & 0077) != 0) {
+                throw new RemoteFileException("Direktori sementara " + dir + " tidak aman");
+            }
+            return dir;
+        } catch (RemoteFileException e) {
+            throw e;
+        } catch (IOException e) {
+            throw translate("Gagal membuat direktori sementara", dir, e);
+        }
     }
 
     /** Direktori home user (path absolut). */
