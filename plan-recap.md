@@ -48,12 +48,13 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] Field secret di dialog profil (login, sudo, root)
 - [x] Auth password dari vault
 - [x] Hotkey `Ctrl+Shift+P` inject sudo password, `Ctrl+Shift+R` inject root password
+- [ ] Acceptance (manual): `sudo su` & `su -` tanpa mengetik password; tidak ada secret di `profiles.json` maupun log
 
 ### Fase 3: Panel SFTP
-- [ ] `RemoteFileService` di atas `SftpClient` (connection handle yang sama)
+- [x] `RemoteFileService` di atas `SftpClient` (connection handle yang sama)
 - [ ] Panel: list dir, navigasi, sort, refresh, mode/owner/size/mtime
-- [ ] Upload/download + drag & drop + progress/cancel
-- [ ] Rename, mkdir, delete (konfirmasi), chmod
+- [~] Upload/download + drag & drop + progress/cancel (service + test selesai, UI belum)
+- [~] Rename, mkdir, delete (konfirmasi), chmod (service + test selesai, UI belum)
 
 ### Fase 4: Edit dengan editor lokal
 - [ ] Konfigurasi editor per ekstensi (default `code --wait`)
@@ -80,6 +81,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 | Tanggal | Commit | Task |
 |---|---|---|
+| 2026-09-30 | `feat(sftp): tambah RemoteFileService dengan upload atomic, progress/cancel, dan integration test OpenSSH` | RemoteFileService (SFTP) |
 | 2026-09-30 | `feat(app): tambah hotkey Ctrl+Shift+P/Ctrl+Shift+R untuk inject password sudo/root dari vault` | Hotkey inject sudo/root |
 | 2026-09-30 | `feat(app): tambah field password login/passphrase/sudo/root di dialog profil yang disimpan ke vault` | Field secret di dialog profil |
 | 2026-09-30 | `feat(app): ambil password login/passphrase dari vault dengan unlock on-demand dan auto-lock idle` | Auth password dari vault + menu Vault |
@@ -98,7 +100,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 ## Langkah berikutnya
 
-- Fase 3: RemoteFileService di atas SftpClient (modul sftp) + unit test dengan server MINA SFTP in-process. (Acceptance manual Fase 1 & 2 menunggu user.)
+- Panel SFTP di app: list dir, navigasi, sort, refresh, kolom mode/owner/size/mtime; lalu toolbar upload/download/rename/mkdir/delete/chmod.
 
 ## Catatan / blocker
 

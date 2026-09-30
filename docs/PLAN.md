@@ -32,7 +32,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 **Acceptance**: `sudo su` dan `su -` bisa dijalankan tanpa mengetik password. Tidak ada secret di `profiles.json` maupun di log.
 
 ## Fase 3: Panel SFTP (±2 minggu)
-- [ ] `RemoteFileService` di atas `SftpClient` (memakai connection handle yang sama)
+- [x] `RemoteFileService` di atas `SftpClient` (memakai connection handle yang sama)
 - [ ] Panel: list dir, navigasi, sort, refresh, tampilan mode/owner/size/mtime
 - [ ] Upload/download + drag & drop dari Explorer + progress/cancel
 - [ ] Rename, mkdir, delete (konfirmasi), chmod
