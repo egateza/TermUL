@@ -52,7 +52,9 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] Field secret di dialog profil (login, sudo, root)
 - [x] Auth password dari vault
 - [x] Hotkey `Ctrl+Shift+P` inject sudo password, `Ctrl+Shift+R` inject root password
-- [ ] Acceptance (manual): `sudo su` & `su -` tanpa mengetik password; tidak ada secret di `profiles.json` maupun log
+- [~] Acceptance (manual): `sudo su` & `su -` tanpa mengetik password; tidak ada secret di `profiles.json` maupun log
+  (2026-10-01: scan data dev bersih — profil/config tanpa field secret, log hanya mencatat jenis password, `vault.bin`
+  terenkripsi; inject sudo sudah dikonfirmasi user 2026-09-30. Belum: `su -` dengan password root)
 
 ### Fase 3: Panel SFTP
 - [x] `RemoteFileService` di atas `SftpClient` (connection handle yang sama)
@@ -60,6 +62,8 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] Upload/download + drag & drop + progress/cancel
 - [x] Rename, mkdir, delete (konfirmasi), chmod
 - [ ] Acceptance (manual): transfer 500 MB tidak membuat UI freeze dan bisa di-cancel
+  (disiapkan 2026-10-01: download `/config/uji/besar-500mb.bin` di `uji-1`, SHA-256 `970fd59e…77bc`; upload
+  `D:\tmp\myterm-dev\uji-upload-500mb.bin`)
 
 ### Fase 4: Edit dengan editor lokal
 - [x] Konfigurasi editor per ekstensi (default `code --wait`)
@@ -78,6 +82,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] Toggle auto-trigger per host (default OFF untuk prod)
 - [ ] Acceptance (manual): edit `/etc/nginx/sites-available/x` dari VS Code → owner `root:root` tetap; config invalid di-rollback;
   auto-sudo: `sudo ls` di host dengan toggle aktif mengirim password sekali, prompt palsu (`echo "[sudo] password for ega: "`) tidak memicu
+  (disiapkan 2026-10-01: nginx di `uji-1`, file root `/etc/nginx/http.d/uji.conf`; config invalid → `nginx -t` gagal → rollback)
 
 ### Fase 6: Polish & distribusi
 - [ ] Import `~/.ssh/config`, jump host (ProxyJump)
@@ -192,7 +197,8 @@ Fase 5 dikerjakan di branch `feat/fase5-root-edit` (bercabang dari `feat/tema-cu
 2. Buka 3 tab, jalankan `htop` dan `vim` di masing-masing (cek warna, garis box, scroll).
 3. Resize window & split host tree → `stty size` / `htop` ikut berubah; coba zoom Ctrl++/Ctrl+-.
 4. Tutup semua tab (aplikasi tetap terbuka), tunggu >30 detik.
-5. Thread dump: tidak ada `term-writer-*`, dan log `Menutup koneksi` untuk tiap profil. Lalu centang di sini + `docs/PLAN.md`.
+5. `powershell -ExecutionPolicy Bypass -File tools\leak-check.ps1` (thread dump via `jcmd` + cek log): harus "Tidak ada thread
+   terminal/SFTP yang tertinggal" dan `sisa: 0`. Lalu centang di sini + `docs/PLAN.md`.
 
 1. **Review oleh user** (urutan saran, per modul):
    - `core/` → `HostProfile`, `ProfileStore`, `config/EditorConfig`
