@@ -1,6 +1,7 @@
 package dev.egateza.termul.app.terminal;
 
 import dev.egateza.termul.app.sftp.SftpPanel;
+import dev.egateza.termul.app.ui.AppIcon;
 import dev.egateza.termul.app.ui.Dialogs;
 import dev.egateza.termul.app.ui.UiAsync;
 import dev.egateza.termul.app.vault.VaultGate;
@@ -170,7 +171,7 @@ public final class TerminalTab extends JPanel {
         var panel = new JPanel(new BorderLayout());
         panel.add(new JScrollPane(text), BorderLayout.CENTER);
         var buttons = new JPanel(new FlowLayout(FlowLayout.CENTER));
-        var retry = new JButton("Coba lagi");
+        var retry = new JButton("Coba lagi", AppIcon.RECONNECT.icon());
         retry.addActionListener(e -> connect());
         buttons.add(retry);
         panel.add(buttons, BorderLayout.SOUTH);
@@ -306,7 +307,7 @@ public final class TerminalTab extends JPanel {
         var label = new JLabel(text);
         label.setForeground(Color.WHITE);
         banner.add(label, BorderLayout.CENTER);
-        var reconnect = new JButton("Reconnect");
+        var reconnect = new JButton("Reconnect", AppIcon.RECONNECT.icon());
         reconnect.addActionListener(e -> reconnect());
         banner.add(reconnect, BorderLayout.EAST);
         banner.setVisible(true);

@@ -1,5 +1,6 @@
 package dev.egateza.termul.app.log;
 
+import dev.egateza.termul.app.ui.AppIcon;
 import dev.egateza.termul.app.ui.Dialogs;
 import dev.egateza.termul.app.ui.UiAsync;
 import java.awt.BorderLayout;
@@ -62,14 +63,14 @@ public final class LogPanel extends JPanel {
         Color red = UIManager.getColor("Actions.Red");
         StyleConstants.setForeground(warning, red != null ? red : new Color(0xE0, 0x55, 0x55));
 
-        var clear = new JButton("Bersihkan");
+        var clear = new JButton("Bersihkan", AppIcon.BROOM.icon());
         clear.setToolTipText("Kosongkan tampilan (file log tidak dihapus)");
         clear.addActionListener(e -> text.setText(""));
-        var openDir = new JButton("Buka folder log");
+        var openDir = new JButton("Buka folder log", AppIcon.FOLDER_OPEN.icon());
         openDir.setToolTipText(logDir.toString());
         openDir.addActionListener(e -> UiAsync.run(io, () -> openFolder(logDir),
                 err -> Dialogs.error(this, "Gagal membuka folder log", err)));
-        var close = new JButton("✕");
+        var close = new JButton(AppIcon.XMARK.icon());
         close.setToolTipText("Sembunyikan panel log");
         close.addActionListener(e -> onClose.run());
 

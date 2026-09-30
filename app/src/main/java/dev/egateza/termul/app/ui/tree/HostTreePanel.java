@@ -1,5 +1,6 @@
 package dev.egateza.termul.app.ui.tree;
 
+import dev.egateza.termul.app.ui.AppIcon;
 import dev.egateza.termul.app.ui.EnvColors;
 import dev.egateza.termul.app.ui.OsIcons;
 import dev.egateza.termul.app.ui.tree.HostTreeModelBuilder.GroupNode;
@@ -227,29 +228,29 @@ public final class HostTreePanel extends JPanel {
         var menu = new JPopupMenu();
         switch (target) {
             case HostProfile p -> {
-                menu.add(item("Buka terminal", () -> actions.open(p)));
+                menu.add(item(AppIcon.TERMINAL, "Buka terminal", () -> actions.open(p)));
                 menu.addSeparator();
-                menu.add(item("Edit...", () -> actions.edit(p)));
-                menu.add(item("Duplikat", () -> actions.duplicate(p)));
-                menu.add(item("Hapus...", () -> actions.delete(p)));
+                menu.add(item(AppIcon.EDIT, "Edit...", () -> actions.edit(p)));
+                menu.add(item(AppIcon.CLONE, "Duplikat", () -> actions.duplicate(p)));
+                menu.add(item(AppIcon.TRASH, "Hapus...", () -> actions.delete(p)));
             }
             case GroupNode g -> {
-                menu.add(item("Host baru di grup ini...", () -> actions.newHost(g.path())));
-                menu.add(item("Subgrup baru...", () -> actions.newGroup(g.path())));
+                menu.add(item(AppIcon.SERVER, "Host baru di grup ini...", () -> actions.newHost(g.path())));
+                menu.add(item(AppIcon.FOLDER_PLUS, "Subgrup baru...", () -> actions.newGroup(g.path())));
                 menu.addSeparator();
-                menu.add(item("Rename grup...", () -> actions.renameGroup(g.path())));
-                menu.add(item("Hapus grup...", () -> actions.deleteGroup(g.path())));
+                menu.add(item(AppIcon.PEN, "Rename grup...", () -> actions.renameGroup(g.path())));
+                menu.add(item(AppIcon.TRASH, "Hapus grup...", () -> actions.deleteGroup(g.path())));
             }
             case null, default -> {
-                menu.add(item("Host baru...", () -> actions.newHost("")));
-                menu.add(item("Grup baru...", () -> actions.newGroup("")));
+                menu.add(item(AppIcon.SERVER, "Host baru...", () -> actions.newHost("")));
+                menu.add(item(AppIcon.FOLDER_PLUS, "Grup baru...", () -> actions.newGroup("")));
             }
         }
         return menu;
     }
 
-    private static JMenuItem item(String label, Runnable r) {
-        var item = new JMenuItem(label);
+    private static JMenuItem item(AppIcon icon, String label, Runnable r) {
+        var item = new JMenuItem(label, icon.icon());
         item.addActionListener(e -> r.run());
         return item;
     }
@@ -275,6 +276,10 @@ public final class HostTreePanel extends JPanel {
 
     /** Menampilkan nama host + alamat abu-abu + warna environment. */
     private static final class Renderer extends DefaultTreeCellRenderer {
+        private static final javax.swing.Icon FOLDER = AppIcon.FOLDER.icon(AppIcon.SIZE, () -> AppIcon.FOLDER_COLOR);
+        private static final javax.swing.Icon FOLDER_OPEN =
+                AppIcon.FOLDER_OPEN.icon(AppIcon.SIZE, () -> AppIcon.FOLDER_COLOR);
+
         @Override
         public Component getTreeCellRendererComponent(JTree tree, Object value, boolean sel, boolean expanded,
                                                       boolean leaf, int row, boolean hasFocus) {
@@ -289,6 +294,9 @@ public final class HostTreePanel extends JPanel {
                 String os = escape(OsIcons.label(p.os()));
                 setToolTipText(p.notes() == null ? os : "<html>" + os + "<br>" + escape(p.notes()) + "</html>");
             } else {
+                if (isGroup) {
+                    setIcon(expanded ? FOLDER_OPEN : FOLDER);
+                }
                 setToolTipText(null);
             }
             return this;

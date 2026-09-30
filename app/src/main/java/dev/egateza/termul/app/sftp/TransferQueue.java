@@ -1,5 +1,6 @@
 package dev.egateza.termul.app.sftp;
 
+import dev.egateza.termul.app.ui.AppIcon;
 import dev.egateza.termul.sftp.RemoteFileException;
 import dev.egateza.termul.sftp.TransferListener;
 import java.awt.BorderLayout;
@@ -35,7 +36,7 @@ public final class TransferQueue extends JPanel {
     private final ExecutorService worker;
     private final JProgressBar bar = new JProgressBar(0, 1000);
     private final JLabel label = new JLabel();
-    private final JButton cancel = new JButton("Batal");
+    private final JButton cancel = new JButton("Batal", AppIcon.XMARK.icon());
     private final AtomicInteger queued = new AtomicInteger();
     private volatile AtomicBoolean currentCancel = new AtomicBoolean();
 

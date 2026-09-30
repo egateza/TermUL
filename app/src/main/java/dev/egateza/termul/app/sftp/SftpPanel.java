@@ -1,5 +1,6 @@
 package dev.egateza.termul.app.sftp;
 
+import dev.egateza.termul.app.ui.AppIcon;
 import dev.egateza.termul.app.ui.Dialogs;
 import dev.egateza.termul.app.ui.Edt;
 import dev.egateza.termul.app.ui.UiAsync;
@@ -80,9 +81,9 @@ public class SftpPanel extends JPanel {
         this.openInEditor = openInEditor;
 
         toolbar.setFloatable(false);
-        toolbar.add(button("↑", "Direktori induk (Backspace)", this::goUp));
-        toolbar.add(button("⌂", "Home", this::goHome));
-        toolbar.add(button("⟳", "Refresh (F5)", this::refresh));
+        toolbar.add(button(AppIcon.ARROW_UP, null, "Direktori induk (Backspace)", this::goUp));
+        toolbar.add(button(AppIcon.HOME, null, "Home", this::goHome));
+        toolbar.add(button(AppIcon.REFRESH, null, "Refresh (F5)", this::refresh));
         toolbar.addSeparator();
 
         pathField.addActionListener(e -> navigate(pathField.getText().strip()));
@@ -107,6 +108,7 @@ public class SftpPanel extends JPanel {
                 super.getTableCellRendererComponent(t, value, sel, focus, row, column);
                 int modelCol = t.convertColumnIndexToModel(column);
                 setText(value instanceof RemoteEntry e ? SftpTableModel.display(e, modelCol) : "");
+                setIcon(modelCol == SftpTableModel.COL_NAME && value instanceof RemoteEntry e ? entryIcon(e) : null);
                 setHorizontalAlignment(modelCol == SftpTableModel.COL_SIZE ? RIGHT : LEFT);
                 return this;
             }
@@ -127,13 +129,13 @@ public class SftpPanel extends JPanel {
         bind(KeyEvent.VK_BACK_SPACE, 0, "up", this::goUp);
         bind(KeyEvent.VK_F5, 0, "refresh", this::refresh);
 
-        toolbar.add(button("⬆ Upload", "Upload file lokal ke direktori ini (atau drag & drop dari Explorer)", this::chooseUpload));
-        toolbar.add(button("⬇ Download", "Download file terpilih", this::downloadSelected));
+        toolbar.add(button(AppIcon.UPLOAD, "Upload", "Upload file lokal ke direktori ini (atau drag & drop dari Explorer)", this::chooseUpload));
+        toolbar.add(button(AppIcon.DOWNLOAD, "Download", "Download file terpilih", this::downloadSelected));
         toolbar.addSeparator();
-        toolbar.add(button("+📁", "Direktori baru (F7)", this::mkdir));
-        toolbar.add(button("✎", "Rename (F2)", this::renameSelected));
-        toolbar.add(button("chmod", "Ubah permission", this::chmodSelected));
-        toolbar.add(button("🗑", "Hapus (Delete)", this::deleteSelected));
+        toolbar.add(button(AppIcon.FOLDER_PLUS, null, "Direktori baru (F7)", this::mkdir));
+        toolbar.add(button(AppIcon.PEN, null, "Rename (F2)", this::renameSelected));
+        toolbar.add(button(AppIcon.PERMISSION, null, "chmod: ubah permission", this::chmodSelected));
+        toolbar.add(button(AppIcon.TRASH, null, "Hapus (Delete)", this::deleteSelected));
         bind(KeyEvent.VK_F2, 0, "rename", this::renameSelected);
         bind(KeyEvent.VK_F7, 0, "mkdir", this::mkdir);
         bind(KeyEvent.VK_DELETE, 0, "delete", this::deleteSelected);
@@ -155,24 +157,36 @@ public class SftpPanel extends JPanel {
 
     private final TransferQueue transfers;
 
+    private static final javax.swing.Icon DIR_ICON = AppIcon.FOLDER.icon(AppIcon.SIZE, () -> AppIcon.FOLDER_COLOR);
+    private static final javax.swing.Icon FILE_ICON = AppIcon.FILE.icon();
+    private static final javax.swing.Icon LINK_ICON = AppIcon.LINK.icon();
+
+    private static javax.swing.Icon entryIcon(RemoteEntry e) {
+        return switch (e.type()) {
+            case DIRECTORY -> DIR_ICON;
+            case SYMLINK -> LINK_ICON;
+            case FILE, OTHER -> FILE_ICON;
+        };
+    }
+
     private JPopupMenu buildPopup() {
         var menu = new JPopupMenu();
-        menu.add(menuItem("Download...", this::downloadSelected));
-        menu.add(menuItem("Upload ke sini...", this::chooseUpload));
+        menu.add(menuItem(AppIcon.DOWNLOAD, "Download...", this::downloadSelected));
+        menu.add(menuItem(AppIcon.UPLOAD, "Upload ke sini...", this::chooseUpload));
         menu.addSeparator();
-        menu.add(menuItem("Rename...", this::renameSelected));
-        menu.add(menuItem("chmod...", this::chmodSelected));
-        menu.add(menuItem("Hapus...", this::deleteSelected));
+        menu.add(menuItem(AppIcon.PEN, "Rename...", this::renameSelected));
+        menu.add(menuItem(AppIcon.PERMISSION, "chmod...", this::chmodSelected));
+        menu.add(menuItem(AppIcon.TRASH, "Hapus...", this::deleteSelected));
         menu.addSeparator();
-        menu.add(menuItem("Direktori baru...", this::mkdir));
-        menu.add(menuItem("Salin path", () -> selectedEntries().stream().findFirst().ifPresent(e ->
+        menu.add(menuItem(AppIcon.FOLDER_PLUS, "Direktori baru...", this::mkdir));
+        menu.add(menuItem(AppIcon.COPY, "Salin path", () -> selectedEntries().stream().findFirst().ifPresent(e ->
                 Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(e.path()), null))));
-        menu.add(menuItem("Refresh", this::refresh));
+        menu.add(menuItem(AppIcon.REFRESH, "Refresh", this::refresh));
         return menu;
     }
 
-    private static JMenuItem menuItem(String label, Runnable action) {
-        var item = new JMenuItem(label);
+    private static JMenuItem menuItem(AppIcon icon, String label, Runnable action) {
+        var item = new JMenuItem(label, icon.icon());
         item.addActionListener(e -> action.run());
         return item;
     }
@@ -468,8 +482,9 @@ public class SftpPanel extends JPanel {
         });
     }
 
-    protected static JButton button(String text, String tooltip, Runnable action) {
-        var b = new JButton(text);
+    /** Tombol toolbar; {@code text} null = hanya ikon. */
+    protected static JButton button(AppIcon icon, String text, String tooltip, Runnable action) {
+        var b = new JButton(text, icon.icon());
         b.setToolTipText(tooltip);
         b.setFocusable(false);
         b.addActionListener(e -> action.run());

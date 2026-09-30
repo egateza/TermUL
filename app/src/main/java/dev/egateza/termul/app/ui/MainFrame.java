@@ -176,45 +176,45 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private JMenuBar buildMenu() {
         var bar = new JMenuBar();
         var file = new JMenu("File");
-        file.add(menuItem("Host baru...", KeyStroke.getKeyStroke(KeyEvent.VK_N, InputEvent.CTRL_DOWN_MASK),
+        file.add(menuItem(AppIcon.SERVER, "Host baru...", KeyStroke.getKeyStroke(KeyEvent.VK_N, InputEvent.CTRL_DOWN_MASK),
                 () -> newHost(hostTree.selectedGroup())));
-        file.add(menuItem("Grup baru...", null, () -> newGroup(hostTree.selectedGroup())));
-        file.add(menuItem("Cari host", KeyStroke.getKeyStroke(KeyEvent.VK_F, InputEvent.CTRL_DOWN_MASK),
+        file.add(menuItem(AppIcon.FOLDER_PLUS, "Grup baru...", null, () -> newGroup(hostTree.selectedGroup())));
+        file.add(menuItem(AppIcon.SEARCH, "Cari host", KeyStroke.getKeyStroke(KeyEvent.VK_F, InputEvent.CTRL_DOWN_MASK),
                 hostTree::focusSearch));
         file.addSeparator();
-        file.add(menuItem("Keluar", null, this::exit));
+        file.add(menuItem(AppIcon.EXIT, "Keluar", null, this::exit));
         bar.add(file);
 
         var terminal = new JMenu("Terminal");
         int ctrlShift = InputEvent.CTRL_DOWN_MASK | InputEvent.SHIFT_DOWN_MASK;
-        terminal.add(menuItem("Duplikat tab", KeyStroke.getKeyStroke(KeyEvent.VK_T, ctrlShift),
+        terminal.add(menuItem(AppIcon.CLONE, "Duplikat tab", KeyStroke.getKeyStroke(KeyEvent.VK_T, ctrlShift),
                 () -> currentTab().ifPresent(t -> open(t.profile()))));
-        terminal.add(menuItem("Reconnect", KeyStroke.getKeyStroke(KeyEvent.VK_F5, InputEvent.CTRL_DOWN_MASK),
+        terminal.add(menuItem(AppIcon.RECONNECT, "Reconnect", KeyStroke.getKeyStroke(KeyEvent.VK_F5, InputEvent.CTRL_DOWN_MASK),
                 () -> currentTab().ifPresent(TerminalTab::reconnect)));
-        terminal.add(menuItem("Tutup tab", KeyStroke.getKeyStroke(KeyEvent.VK_W, ctrlShift),
+        terminal.add(menuItem(AppIcon.XMARK, "Tutup tab", KeyStroke.getKeyStroke(KeyEvent.VK_W, ctrlShift),
                 () -> closeTab(tabs.getSelectedIndex())));
-        terminal.add(menuItem("Panel SFTP", KeyStroke.getKeyStroke(KeyEvent.VK_F, ctrlShift),
+        terminal.add(menuItem(AppIcon.FOLDER_TREE, "Panel SFTP", KeyStroke.getKeyStroke(KeyEvent.VK_F, ctrlShift),
                 () -> currentTab().ifPresent(TerminalTab::toggleSftp)));
         terminal.addSeparator();
-        terminal.add(menuItem("Zoom in", KeyStroke.getKeyStroke(KeyEvent.VK_EQUALS, InputEvent.CTRL_DOWN_MASK),
+        terminal.add(menuItem(AppIcon.ZOOM_IN, "Zoom in", KeyStroke.getKeyStroke(KeyEvent.VK_EQUALS, InputEvent.CTRL_DOWN_MASK),
                 () -> currentTab().ifPresent(t -> t.zoom(1))));
-        terminal.add(menuItem("Zoom out", KeyStroke.getKeyStroke(KeyEvent.VK_MINUS, InputEvent.CTRL_DOWN_MASK),
+        terminal.add(menuItem(AppIcon.ZOOM_OUT, "Zoom out", KeyStroke.getKeyStroke(KeyEvent.VK_MINUS, InputEvent.CTRL_DOWN_MASK),
                 () -> currentTab().ifPresent(t -> t.zoom(-1))));
-        terminal.add(menuItem("Ukuran font default", KeyStroke.getKeyStroke(KeyEvent.VK_0, InputEvent.CTRL_DOWN_MASK),
+        terminal.add(menuItem(AppIcon.FONT_SIZE, "Ukuran font default", KeyStroke.getKeyStroke(KeyEvent.VK_0, InputEvent.CTRL_DOWN_MASK),
                 () -> currentTab().ifPresent(t -> t.zoom(0))));
         terminal.addSeparator();
-        terminal.add(menuItem("File yang sedang diedit...", KeyStroke.getKeyStroke(KeyEvent.VK_E, ctrlShift),
+        terminal.add(menuItem(AppIcon.EDIT, "File yang sedang diedit...", KeyStroke.getKeyStroke(KeyEvent.VK_E, ctrlShift),
                 this::showEditTracker));
         terminal.addSeparator();
-        terminal.add(menuItem("Inject password sudo", KeyStroke.getKeyStroke(KeyEvent.VK_P, ctrlShift),
+        terminal.add(menuItem(AppIcon.KEY, "Inject password sudo", KeyStroke.getKeyStroke(KeyEvent.VK_P, ctrlShift),
                 () -> currentTab().ifPresent(t -> t.injectSecret(SecretType.SUDO_PASSWORD, ctx.vault()))));
-        terminal.add(menuItem("Inject password root", KeyStroke.getKeyStroke(KeyEvent.VK_R, ctrlShift),
+        terminal.add(menuItem(AppIcon.ROOT, "Inject password root", KeyStroke.getKeyStroke(KeyEvent.VK_R, ctrlShift),
                 () -> currentTab().ifPresent(t -> t.injectSecret(SecretType.ROOT_PASSWORD, ctx.vault()))));
         bar.add(terminal);
         bar.add(buildVaultMenu());
 
         var settings = new JMenu("Pengaturan");
-        settings.add(menuItem("Editor lokal...", null, () ->
+        settings.add(menuItem(AppIcon.CODE, "Editor lokal...", null, () ->
                 EditorSettingsDialog.show(this, ctx.config().current().editors()).ifPresent(editors ->
                         mutate("Gagal menyimpan pengaturan", () ->
                                 ctx.config().save(ctx.config().current().withEditors(editors))))));
@@ -225,11 +225,14 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         showLog.setToolTipText("Log aplikasi di bagian bawah window (sama dengan isi file log)");
         showLog.addActionListener(e -> setLogVisible(showLog.isSelected()));
         help.add(showLog);
-        help.add(menuItem("Buka folder log", null, () -> UiAsync.run(io, () -> LogPanel.openFolder(ctx.paths().logDir()),
-                err -> Dialogs.error(this, "Gagal membuka folder log", err))));
+        help.add(menuItem(AppIcon.FOLDER_OPEN, "Buka folder log", null,
+                () -> UiAsync.run(io, () -> LogPanel.openFolder(ctx.paths().logDir()),
+                        err -> Dialogs.error(this, "Gagal membuka folder log", err))));
         help.addSeparator();
-        help.add(menuItem("Tentang TermUL", null, () -> Dialogs.info(this, "Tentang TermUL",
-                "TermUL — SSH client pribadi\n\nJava " + Runtime.version() + "\nFolder log: " + ctx.paths().logDir())));
+        help.add(menuItem(AppIcon.INFO, "Tentang TermUL", null, () -> Dialogs.info(this, "Tentang TermUL",
+                "TermUL (Terminal Utility) — SSH client pribadi\n\nJava " + Runtime.version()
+                        + "\nFolder log: " + ctx.paths().logDir()
+                        + "\n\nIkon: Font Awesome Free 7.3.1 (CC BY 4.0), fontawesome.com")));
         bar.add(help);
         return bar;
     }
@@ -256,9 +259,9 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private JMenu buildVaultMenu() {
         var gate = ctx.vault();
         var menu = new JMenu("Vault");
-        menu.add(menuItem("Buka vault...", null, () -> ctx.sshOps().execute(gate::ensureUnlocked)));
-        menu.add(menuItem("Kunci vault", null, () -> ctx.sshOps().execute(gate::lock)));
-        menu.add(menuItem("Ganti master password...", null,
+        menu.add(menuItem(AppIcon.UNLOCK, "Buka vault...", null, () -> ctx.sshOps().execute(gate::ensureUnlocked)));
+        menu.add(menuItem(AppIcon.LOCK, "Kunci vault", null, () -> ctx.sshOps().execute(gate::lock)));
+        menu.add(menuItem(AppIcon.KEY, "Ganti master password...", null,
                 () -> ctx.sshOps().execute(gate::changeMasterPasswordInteractive)));
         menu.addSeparator();
         var remember = new JCheckBoxMenuItem("Ingat di PC ini (Windows DPAPI)");
@@ -404,8 +407,8 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                 : "<html><font color='#%06x'>&#9679;</font> %s</html>".formatted(color.getRGB() & 0xFFFFFF, name);
     }
 
-    private static JMenuItem menuItem(String label, KeyStroke key, Runnable action) {
-        var item = new JMenuItem(label);
+    private static JMenuItem menuItem(AppIcon icon, String label, KeyStroke key, Runnable action) {
+        var item = new JMenuItem(label, icon.icon());
         if (key != null) {
             item.setAccelerator(key);
         }
