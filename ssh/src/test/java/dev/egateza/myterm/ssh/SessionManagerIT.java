@@ -130,6 +130,14 @@ class SessionManagerIT {
     }
 
     @Test
+    void deteksiOsAlpine() throws Exception {
+        try (SshLease lease = manager.acquire(profile())) {
+            assertThat(OsDetector.detect(lease.connection())).get()
+                    .extracting(o -> o.id()).isEqualTo("alpine");
+        }
+    }
+
+    @Test
     void execDanPasswordSalah() throws Exception {
         try (SshLease lease = manager.acquire(profile())) {
             var exec = lease.connection().createExec("id -un");
