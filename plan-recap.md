@@ -98,8 +98,8 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
   dan "Tentang TermUL" (permintaan user). `UiLogAppender` (logback) → ring buffer `LogBuffer` (2000 entry terakhir,
   di memori) → `LogPanel` polling tiap 300 ms hanya saat terlihat; WARN/ERROR berwarna merah. Isi sama dengan file log
 - [x] Ikon Font Awesome Free 7.3.1 (SVG, lisensi CC BY 4.0, atribusi di Bantuan → Tentang) lewat enum `AppIcon` +
-  `FlatSVGIcon`: menu utama, toolbar & popup SFTP, ikon folder/file/symlink di tabel SFTP, folder grup di host tree,
-  panel log, tombol reconnect/batal. Warna dibaca dari `UIManager` saat digambar → siap untuk dark/light theme.
+  `FlatSVGIcon`: toolbar SFTP, ikon folder/file/symlink di tabel SFTP, folder grup di host tree, panel log, tombol
+  reconnect/batal. Di menu **hanya** Host baru, Grup baru, dan Tentang TermUL (keputusan user: menu lain tanpa ikon). Warna dibaca dari `UIManager` saat digambar → siap untuk dark/light theme.
   Tambah ikon: unduh SVG ke `app/src/main/resources/dev/egateza/termul/app/icons/fa/` (viewBox dibuat persegi) +
   konstanta di `AppIcon` (permintaan user)
 - [ ] (usulan, menunggu keputusan user) Fallback koneksi kedua kalau server menolak channel (`MaxSessions`, default 10),
@@ -109,6 +109,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 | Tanggal | Commit | Task |
 |---|---|---|
+| 2026-09-30 | `refactor(app): ikon menu hanya untuk host/grup baru dan Tentang` | Kurangi ikon menu (permintaan user) |
 | 2026-09-30 | `feat(app): ikon Font Awesome Free di menu, toolbar SFTP, dan host tree` | Ikon Font Awesome (permintaan user) |
 | 2026-09-30 | `refactor: rename aplikasi MyTerm menjadi TermUL` | Rename ke TermUL + migrasi folder data (permintaan user) |
 | 2026-09-30 | `feat(app): panel log aplikasi di bawah window dan menu Bantuan` | Panel log + menu Bantuan (permintaan user) |

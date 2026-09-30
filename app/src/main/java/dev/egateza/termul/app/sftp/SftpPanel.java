@@ -171,22 +171,22 @@ public class SftpPanel extends JPanel {
 
     private JPopupMenu buildPopup() {
         var menu = new JPopupMenu();
-        menu.add(menuItem(AppIcon.DOWNLOAD, "Download...", this::downloadSelected));
-        menu.add(menuItem(AppIcon.UPLOAD, "Upload ke sini...", this::chooseUpload));
+        menu.add(menuItem("Download...", this::downloadSelected));
+        menu.add(menuItem("Upload ke sini...", this::chooseUpload));
         menu.addSeparator();
-        menu.add(menuItem(AppIcon.PEN, "Rename...", this::renameSelected));
-        menu.add(menuItem(AppIcon.PERMISSION, "chmod...", this::chmodSelected));
-        menu.add(menuItem(AppIcon.TRASH, "Hapus...", this::deleteSelected));
+        menu.add(menuItem("Rename...", this::renameSelected));
+        menu.add(menuItem("chmod...", this::chmodSelected));
+        menu.add(menuItem("Hapus...", this::deleteSelected));
         menu.addSeparator();
-        menu.add(menuItem(AppIcon.FOLDER_PLUS, "Direktori baru...", this::mkdir));
-        menu.add(menuItem(AppIcon.COPY, "Salin path", () -> selectedEntries().stream().findFirst().ifPresent(e ->
+        menu.add(menuItem("Direktori baru...", this::mkdir));
+        menu.add(menuItem("Salin path", () -> selectedEntries().stream().findFirst().ifPresent(e ->
                 Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(e.path()), null))));
-        menu.add(menuItem(AppIcon.REFRESH, "Refresh", this::refresh));
+        menu.add(menuItem("Refresh", this::refresh));
         return menu;
     }
 
-    private static JMenuItem menuItem(AppIcon icon, String label, Runnable action) {
-        var item = new JMenuItem(label, icon.icon());
+    private static JMenuItem menuItem(String label, Runnable action) {
+        var item = new JMenuItem(label);
         item.addActionListener(e -> action.run());
         return item;
     }

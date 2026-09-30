@@ -228,18 +228,18 @@ public final class HostTreePanel extends JPanel {
         var menu = new JPopupMenu();
         switch (target) {
             case HostProfile p -> {
-                menu.add(item(AppIcon.TERMINAL, "Buka terminal", () -> actions.open(p)));
+                menu.add(item(null, "Buka terminal", () -> actions.open(p)));
                 menu.addSeparator();
-                menu.add(item(AppIcon.EDIT, "Edit...", () -> actions.edit(p)));
-                menu.add(item(AppIcon.CLONE, "Duplikat", () -> actions.duplicate(p)));
-                menu.add(item(AppIcon.TRASH, "Hapus...", () -> actions.delete(p)));
+                menu.add(item(null, "Edit...", () -> actions.edit(p)));
+                menu.add(item(null, "Duplikat", () -> actions.duplicate(p)));
+                menu.add(item(null, "Hapus...", () -> actions.delete(p)));
             }
             case GroupNode g -> {
                 menu.add(item(AppIcon.SERVER, "Host baru di grup ini...", () -> actions.newHost(g.path())));
                 menu.add(item(AppIcon.FOLDER_PLUS, "Subgrup baru...", () -> actions.newGroup(g.path())));
                 menu.addSeparator();
-                menu.add(item(AppIcon.PEN, "Rename grup...", () -> actions.renameGroup(g.path())));
-                menu.add(item(AppIcon.TRASH, "Hapus grup...", () -> actions.deleteGroup(g.path())));
+                menu.add(item(null, "Rename grup...", () -> actions.renameGroup(g.path())));
+                menu.add(item(null, "Hapus grup...", () -> actions.deleteGroup(g.path())));
             }
             case null, default -> {
                 menu.add(item(AppIcon.SERVER, "Host baru...", () -> actions.newHost("")));
@@ -250,7 +250,7 @@ public final class HostTreePanel extends JPanel {
     }
 
     private static JMenuItem item(AppIcon icon, String label, Runnable r) {
-        var item = new JMenuItem(label, icon.icon());
+        var item = icon == null ? new JMenuItem(label) : new JMenuItem(label, icon.icon());
         item.addActionListener(e -> r.run());
         return item;
     }
