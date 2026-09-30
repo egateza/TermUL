@@ -1,7 +1,6 @@
 package dev.egateza.termul.ssh;
 
 import dev.egateza.termul.core.profile.OsInfo;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
@@ -43,30 +42,6 @@ public final class OsDetector {
         } catch (IOException | RuntimeException e) {
             log.info("Deteksi OS {} gagal: {}", connection.profile().address(), e.toString());
             return Optional.empty();
-        }
-    }
-
-    /** Membuang output di atas batas (server tidak bisa membanjiri memory). */
-    private static final class LimitedOutput extends ByteArrayOutputStream {
-        private final int limit;
-
-        LimitedOutput(int limit) {
-            this.limit = limit;
-        }
-
-        @Override
-        public synchronized void write(byte[] b, int off, int len) {
-            int room = limit - count;
-            if (room > 0) {
-                super.write(b, off, Math.min(room, len));
-            }
-        }
-
-        @Override
-        public synchronized void write(int b) {
-            if (count < limit) {
-                super.write(b);
-            }
         }
     }
 }
