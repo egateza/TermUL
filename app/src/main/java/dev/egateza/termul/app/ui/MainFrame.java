@@ -72,7 +72,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private final JSplitPane logSplit;
     private final JCheckBoxMenuItem showLog = new JCheckBoxMenuItem("Tampilkan log");
     private int logHeight = 220; // EDT
-    private int logDividerSize;
+    private int logDividerSize; // EDT
     private static final int HOST_HANDLE_WIDTH = 18;
     private static final int HOST_TOGGLE_HEIGHT = 44;
     /** Isi area utama: split (mode panel) atau area terminal saja (mode tombol melayang). */
@@ -300,6 +300,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             hostTree.setVisible(true);
             hostSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, hostSide, center);
             hostSplit.setContinuousLayout(true);
+            hostSplit.putClientProperty("FlatLaf.style", "gripDotCount: 0"); // divider tetap bisa digeser, tanpa titik
             hostSplit.setDividerLocation(hostWidth);
             body.add(hostSplit, BorderLayout.CENTER);
             updateHostToggle();
