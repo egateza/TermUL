@@ -41,7 +41,8 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 ### Fase 1: acceptance (manual, oleh user) — boleh dikerjakan sekarang, tidak perlu menunggu fase lain
 - [~] Connect ke 3 server di 3 tab, `htop` & `vim` tampil benar, resize berfungsi
-  (sudah: 1 server, beberapa tab, login password + TOFU + inject sudo; belum: 3 server berbeda, htop/vim, resize)
+  (sudah dikonfirmasi user 2026-09-30: SSH ke `server01` (192.0.2.10) berhasil — login password dari vault, TOFU
+  host key, beberapa tab satu koneksi, inject sudo, logout + reconnect; belum: 3 server berbeda, htop/vim, resize)
 - [ ] Tutup tab tidak meninggalkan thread/koneksi bocor (thread dump `jcmd <pid> Thread.print` sebelum/sesudah;
   log harus menunjukkan `Pemakai koneksi … dilepas (sisa: 0)` lalu `Menutup koneksi` setelah grace 30 detik)
 
@@ -137,7 +138,7 @@ Fase 5 & 6 **ditunda** atas permintaan user. Sedang berjalan: **acceptance Fase 
 - Perlu fallback `MaxSessions` / opsi koneksi terpisah per tab?
 
 **Prosedur acceptance Fase 1** (AI bisa membantu langkah 4–5):
-1. Buat 3 profil (boleh: server01 + container uji `localhost:2222` `dev`/`devpass` + satu server lain).
+1. ~~Koneksi ke server nyata~~ ✔ (server01). Buat 2 profil lagi (boleh container uji `localhost:2222` `dev`/`devpass`).
 2. Buka 3 tab, jalankan `htop` dan `vim` di masing-masing (cek warna, garis box, scroll).
 3. Resize window & split host tree → `stty size` / `htop` ikut berubah; coba zoom Ctrl++/Ctrl+-.
 4. Tutup semua tab (aplikasi tetap terbuka), tunggu >30 detik.
