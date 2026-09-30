@@ -69,7 +69,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 | # | Keputusan | Opsi | Status |
 |---|---|---|---|
 | D1 | Nama aplikasi & base package | `MyTerm` / lainnya; `dev.<nama>.myterm` | Diputuskan: `MyTerm`, `dev.egateza.myterm` |
-| D2 | Desain vault | DPAPI / master password / kombinasi | Terbuka (rekomendasi: kombinasi) |
+| D2 | Desain vault | DPAPI / master password / kombinasi | Diputuskan: kombinasi (ADR 0002) |
 | D3 | Format storage profil | JSON / SQLite | Rekomendasi JSON (mudah di-diff & backup) |
 | D4 | Repo & lisensi | Private GitHub/GitLab | Terbuka |
 

@@ -17,6 +17,7 @@
 |---|---|---|---|
 | D1 | Nama & base package | `MyTerm`, groupId/package `dev.egateza.myterm` | Masih bisa di-rename (refactor package di IntelliJ) |
 | D3 | Format storage profil | JSON (Jackson) | Sesuai rekomendasi PLAN |
+| D2 | Desain vault | Master password + Argon2id + AES-256-GCM, opsi DPAPI | `docs/adr/0002-vault-design.md` |
 
 ## Status per fase
 
@@ -42,7 +43,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [ ] Tutup tab tidak meninggalkan thread/koneksi bocor (cek VisualVM/jconsole)
 
 ### Fase 2: Vault & inject password
-- [ ] ADR 0002 desain vault
+- [x] ADR 0002 desain vault
 - [ ] `CredentialVault` + implementasi + unit test (round-trip, tamper detection GCM)
 - [ ] Field secret di dialog profil (login, sudo, root)
 - [ ] Auth password dari vault
@@ -79,6 +80,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 | Tanggal | Commit | Task |
 |---|---|---|
+| 2026-09-30 | `docs: tambah ADR 0002 desain vault (Argon2id + AES-256-GCM + opsi DPAPI)` | ADR 0002 desain vault |
 | 2026-09-30 | `test(ssh): tambah integration test heartbeat mendeteksi server hang` | Keep-alive + deteksi putus + reconnect |
 | 2026-09-30 | `feat(app): tambah tab terminal JediTerm, dialog TOFU, prompt password, dan integration test OpenSSH` | Tab terminal JediTerm + dialog TOFU/password + IT OpenSSH |
 | 2026-09-30 | `feat(terminal): tambah SshTtyConnector JediTerm di atas ChannelShell dengan writer thread terpisah` | SshTtyConnector + SshTerminalFactory |
@@ -92,7 +94,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 ## Langkah berikutnya
 
-- Fase 2: ADR 0002 desain vault, lalu CredentialVault (AES-256-GCM + Argon2id) + unit test. (Acceptance test manual Fase 1 masih perlu dilakukan user.)
+- Implementasi CredentialVault di modul vault + unit test (round-trip, tamper detection, ganti master password).
 
 ## Catatan / blocker
 

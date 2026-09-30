@@ -17,7 +17,7 @@ Aplikasi ini memegang akses SSH dan password sudo/root ke server produksi. Kalau
 
 ## Vault
 
-Dua opsi. **Keputusan terbuka** (catat di ADR saat dipilih):
+Dua opsi di bawah. **Diputuskan: kombinasi**, lihat `docs/adr/0002-vault-design.md`.
 
 **Opsi 1: Windows DPAPI (`CryptProtectData`, scope CurrentUser) via JNA**
 - (+) Tanpa master password, terikat ke login Windows.
