@@ -5,35 +5,35 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>dev.egateza.myterm</groupId>
-        <artifactId>myterm-parent</artifactId>
+        <groupId>dev.egateza.termul</groupId>
+        <artifactId>termul-parent</artifactId>
         <version>0.1.0-SNAPSHOT</version>
     </parent>
 
-    <artifactId>myterm-app</artifactId>
-    <name>MyTerm :: app</name>
+    <artifactId>termul-app</artifactId>
+    <name>TermUL :: app</name>
     <description>Swing UI, wiring, main()</description>
 
     <dependencies>
         <dependency>
-            <groupId>dev.egateza.myterm</groupId>
-            <artifactId>myterm-core</artifactId>
+            <groupId>dev.egateza.termul</groupId>
+            <artifactId>termul-core</artifactId>
         </dependency>
         <dependency>
-            <groupId>dev.egateza.myterm</groupId>
-            <artifactId>myterm-vault</artifactId>
+            <groupId>dev.egateza.termul</groupId>
+            <artifactId>termul-vault</artifactId>
         </dependency>
         <dependency>
-            <groupId>dev.egateza.myterm</groupId>
-            <artifactId>myterm-ssh</artifactId>
+            <groupId>dev.egateza.termul</groupId>
+            <artifactId>termul-ssh</artifactId>
         </dependency>
         <dependency>
-            <groupId>dev.egateza.myterm</groupId>
-            <artifactId>myterm-terminal</artifactId>
+            <groupId>dev.egateza.termul</groupId>
+            <artifactId>termul-terminal</artifactId>
         </dependency>
         <dependency>
-            <groupId>dev.egateza.myterm</groupId>
-            <artifactId>myterm-sftp</artifactId>
+            <groupId>dev.egateza.termul</groupId>
+            <artifactId>termul-sftp</artifactId>
         </dependency>
         <dependency>
             <groupId>org.jetbrains.jediterm</groupId>
@@ -52,21 +52,21 @@
             <artifactId>logback-classic</artifactId>
         </dependency>
         <dependency>
-            <groupId>dev.egateza.myterm</groupId>
-            <artifactId>myterm-ssh</artifactId>
+            <groupId>dev.egateza.termul</groupId>
+            <artifactId>termul-ssh</artifactId>
             <type>test-jar</type>
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>dev.egateza.myterm</groupId>
-            <artifactId>myterm-sftp</artifactId>
+            <groupId>dev.egateza.termul</groupId>
+            <artifactId>termul-sftp</artifactId>
             <type>test-jar</type>
             <scope>test</scope>
         </dependency>
     </dependencies>
 
     <properties>
-        <myterm.mainClass>dev.egateza.myterm.app.MyTermApp</myterm.mainClass>
+        <termul.mainClass>dev.egateza.termul.app.TermULApp</termul.mainClass>
     </properties>
 
     <build>
@@ -77,7 +77,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>${myterm.mainClass}</mainClass>
+                            <mainClass>${termul.mainClass}</mainClass>
                             <addClasspath>true</addClasspath>
                             <classpathPrefix>libs/</classpathPrefix>
                         </manifest>
@@ -91,7 +91,7 @@
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
                 <configuration>
-                    <mainClass>${myterm.mainClass}</mainClass>
+                    <mainClass>${termul.mainClass}</mainClass>
                 </configuration>
             </plugin>
         </plugins>

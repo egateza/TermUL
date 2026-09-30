@@ -5,19 +5,19 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>dev.egateza.myterm</groupId>
-        <artifactId>myterm-parent</artifactId>
+        <groupId>dev.egateza.termul</groupId>
+        <artifactId>termul-parent</artifactId>
         <version>0.1.0-SNAPSHOT</version>
     </parent>
 
-    <artifactId>myterm-ssh</artifactId>
-    <name>MyTerm :: ssh</name>
+    <artifactId>termul-ssh</artifactId>
+    <name>TermUL :: ssh</name>
     <description>SessionManager, koneksi MINA SSHD, known_hosts, auth</description>
 
     <dependencies>
         <dependency>
-            <groupId>dev.egateza.myterm</groupId>
-            <artifactId>myterm-core</artifactId>
+            <groupId>dev.egateza.termul</groupId>
+            <artifactId>termul-core</artifactId>
         </dependency>
         <dependency>
             <groupId>org.apache.sshd</groupId>

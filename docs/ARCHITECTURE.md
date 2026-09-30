@@ -53,18 +53,18 @@ OPENING ─download+stat─► EDITING ─(file saved, debounce)─► UPLOADING
 
 Upload normal (user punya akses tulis):
 1. `stat` remote. Kalau `mtime/size` ≠ baseline, lempar `RemoteConflictException`.
-2. Tulis ke `<dir>/.<name>.myterm-<rand>.tmp`.
+2. Tulis ke `<dir>/.<name>.termul-<rand>.tmp`.
 3. `setstat` mode = mode asal.
 4. `posix-rename@openssh.com` (atomic replace). Fallback: rename biasa setelah remove.
 5. Perbarui baseline (`stat` baru).
 
 Upload file root (`SudoWriter`):
-1. Upload ke `/tmp/myterm-<rand>` (mode 600).
-2. `ChannelExec`: `sudo -S -p '' install -m <mode> -o <uid> -g <gid> /tmp/myterm-<rand> <target> && rm -f /tmp/myterm-<rand>`. Password dikirim via stdin.
-3. Opsional: jalankan validation hook. Kalau gagal, restore backup (`<target>.myterm-bak`).
+1. Upload ke `/tmp/termul-<rand>` (mode 600).
+2. `ChannelExec`: `sudo -S -p '' install -m <mode> -o <uid> -g <gid> /tmp/termul-<rand> <target> && rm -f /tmp/termul-<rand>`. Password dikirim via stdin.
+3. Opsional: jalankan validation hook. Kalau gagal, restore backup (`<target>.termul-bak`).
 
 File watching:
-- Satu `WatchService` untuk direktori cache (`%LOCALAPPDATA%\MyTerm\edit\`), dengan thread watcher tunggal.
+- Satu `WatchService` untuk direktori cache (`%LOCALAPPDATA%\TermUL\edit\`), dengan thread watcher tunggal.
 - Event dikumpulkan per file dan di-debounce 300–500 ms (editor melakukan atomic save: tulis temp lalu rename, sehingga muncul beberapa event).
 - Bandingkan hash (SHA-256) konten lokal dengan hash terakhir yang di-upload supaya tidak upload tanpa perubahan.
 
@@ -84,13 +84,13 @@ Aturan: callback ke UI selalu lewat `invokeLater`. `CompletableFuture` dari oper
 ## Layout storage (Windows)
 
 ```
-%APPDATA%\MyTerm\
+%APPDATA%\TermUL\
   config.json         preferensi (font, tema, editor mapping, hotkey)
   profiles.json       host tree + profil (TANPA secret)
   known_hosts         host key terverifikasi (format OpenSSH)
   vault.bin           secret terenkripsi
   logs\               log aplikasi (tanpa secret)
-%LOCALAPPDATA%\MyTerm\
+%LOCALAPPDATA%\TermUL\
   edit\<profileId>\<remote-path>   cache file yang sedang diedit
 ```
 

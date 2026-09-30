@@ -4,7 +4,7 @@
 
 ## Ringkasan
 
-**MyTerm** (nama kerja, belum final) adalah SSH client desktop pribadi ala MobaXterm untuk Windows:
+**TermUL** (Terminal Utility; sebelumnya bernama MyTerm) adalah SSH client desktop pribadi ala MobaXterm untuk Windows:
 
 - Daftar host (tree/grup) dan profil SSH per server
 - Terminal SSH dengan tab
@@ -29,7 +29,7 @@ Ini **bukan** terminal emulator lokal. PTY berada di server remote, sedangkan ap
 | Terminal widget | JediTerm (`jediterm-core`, `jediterm-ui`) dengan custom `TtyConnector` di atas `ChannelShell` |
 | UI | Swing + FlatLaf (JediTerm berbasis Swing, jadi jangan pakai JavaFX) |
 | Credential | Windows DPAPI via JNA, atau vault AES-256-GCM + Argon2id (keputusan terbuka, lihat `docs/SECURITY.md`) |
-| Storage profil | JSON (Jackson) di `%APPDATA%\MyTerm\`; profil tidak boleh berisi secret |
+| Storage profil | JSON (Jackson) di `%APPDATA%\TermUL\`; profil tidak boleh berisi secret |
 | Logging | SLF4J + Logback |
 | Test | JUnit 5, AssertJ, Testcontainers (container `openssh-server` untuk integration test) |
 | Packaging | `jpackage` (.msi/.exe dengan runtime bawaan) |
@@ -37,7 +37,7 @@ Ini **bukan** terminal emulator lokal. PTY berada di server remote, sedangkan ap
 ## Struktur modul (target)
 
 ```
-myterm/
+termul/
 ├─ core/       domain model (HostProfile, Group), ProfileStore, event bus, utilities
 ├─ vault/      CredentialVault API + implementasi (DPAPI / AES-GCM)
 ├─ ssh/        SessionManager, koneksi MINA, known_hosts, auth (key/agent/password), jump host

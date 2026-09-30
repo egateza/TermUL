@@ -15,7 +15,7 @@
 
 | # | Keputusan | Pilihan | Catatan |
 |---|---|---|---|
-| D1 | Nama & base package | `MyTerm`, groupId/package `dev.egateza.myterm` | Masih bisa di-rename (refactor package di IntelliJ) |
+| D1 | Nama & base package | `TermUL` (Terminal Utility), groupId/package `dev.egateza.termul` | Di-rename dari `MyTerm` 2026-09-30 (permintaan user). Folder data `%APPDATA%\MyTerm` & `%LOCALAPPDATA%\MyTerm` dipindah otomatis saat start. Konstanta format vault (`MyTerm-vault-dek-v1`, `MYTERM-VAULT-OK`) sengaja tidak diubah |
 | D3 | Format storage profil | JSON (Jackson) | Sesuai rekomendasi PLAN |
 | D2 | Desain vault | Master password + Argon2id + AES-256-GCM, opsi DPAPI | `docs/adr/0002-vault-design.md` |
 
@@ -92,10 +92,10 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] Log per shell (buka/tutup) dan jumlah pemakai koneksi bersama
 - [x] Ikon OS otomatis: `cat /etc/os-release` lewat exec channel sekali per profil per run → disimpan di profil
   (`HostProfile.os`), badge warna distro di host tree + tab, tooltip nama lengkap (permintaan user)
-  - Ubuntu memakai logo resmi (PNG dari user, `app/src/main/resources/dev/egateza/myterm/app/icons/ubuntu.png`,
+  - Ubuntu memakai logo resmi (PNG dari user, `app/src/main/resources/dev/egateza/termul/app/icons/ubuntu.png`,
     varian 1x–4x untuk HiDPI); distro lain tetap badge. Tambah logo lain: taruh PNG + daftarkan di `OsIcons.LOGOS`
 - [x] Panel log aplikasi di bawah window: menu **Bantuan → Tampilkan log** (`Ctrl+Shift+L`), plus "Buka folder log"
-  dan "Tentang MyTerm" (permintaan user). `UiLogAppender` (logback) → ring buffer `LogBuffer` (2000 entry terakhir,
+  dan "Tentang TermUL" (permintaan user). `UiLogAppender` (logback) → ring buffer `LogBuffer` (2000 entry terakhir,
   di memori) → `LogPanel` polling tiap 300 ms hanya saat terlihat; WARN/ERROR berwarna merah. Isi sama dengan file log
 - [ ] (usulan, menunggu keputusan user) Fallback koneksi kedua kalau server menolak channel (`MaxSessions`, default 10),
   atau opsi per profil "koneksi terpisah per tab"
@@ -149,7 +149,7 @@ Fase 5 & 6 **ditunda** atas permintaan user. Sedang berjalan: **acceptance Fase 
 1. ~~Koneksi ke server nyata~~ ✔ (server01). Buat 2 profil lagi ke container uji (sudah dijalankan 2026-09-30):
    `uji-1` = `127.0.0.1:2222`, `uji-2` = `127.0.0.1:2223`, user `dev` / password `devpass` (sudo pakai password yang sama;
    htop, vim, bash, terminfo sudah di-install). Stop: `docker stop myterm-sshd myterm-sshd2`; hapus: `docker rm -f ...`.
-   Kalau container dihapus lalu dibuat ulang, host key berubah → MyTerm akan MENOLAK koneksi (benar), hapus entry lama
+   Kalau container dihapus lalu dibuat ulang, host key berubah → TermUL akan MENOLAK koneksi (benar), hapus entry lama
    di `D:\tmp\myterm-dev\config\known_hosts`.
 2. Buka 3 tab, jalankan `htop` dan `vim` di masing-masing (cek warna, garis box, scroll).
 3. Resize window & split host tree → `stty size` / `htop` ikut berubah; coba zoom Ctrl++/Ctrl+-.
@@ -162,9 +162,9 @@ Fase 5 & 6 **ditunda** atas permintaan user. Sedang berjalan: **acceptance Fase 
    - `ssh/` → `SessionManager`, `auth/AuthSetup` (batas String MINA), `hostkey/AppServerKeyVerifier`
    - `terminal/` → `SshTtyConnector`
    - `sftp/` → `RemoteFileService`, `edit/RemoteEditSession`, `edit/EditWatcher`, `edit/EditCache`
-   - `app/` → `MyTermApp` (wiring), `ui/MainFrame`, `terminal/TerminalTab`, `sftp/SftpPanel`, `edit/EditManager`
+   - `app/` → `TermULApp` (wiring), `ui/MainFrame`, `terminal/TerminalTab`, `sftp/SftpPanel`, `edit/EditManager`
 2. **Acceptance test manual** Fase 1–4 (checkbox "Acceptance" di atas), dengan data dev terpisah:
-   `mvnw.cmd -pl app exec:java -Dmyterm.home=D:\tmp\myterm-dev`
+   `mvnw.cmd -pl app exec:java -Dtermul.home=D:\tmp\myterm-dev`
 3. Setelah review: **Fase 5** — `SudoWriter` (upload `/tmp` → `sudo -S install`), backup + validation hook + rollback,
    `PromptResponder` auto-sudo dengan semua guard (lihat `docs/SECURITY.md`), toggle per host. Hook yang sudah disiapkan:
    `RemoteEditSession.Uploader` (ganti uploader untuk file root), `SshTtyConnector.addOutputListener` (tap output),
@@ -196,7 +196,7 @@ Fase 5 & 6 **ditunda** atas permintaan user. Sedang berjalan: **acceptance Fase 
 - **Satu koneksi SSH per profil** dipakai bersama oleh semua tab/SFTP/edit (requirement N5); tiap tab = channel shell
   sendiri. Konsekuensi: koneksi putus → semua tab profil itu putus; OpenSSH `MaxSessions` default 10 channel per koneksi.
 - JediTerm memanggil `TtyConnector.close()` sendiri setelah stream EOF → penutupan oleh user memakai `closeByUser()`.
-- VS Code: kalau muncul `ClassNotFoundException MyTermApp`, folder `target/classes` terhapus → `mvnw.cmd install -DskipTests`
+- VS Code: kalau muncul `ClassNotFoundException TermULApp`, folder `target/classes` terhapus → `mvnw.cmd install -DskipTests`
   atau *Java: Force Java Compilation (Full)*. Extension Oracle Java + Red Hat Java terpasang bersamaan bisa bentrok.
 
 ## Cara menjalankan (dev)
@@ -204,12 +204,12 @@ Fase 5 & 6 **ditunda** atas permintaan user. Sedang berjalan: **acceptance Fase 
 ```bash
 mvnw.cmd install -DskipITs                       # build + unit test
 mvnw.cmd verify                                  # + integration test (butuh Docker)
-mvnw.cmd -pl app exec:java                       # jalankan app (data asli di %APPDATA%\MyTerm)
-mvnw.cmd -pl app exec:java -Dmyterm.home=D:\tmp\myterm-dev   # data dev terpisah
+mvnw.cmd -pl app exec:java                       # jalankan app (data asli di %APPDATA%\TermUL)
+mvnw.cmd -pl app exec:java -Dtermul.home=D:\tmp\myterm-dev   # data dev terpisah
 ```
 
-Dari VS Code: `.vscode/launch.json` (tidak di-commit) konfigurasi `MyTermApp`, `projectName: myterm-app`,
-`vmArgs: --enable-native-access=ALL-UNNAMED -Dmyterm.home=D:\\tmp\\myterm-dev`, lalu F5.
-Log aplikasi dev: `D:\tmp\myterm-dev\config\logs\myterm.log`.
+Dari VS Code: `.vscode/launch.json` (tidak di-commit) konfigurasi `TermULApp`, `projectName: termul-app`,
+`vmArgs: --enable-native-access=ALL-UNNAMED -Dtermul.home=D:\\tmp\\myterm-dev`, lalu F5.
+Log aplikasi dev: `D:\tmp\myterm-dev\config\logs\termul.log`.
 
 Server uji cepat: lihat `docs/SETUP.md` (container `lscr.io/linuxserver/openssh-server`, port 2222, user `dev`/`devpass`).

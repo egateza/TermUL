@@ -1,6 +1,6 @@
 <configuration>
     <!-- Log aplikasi: TANPA secret dan tanpa konten terminal (lihat docs/SECURITY.md) -->
-    <property name="LOG_DIR" value="${myterm.logDir:-logs}"/>
+    <property name="LOG_DIR" value="${termul.logDir:-logs}"/>
 
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
@@ -9,9 +9,9 @@
     </appender>
 
     <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>${LOG_DIR}/myterm.log</file>
+        <file>${LOG_DIR}/termul.log</file>
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <fileNamePattern>${LOG_DIR}/myterm.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <fileNamePattern>${LOG_DIR}/termul.%d{yyyy-MM-dd}.log</fileNamePattern>
             <maxHistory>14</maxHistory>
         </rollingPolicy>
         <encoder>
@@ -20,7 +20,7 @@
     </appender>
 
     <!-- Panel log di UI (menu Bantuan → Tampilkan log): ring buffer di memori, isi sama dengan file log -->
-    <appender name="UI" class="dev.egateza.myterm.app.log.UiLogAppender">
+    <appender name="UI" class="dev.egateza.termul.app.log.UiLogAppender">
         <pattern>%d{HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n</pattern>
     </appender>
 

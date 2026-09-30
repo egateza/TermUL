@@ -1,4 +1,4 @@
-# MyTerm (nama kerja)
+# TermUL (Terminal Utility)
 
 SSH client desktop pribadi untuk Windows, ala MobaXterm:
 

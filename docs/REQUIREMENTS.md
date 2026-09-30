@@ -60,7 +60,7 @@ Pekerjaan harian melibatkan banyak server Linux (produksi & staging). Masalah ya
 | N4 | Koneksi putus tidak membuat UI freeze, dan edit yang pending tidak hilang (file lokal tetap ada, upload bisa di-retry) |
 | N5 | Satu koneksi SSH per host dipakai bersama oleh shell, SFTP, dan exec |
 | N6 | Distribusi berupa installer Windows dengan runtime bawaan (tanpa perlu install JDK) |
-| N7 | Konfigurasi & data di `%APPDATA%\MyTerm`, cache edit di `%LOCALAPPDATA%\MyTerm` |
+| N7 | Konfigurasi & data di `%APPDATA%\TermUL`, cache edit di `%LOCALAPPDATA%\TermUL` |
 
 ## Out of scope (untuk sekarang)
 

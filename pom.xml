@@ -4,12 +4,12 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>dev.egateza.myterm</groupId>
-    <artifactId>myterm-parent</artifactId>
+    <groupId>dev.egateza.termul</groupId>
+    <artifactId>termul-parent</artifactId>
     <version>0.1.0-SNAPSHOT</version>
     <packaging>pom</packaging>
 
-    <name>MyTerm</name>
+    <name>TermUL</name>
     <description>SSH client desktop pribadi (host tree, terminal, sudo inject, SFTP, remote edit)</description>
 
     <modules>
@@ -28,7 +28,7 @@
         <project.build.outputTimestamp>2026-09-30T00:00:00Z</project.build.outputTimestamp>
 
         <!-- argLine bersama untuk Surefire/Failsafe (JNA butuh native access) -->
-        <myterm.test.argLine>--enable-native-access=ALL-UNNAMED -Dfile.encoding=UTF-8</myterm.test.argLine>
+        <termul.test.argLine>--enable-native-access=ALL-UNNAMED -Dfile.encoding=UTF-8</termul.test.argLine>
 
         <!-- Library -->
         <sshd.version>2.20.0</sshd.version>
@@ -79,39 +79,39 @@
         <dependencies>
             <!-- Modul internal -->
             <dependency>
-                <groupId>dev.egateza.myterm</groupId>
-                <artifactId>myterm-core</artifactId>
+                <groupId>dev.egateza.termul</groupId>
+                <artifactId>termul-core</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>dev.egateza.myterm</groupId>
-                <artifactId>myterm-vault</artifactId>
+                <groupId>dev.egateza.termul</groupId>
+                <artifactId>termul-vault</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>dev.egateza.myterm</groupId>
-                <artifactId>myterm-ssh</artifactId>
+                <groupId>dev.egateza.termul</groupId>
+                <artifactId>termul-ssh</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>dev.egateza.myterm</groupId>
-                <artifactId>myterm-terminal</artifactId>
+                <groupId>dev.egateza.termul</groupId>
+                <artifactId>termul-terminal</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>dev.egateza.myterm</groupId>
-                <artifactId>myterm-sftp</artifactId>
+                <groupId>dev.egateza.termul</groupId>
+                <artifactId>termul-sftp</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>dev.egateza.myterm</groupId>
-                <artifactId>myterm-ssh</artifactId>
+                <groupId>dev.egateza.termul</groupId>
+                <artifactId>termul-ssh</artifactId>
                 <version>${project.version}</version>
                 <type>test-jar</type>
             </dependency>
             <dependency>
-                <groupId>dev.egateza.myterm</groupId>
-                <artifactId>myterm-sftp</artifactId>
+                <groupId>dev.egateza.termul</groupId>
+                <artifactId>termul-sftp</artifactId>
                 <version>${project.version}</version>
                 <type>test-jar</type>
             </dependency>
@@ -293,7 +293,7 @@
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>${maven-surefire-plugin.version}</version>
                     <configuration>
-                        <argLine>${myterm.test.argLine}</argLine>
+                        <argLine>${termul.test.argLine}</argLine>
                         <includes>
                             <include>**/*Test.java</include>
                         </includes>
@@ -304,7 +304,7 @@
                     <artifactId>maven-failsafe-plugin</artifactId>
                     <version>${maven-failsafe-plugin.version}</version>
                     <configuration>
-                        <argLine>${myterm.test.argLine}</argLine>
+                        <argLine>${termul.test.argLine}</argLine>
                         <includes>
                             <include>**/*IT.java</include>
                         </includes>
@@ -375,11 +375,11 @@
                             <rules>
                                 <requireJavaVersion>
                                     <version>[25,26)</version>
-                                    <message>MyTerm butuh JDK 25 (LTS).</message>
+                                    <message>TermUL butuh JDK 25 (LTS).</message>
                                 </requireJavaVersion>
                                 <requireMavenVersion>
                                     <version>[3.9,)</version>
-                                    <message>MyTerm butuh Maven 3.9 atau lebih baru (pakai mvnw).</message>
+                                    <message>TermUL butuh Maven 3.9 atau lebih baru (pakai mvnw).</message>
                                 </requireMavenVersion>
                                 <dependencyConvergence/>
                             </rules>

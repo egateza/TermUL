@@ -5,19 +5,19 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>dev.egateza.myterm</groupId>
-        <artifactId>myterm-parent</artifactId>
+        <groupId>dev.egateza.termul</groupId>
+        <artifactId>termul-parent</artifactId>
         <version>0.1.0-SNAPSHOT</version>
     </parent>
 
-    <artifactId>myterm-terminal</artifactId>
-    <name>MyTerm :: terminal</name>
+    <artifactId>termul-terminal</artifactId>
+    <name>TermUL :: terminal</name>
     <description>TtyConnector JediTerm di atas ChannelShell, PromptResponder</description>
 
     <dependencies>
         <dependency>
-            <groupId>dev.egateza.myterm</groupId>
-            <artifactId>myterm-ssh</artifactId>
+            <groupId>dev.egateza.termul</groupId>
+            <artifactId>termul-ssh</artifactId>
         </dependency>
         <dependency>
             <groupId>org.jetbrains.jediterm</groupId>
@@ -32,8 +32,8 @@
             <artifactId>annotations</artifactId>
         </dependency>
         <dependency>
-            <groupId>dev.egateza.myterm</groupId>
-            <artifactId>myterm-ssh</artifactId>
+            <groupId>dev.egateza.termul</groupId>
+            <artifactId>termul-ssh</artifactId>
             <type>test-jar</type>
             <scope>test</scope>
         </dependency>
