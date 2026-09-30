@@ -81,8 +81,8 @@ Arah dependensi: `app → terminal, sftp → ssh → core`, dan `vault → core`
 
 ## Status saat ini
 
-- **Fase 0: dokumentasi & perencanaan.** Belum ada kode.
-- Langkah berikutnya: Fase 1 di `docs/PLAN.md` (skeleton Maven, lalu connect, lalu tab terminal).
+- **Fase 1 selesai (kode)**; acceptance test manual menunggu. Progres & langkah berikutnya selalu di `plan-recap.md`.
+- Langkah berikutnya: Fase 2 di `docs/PLAN.md` (vault & inject password).
 
 ## Peta dokumen
 

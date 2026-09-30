@@ -7,7 +7,7 @@ SSH client desktop pribadi untuk Windows, ala MobaXterm:
 - Inject password sudo/su dari vault terenkripsi (hotkey / auto-trigger dengan guard)
 - Remote directory (SFTP) + edit file remote dengan editor lokal, auto-upload saat disimpan
 
-**Status:** Fase 0 (perencanaan). Belum ada kode.
+**Status:** Fase 1 (kode) selesai: host tree, profil, terminal SSH multi-tab, TOFU, keep-alive. Progres detail: [plan-recap.md](plan-recap.md).
 
 ## Dokumen
 - [CLAUDE.md](CLAUDE.md): konteks project & aturan kode
