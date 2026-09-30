@@ -59,9 +59,10 @@ Upload normal (user punya akses tulis):
 5. Perbarui baseline (`stat` baru).
 
 Upload file root (`SudoWriter`):
-1. Upload ke `/tmp/termul-<rand>` (mode 600).
-2. `ChannelExec`: `sudo -S -p '' install -m <mode> -o <uid> -g <gid> /tmp/termul-<rand> <target> && rm -f /tmp/termul-<rand>`. Password dikirim via stdin.
-3. Opsional: jalankan validation hook. Kalau gagal, restore backup (`<target>.termul-bak`).
+1. Upload ke `/tmp/termul-<rand>/content` (direktori mode 700 dibuat dulu, file 600).
+2. `ChannelExec` (`RemoteExec`): `env LC_ALL=C sudo -S -k -p '' sh -c <script> termul <target> <src> <hook> <bakdir> <keep>`. Password via stdin. Script: `readlink -f`, backup `cp -p` ke `/var/backups/termul`, `install -m/-o/-g` (mode/owner lama) ke temp di direktori target, `mv -f`.
+3. Hook validasi pertama yang cocok (`ValidationHooks`, mis. `/etc/nginx/** = nginx -t`) dijalankan di sudo yang sama. Gagal → backup dipasang lagi (exit 10; 11 = rollback gagal). Direktori `/tmp/termul-*` dihapus di `finally`.
+4. App menawarkan sudo otomatis kalau `test -w` gagal saat file dibuka, atau lewat klik kanan *Edit sebagai root*.
 
 File watching:
 - Satu `WatchService` untuk direktori cache (`%LOCALAPPDATA%\TermUL\edit\`), dengan thread watcher tunggal.

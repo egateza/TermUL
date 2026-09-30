@@ -66,9 +66,14 @@ Rekomendasi operasional (di luar aplikasi): untuk server prod, pertimbangkan aks
 - Upload atomic, conflict check berbasis `mtime + size` (opsional: hash via `sha256sum` exec).
 - `sudo install` menjaga owner/mode. File temp di `/tmp` dibuat dengan mode 600 dan dihapus setelahnya.
 - Jangan pernah menaruh password di argumen command (terlihat di `ps`). Password selalu dikirim via stdin (`sudo -S -p ''`).
+- Implementasi (`SudoWriter`): file baru ditulis ke `/tmp/termul-<acak>/` (direktori dibuat mode 700 **sebelum** ada isinya), lalu satu `sudo -S -k -p '' sh -c <script>` sebagai root: `readlink -f` target (symlink tetap symlink), backup `cp -p` ke `/var/backups/termul` (mode 700, 10 versi per file), `install -m/-o/-g` sesuai file lama ke temp di direktori yang sama, `mv -f` (atomic), hook validasi, dan rollback dari backup kalau validasi gagal. Semua dalam satu sudo sehingga rollback tetap jalan walau yang rusak `sudoers`.
+- `-k` memaksa sudo selalu membaca password dari stdin (tidak memakai cache), supaya password tidak pernah sampai ke script. Tanpa password tersimpan dicoba `sudo -n` dulu (NOPASSWD), baru user diminta (tidak disimpan). Password salah tidak diulang.
+- Hook validasi (`config.json` → `validationHooks`) adalah command milik user sendiri yang dijalankan sebagai root; hanya bisa diubah lewat config lokal.
 
 ## Keterbatasan yang diketahui
 
+- Auto-sudo meng-arm hanya kalau baris kursor dikenali sebagai prompt shell (heuristik `ExitGuard`); prompt dengan spasi (mis. `(venv) user@host:~$`) dan prompt `sudo-rs` (`[sudo: authenticate] Password:`, tanpa username) tidak dikenali, jadi auto-sudo tidak jalan (fail-safe). Hotkey tetap bisa dipakai.
+- Selama validasi berjalan (antara `mv` dan rollback), file baru yang invalid sempat terpasang sebentar.
 - **Password login & passphrase key di MINA berupa `String`.** API Apache MINA SSHD (`UserInteraction`, `FilePasswordProvider`) hanya menerima `String`. Konversi `char[] → String` dibatasi di satu tempat (`ssh/.../auth/AuthSetup.java`), dilakukan tepat saat MINA memintanya, dan `char[]` asal langsung di-zero. String itu tidak disimpan di field, tidak di-log, dan menjadi garbage setelah paket auth terkirim. Password sudo/su (inject ke terminal) tetap `char[]`/`byte[]` penuh.
 
 ## Logging

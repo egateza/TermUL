@@ -51,12 +51,14 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 **Acceptance**: edit `~/app/config.yml` di VS Code, lalu Ctrl+S, dan file langsung ter-update di server dengan permission yang sama. Kalau file diubah di server sebelum save, dialog konflik muncul.
 
 ## Fase 5: Edit file root & auto-trigger (±2 minggu)
-- [ ] `SudoWriter`: upload ke `/tmp`, lalu `sudo -S install` dengan owner/mode, lalu cleanup
-- [ ] Backup + validation hook per pola path (`/etc/nginx/**` menjalankan `nginx -t`) + rollback
-- [ ] `PromptResponder` auto-trigger dengan semua guard + unit test (termasuk test spoofing: prompt palsu tanpa armed tidak boleh memicu)
-- [ ] Toggle auto-trigger per host (default OFF untuk tag prod)
+- [x] `SudoWriter`: upload ke `/tmp`, lalu `sudo -S install` dengan owner/mode, lalu cleanup
+- [x] Backup + validation hook per pola path (`/etc/nginx/**` menjalankan `nginx -t`) + rollback
+- [x] `PromptResponder` auto-trigger dengan semua guard + unit test (termasuk test spoofing: prompt palsu tanpa armed tidak boleh memicu)
+- [x] Toggle auto-trigger per host (default OFF untuk tag prod)
 
 **Acceptance**: edit `/etc/nginx/sites-available/x` dari VS Code berhasil dengan owner `root:root` tetap. Config yang invalid di-rollback otomatis.
+
+Catatan implementasi: satu `sudo sh -c` per upload (backup ke `/var/backups/termul`, `install` ke temp + `mv`, validasi, rollback) supaya rollback tetap jalan walau yang rusak `sudoers`. Hook validasi di **Pengaturan → Validasi file root (sudo)**. File di `/tmp` ditaruh di direktori privat mode 700.
 
 ## Fase 6: Polish & distribusi
 - [ ] Import `~/.ssh/config`, jump host (ProxyJump)

@@ -72,10 +72,12 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [ ] Acceptance (manual): edit `~/app/config.yml` di VS Code → Ctrl+S → ter-update di server dengan permission sama; konflik memunculkan dialog
 
 ### Fase 5: Edit file root & auto-trigger
-- [ ] `SudoWriter` (upload /tmp → `sudo -S install` → cleanup)
-- [ ] Backup + validation hook per path + rollback
-- [ ] `PromptResponder` auto-trigger dengan semua guard + unit test spoofing
-- [ ] Toggle auto-trigger per host (default OFF untuk prod)
+- [x] `SudoWriter` (upload /tmp → `sudo -S install` → cleanup)
+- [x] Backup + validation hook per path + rollback
+- [x] `PromptResponder` auto-trigger dengan semua guard + unit test spoofing
+- [x] Toggle auto-trigger per host (default OFF untuk prod)
+- [ ] Acceptance (manual): edit `/etc/nginx/sites-available/x` dari VS Code → owner `root:root` tetap; config invalid di-rollback;
+  auto-sudo: `sudo ls` di host dengan toggle aktif mengirim password sekali, prompt palsu (`echo "[sudo] password for ega: "`) tidak memicu
 
 ### Fase 6: Polish & distribusi
 - [ ] Import `~/.ssh/config`, jump host (ProxyJump)
@@ -126,6 +128,13 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 | Tanggal | Commit | Task |
 |---|---|---|
+| 2026-10-01 | `feat(app): auto-inject password sudo/su per host lewat PromptResponder ...` | Wiring auto-sudo di tab (Fase 5) |
+| 2026-10-01 | `feat(terminal): PromptResponder auto-inject sudo/su dengan guard ...` | PromptResponder + AnsiStripper + test spoofing (Fase 5) |
+| 2026-10-01 | `feat(app): edit file root lewat sudo ...` | Edit sebagai root, tawaran sudo untuk file read-only, dialog validasi (Fase 5) |
+| 2026-10-01 | `fix(ssh): exec yang ditolak server langsung selesai ...` | Exec want-reply |
+| 2026-10-01 | `feat(sftp): SudoWriter untuk edit file root ...` | SudoWriter + backup/validasi/rollback + IT sudo asli (Fase 5) |
+| 2026-10-01 | `feat(ssh): RemoteExec ...` | Exec channel dengan stdin/timeout (Fase 5) |
+| 2026-10-01 | `feat(core): hook validasi per pola path ...` | ValidationHooks di config.json (Fase 5) |
 | 2026-09-30 | `feat(app): menu Terminal nonaktif kalau tidak ada tab/sesi aktif` | Enable/disable menu Terminal sesuai sesi (permintaan user) |
 | 2026-09-30 | `feat(app): mode tombol melayang untuk panel host dengan opsi transparansi` | Panel host: mode melayang + panel di samping (permintaan user) |
 | 2026-09-30 | `feat(app): pilihan set ikon Font Awesome / Material Symbols dan tool AddIcon` | Dua set ikon + tool tambah ikon (permintaan user) |
@@ -168,8 +177,8 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 ## Langkah berikutnya
 
-**Status 2026-09-30:** Fase 1–4 selesai (kode + test), plus perbaikan dari uji manual (lihat "Tambahan dari uji manual").
-Fase 5 & 6 **ditunda** atas permintaan user. Sedang berjalan: **acceptance Fase 0 & 1**.
+**Status 2026-10-01:** Fase 1–5 selesai (kode + test), plus perbaikan dari uji manual (lihat "Tambahan dari uji manual").
+Fase 5 dikerjakan di branch `feat/fase5-root-edit` (bercabang dari `feat/tema-custom`). Fase 6 sebagian (tema). Menunggu: **acceptance manual Fase 1–5**.
 
 **Pertanyaan terbuka untuk user:**
 - Perlu fallback `MaxSessions` / opsi koneksi terpisah per tab?
@@ -194,10 +203,12 @@ Fase 5 & 6 **ditunda** atas permintaan user. Sedang berjalan: **acceptance Fase 
    - `app/` → `TermULApp` (wiring), `ui/MainFrame`, `terminal/TerminalTab`, `sftp/SftpPanel`, `edit/EditManager`
 2. **Acceptance test manual** Fase 1–4 (checkbox "Acceptance" di atas), dengan data dev terpisah:
    `mvnw.cmd -pl app exec:java -Dtermul.home=D:\tmp\myterm-dev`
-3. Setelah review: **Fase 5** — `SudoWriter` (upload `/tmp` → `sudo -S install`), backup + validation hook + rollback,
-   `PromptResponder` auto-sudo dengan semua guard (lihat `docs/SECURITY.md`), toggle per host. Hook yang sudah disiapkan:
-   `RemoteEditSession.Uploader` (ganti uploader untuk file root), `SshTtyConnector.addOutputListener` (tap output),
-   `SshTtyConnector.writeSecret`, field `HostProfile.autoSudo`.
+3. **Fase 5 selesai (kode)** — uji manual: klik kanan file root di SFTP → *Edit sebagai root (sudo)* (atau buka file read-only → tawaran sudo),
+   simpan config nginx yang valid (owner/mode tetap, backup di `/var/backups/termul`) dan yang invalid (rollback + dialog
+   output `nginx -t`). Auto-sudo: centang di Edit host, lalu `sudo ls` / `su -`. Hook validasi: Pengaturan → Validasi file root.
+   Keterbatasan: shell login harus POSIX (bash/dash/zsh); prompt `sudo-rs` (`[sudo: authenticate] Password:`) belum dikenali
+   auto-sudo (hotkey tetap bisa); prompt shell dengan spasi di depan (mis. `(venv) ega@host:~$`) tidak meng-arm; file yang
+   tidak bisa **dibaca** user login belum bisa dibuka (download masih lewat SFTP biasa).
 4. Lalu **Fase 6** (lihat checklist di atas).
 
 ## Shortcut aplikasi (untuk uji manual)
