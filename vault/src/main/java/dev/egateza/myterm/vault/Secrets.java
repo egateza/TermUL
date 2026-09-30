@@ -32,6 +32,21 @@ public final class Secrets {
         }
     }
 
+    /**
+     * UTF-8 dari {@code chars} ditambah satu byte {@code suffix} (mis. {@code '\r'} untuk inject ke terminal).
+     * {@code chars} tidak diubah; buffer perantara di-zero.
+     */
+    public static byte[] toUtf8WithSuffix(char[] chars, byte suffix) {
+        byte[] encoded = toUtf8(chars);
+        try {
+            byte[] out = Arrays.copyOf(encoded, encoded.length + 1);
+            out[encoded.length] = suffix;
+            return out;
+        } finally {
+            zero(encoded);
+        }
+    }
+
     public static char[] fromUtf8(byte[] bytes) {
         var decoder = StandardCharsets.UTF_8.newDecoder()
                 .onMalformedInput(CodingErrorAction.REPORT)

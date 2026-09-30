@@ -47,7 +47,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] `CredentialVault` + implementasi + unit test (round-trip, tamper detection GCM)
 - [x] Field secret di dialog profil (login, sudo, root)
 - [x] Auth password dari vault
-- [ ] Hotkey `Ctrl+Shift+P` inject sudo password, `Ctrl+Shift+R` inject root password
+- [x] Hotkey `Ctrl+Shift+P` inject sudo password, `Ctrl+Shift+R` inject root password
 
 ### Fase 3: Panel SFTP
 - [ ] `RemoteFileService` di atas `SftpClient` (connection handle yang sama)
@@ -80,6 +80,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 | Tanggal | Commit | Task |
 |---|---|---|
+| 2026-09-30 | `feat(app): tambah hotkey Ctrl+Shift+P/Ctrl+Shift+R untuk inject password sudo/root dari vault` | Hotkey inject sudo/root |
 | 2026-09-30 | `feat(app): tambah field password login/passphrase/sudo/root di dialog profil yang disimpan ke vault` | Field secret di dialog profil |
 | 2026-09-30 | `feat(app): ambil password login/passphrase dari vault dengan unlock on-demand dan auto-lock idle` | Auth password dari vault + menu Vault |
 | 2026-09-30 | `feat(vault): tambah vault terenkripsi Argon2id + AES-256-GCM dengan opsi DPAPI` | CredentialVault + FileCredentialVault + DPAPI |
@@ -97,7 +98,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 ## Langkah berikutnya
 
-- Hotkey Ctrl+Shift+P (inject sudo) dan Ctrl+Shift+R (inject root) di tab terminal.
+- Fase 3: RemoteFileService di atas SftpClient (modul sftp) + unit test dengan server MINA SFTP in-process. (Acceptance manual Fase 1 & 2 menunggu user.)
 
 ## Catatan / blocker
 

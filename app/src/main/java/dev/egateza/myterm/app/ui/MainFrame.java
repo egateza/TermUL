@@ -15,6 +15,8 @@ import dev.egateza.myterm.vault.SecretType;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.Font;
+import java.awt.KeyEventDispatcher;
+import java.awt.KeyboardFocusManager;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
@@ -47,6 +49,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             "<html><center><b>MyTerm</b><br><br>Double-click host di kiri untuk membuka terminal.<br>"
                     + "Ctrl+N: host baru &nbsp; Ctrl+F: cari host</center></html>", SwingConstants.CENTER);
     private final Runnable onExit;
+    private final KeyEventDispatcher hotkeys = this::dispatchHotkey;
 
     public MainFrame(AppContext ctx, Runnable onExit) {
         super("MyTerm");
@@ -88,6 +91,37 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         setLocationRelativeTo(null);
 
         store.addListener(s -> SwingUtilities.invokeLater(() -> hostTree.setSnapshot(s)));
+        KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(hotkeys);
+    }
+
+    /**
+     * Hotkey inject password: Ctrl+Shift+P (sudo), Ctrl+Shift+R (root). Ditangkap sebelum JediTerm
+     * supaya tidak ikut terkirim ke remote.
+     */
+    private boolean dispatchHotkey(KeyEvent e) {
+        if (e.getID() != KeyEvent.KEY_PRESSED || !e.isControlDown() || !e.isShiftDown() || e.isAltDown()) {
+            return false;
+        }
+        SecretType type = switch (e.getKeyCode()) {
+            case KeyEvent.VK_P -> SecretType.SUDO_PASSWORD;
+            case KeyEvent.VK_R -> SecretType.ROOT_PASSWORD;
+            default -> null;
+        };
+        if (type == null || e.getComponent() == null || SwingUtilities.getWindowAncestor(e.getComponent()) != this) {
+            return false;
+        }
+        var tab = currentTab();
+        if (tab.isEmpty()) {
+            return false;
+        }
+        tab.get().injectSecret(type, ctx.vault());
+        return true;
+    }
+
+    @Override
+    public void dispose() {
+        KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(hotkeys);
+        super.dispose();
     }
 
     public void showSnapshot(ProfileSnapshot snapshot) {
@@ -118,6 +152,12 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                 () -> currentTab().ifPresent(TerminalTab::reconnect)));
         terminal.add(menuItem("Tutup tab", KeyStroke.getKeyStroke(KeyEvent.VK_W, ctrlShift),
                 () -> closeTab(tabs.getSelectedIndex())));
+        terminal.addSeparator();
+        // tanpa accelerator: hotkey ditangani dispatchHotkey supaya tidak ditelan terminal
+        terminal.add(menuItem("Inject password sudo   (Ctrl+Shift+P)", null,
+                () -> currentTab().ifPresent(t -> t.injectSecret(SecretType.SUDO_PASSWORD, ctx.vault()))));
+        terminal.add(menuItem("Inject password root   (Ctrl+Shift+R)", null,
+                () -> currentTab().ifPresent(t -> t.injectSecret(SecretType.ROOT_PASSWORD, ctx.vault()))));
         bar.add(terminal);
         bar.add(buildVaultMenu());
         return bar;

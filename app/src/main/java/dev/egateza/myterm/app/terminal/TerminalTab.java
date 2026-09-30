@@ -1,12 +1,16 @@
 package dev.egateza.myterm.app.terminal;
 
 import com.jediterm.terminal.ui.JediTermWidget;
+import dev.egateza.myterm.app.ui.Dialogs;
 import dev.egateza.myterm.app.ui.UiAsync;
+import dev.egateza.myterm.app.vault.VaultGate;
 import dev.egateza.myterm.core.profile.HostProfile;
 import dev.egateza.myterm.ssh.SshConnectException;
 import dev.egateza.myterm.ssh.hostkey.HostKeyRejectedException;
 import dev.egateza.myterm.terminal.SshTerminalFactory;
 import dev.egateza.myterm.terminal.SshTtyConnector;
+import dev.egateza.myterm.vault.SecretType;
+import dev.egateza.myterm.vault.Secrets;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.FlowLayout;
@@ -146,6 +150,43 @@ public final class TerminalTab extends JPanel {
         disposeTerminal();
         connect();
     }
+
+    /**
+     * Mengirim secret dari vault + Enter ke terminal ini (hotkey). User yang menentukan kapan,
+     * sehingga tidak ada prompt yang bisa di-spoof. Dipanggil di EDT; vault diakses di {@code sshOps}.
+     */
+    public void injectSecret(SecretType type, VaultGate gate) {
+        SshTtyConnector target = connector;
+        if (target == null || !target.isConnected()) {
+            return;
+        }
+        UiAsync.run(sshOps, () -> {
+            if (!gate.ensureUnlocked()) {
+                return InjectResult.CANCELLED;
+            }
+            char[] secret = gate.vault().get(profile.id(), type);
+            if (secret == null) {
+                return InjectResult.MISSING;
+            }
+            try {
+                target.writeSecret(Secrets.toUtf8WithSuffix(secret, (byte) '\r'));
+            } finally {
+                Secrets.zero(secret);
+            }
+            log.info("Password {} di-inject ke {}", type, profile.address()); // tanpa isi secret
+            return InjectResult.SENT;
+        }, result -> {
+            if (result == InjectResult.MISSING) {
+                String what = type == SecretType.ROOT_PASSWORD ? "root" : "sudo";
+                Dialogs.info(this, "Inject password",
+                        "Password " + what + " untuk " + profile.name() + " belum disimpan di vault.\n"
+                                + "Isi lewat Edit host (F2).");
+            }
+            focusTerminal();
+        }, err -> Dialogs.error(this, "Inject password gagal", err));
+    }
+
+    private enum InjectResult { SENT, MISSING, CANCELLED }
 
     public void focusTerminal() {
         if (widget != null) {
