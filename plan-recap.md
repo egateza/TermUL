@@ -44,7 +44,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 ### Fase 2: Vault & inject password
 - [x] ADR 0002 desain vault
-- [ ] `CredentialVault` + implementasi + unit test (round-trip, tamper detection GCM)
+- [x] `CredentialVault` + implementasi + unit test (round-trip, tamper detection GCM)
 - [ ] Field secret di dialog profil (login, sudo, root)
 - [ ] Auth password dari vault
 - [ ] Hotkey `Ctrl+Shift+P` inject sudo password, `Ctrl+Shift+R` inject root password
@@ -80,6 +80,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 | Tanggal | Commit | Task |
 |---|---|---|
+| 2026-09-30 | `feat(vault): tambah vault terenkripsi Argon2id + AES-256-GCM dengan opsi DPAPI` | CredentialVault + FileCredentialVault + DPAPI |
 | 2026-09-30 | `docs: tambah ADR 0002 desain vault (Argon2id + AES-256-GCM + opsi DPAPI)` | ADR 0002 desain vault |
 | 2026-09-30 | `test(ssh): tambah integration test heartbeat mendeteksi server hang` | Keep-alive + deteksi putus + reconnect |
 | 2026-09-30 | `feat(app): tambah tab terminal JediTerm, dialog TOFU, prompt password, dan integration test OpenSSH` | Tab terminal JediTerm + dialog TOFU/password + IT OpenSSH |
@@ -94,7 +95,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 ## Langkah berikutnya
 
-- Implementasi CredentialVault di modul vault + unit test (round-trip, tamper detection, ganti master password).
+- Field secret di dialog profil (login, sudo, root) + auth password dari vault (VaultCredentialProvider) + dialog unlock/buat vault di app.
 
 ## Catatan / blocker
 

@@ -24,7 +24,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 ## Fase 2: Vault & inject password (±1 minggu)
 - [x] Putuskan desain vault (ADR 0002)
-- [ ] `CredentialVault` + implementasi + unit test (round-trip, tamper detection GCM)
+- [x] `CredentialVault` + implementasi + unit test (round-trip, tamper detection GCM)
 - [ ] Field secret di dialog profil (login, sudo, root)
 - [ ] Auth password dari vault
 - [ ] Hotkey `Ctrl+Shift+P` inject sudo password, `Ctrl+Shift+R` inject root password
