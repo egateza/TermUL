@@ -16,7 +16,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] `HostProfile` record + `ProfileStore` (JSON, atomic write)
 - [x] Dialog tambah/edit profil
 - [ ] `SessionManager` dengan MINA: connect, auth key/agent/password (prompt manual dulu)
-- [ ] `HostKeyVerifier`: known_hosts + dialog TOFU
+- [x] `HostKeyVerifier`: known_hosts + dialog TOFU
 - [ ] `SshTtyConnector` + tab JediTerm, resize, dan close yang rapi
 - [ ] Keep-alive + deteksi putus + tombol reconnect
 

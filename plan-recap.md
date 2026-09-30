@@ -33,7 +33,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] `HostProfile` + `ProfileStore` (JSON, atomic write)
 - [x] Dialog tambah/edit profil
 - [ ] `SessionManager` (connect, auth key/agent/password prompt)
-- [ ] `HostKeyVerifier` (known_hosts + TOFU)
+- [x] `HostKeyVerifier` (known_hosts + TOFU)
 - [ ] `SshTtyConnector` + tab JediTerm
 - [ ] Keep-alive + deteksi putus + reconnect
 
@@ -44,6 +44,7 @@ Belum dimulai. Lihat `docs/PLAN.md`.
 
 | Tanggal | Commit | Task |
 |---|---|---|
+| 2026-09-30 | `feat(ssh): tambah verifikasi host key strict dengan known_hosts aplikasi dan TOFU` | HostKeyVerifier (known_hosts + TOFU, logic) |
 | 2026-09-30 | `feat(app): tambah dialog tambah/edit profil host` | Dialog profil |
 | 2026-09-30 | `feat(app): tambah main window FlatLaf dengan host tree, grup, dan pencarian` | Main window + host tree |
 | 2026-09-30 | `feat(core): tambah HostProfile, AppPaths, dan ProfileStore JSON dengan atomic write` | HostProfile + ProfileStore |
@@ -52,7 +53,7 @@ Belum dimulai. Lihat `docs/PLAN.md`.
 
 ## Langkah berikutnya
 
-- SessionManager dengan MINA SSHD + HostKeyVerifier (modul ssh).
+- SessionManager (connect, auth key/password, ref-count, keep-alive) di modul ssh; dialog TOFU di app menyusul saat wiring.
 
 ## Catatan / blocker
 
