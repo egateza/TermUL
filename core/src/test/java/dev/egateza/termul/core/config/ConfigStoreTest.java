@@ -25,6 +25,7 @@ class ConfigStoreTest {
         assertThat(config.terminalFontSize()).isEqualTo(16f);
         assertThat(config.theme()).isEqualTo(AppConfig.DEFAULT_THEME);
         assertThat(config.themeMode()).isEqualTo(AppConfig.MODE_DARK);
+        assertThat(config.language()).isEqualTo(AppConfig.DEFAULT_LANGUAGE);
     }
 
     @Test
@@ -32,7 +33,7 @@ class ConfigStoreTest {
         Path file = dir.resolve("config.json");
         new ConfigStore(file).save(AppConfig.defaults().withIconSet("material").withHostButtonOpacity(40)
                 .withHostPanelMode(AppConfig.HOST_FLOATING).withTheme("default")
-                .withThemeMode(AppConfig.MODE_LIGHT));
+                .withThemeMode(AppConfig.MODE_LIGHT).withLanguage("en"));
 
         var loaded = new ConfigStore(file).load();
 
@@ -40,6 +41,7 @@ class ConfigStoreTest {
         assertThat(loaded.hostButtonOpacity()).isEqualTo(40);
         assertThat(loaded.hostPanelMode()).isEqualTo(AppConfig.HOST_FLOATING);
         assertThat(loaded.themeMode()).isEqualTo(AppConfig.MODE_LIGHT);
+        assertThat(loaded.language()).isEqualTo("en");
     }
 
     @Test

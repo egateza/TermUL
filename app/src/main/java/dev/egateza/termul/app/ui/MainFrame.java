@@ -3,6 +3,7 @@ package dev.egateza.termul.app.ui;
 import dev.egateza.termul.app.AppContext;
 import dev.egateza.termul.app.edit.EditTrackerDialog;
 import dev.egateza.termul.app.edit.EditorSettingsDialog;
+import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.app.log.LogBuffer;
 import dev.egateza.termul.app.log.LogPanel;
 import dev.egateza.termul.app.sftp.ActivityBar;
@@ -305,10 +306,11 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         bar.add(terminal);
         bar.add(buildVaultMenu());
 
-        var settings = new JMenu("Pengaturan");
+        var settings = new JMenu(I18n.t("menu.settings"));
         settings.add(menuItem(null, "Editor lokal...", null, this::configureEditors));
         settings.add(buildHostPanelMenu());
         settings.add(buildThemeMenu());
+        settings.add(buildLanguageMenu());
         settings.add(buildIconSetMenu());
         bar.add(settings);
         bar.add(javax.swing.Box.createHorizontalGlue());
@@ -340,7 +342,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
     private void configureEditors() {
         EditorSettingsDialog.show(this, ctx.config().current().editors()).ifPresent(editors ->
-                mutate("Gagal menyimpan pengaturan", () ->
+                mutate(I18n.t("error.saveSettings"), () ->
                         ctx.config().save(ctx.config().current().withEditors(editors))));
     }
 
@@ -409,12 +411,12 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private void updateHostToggle() {
         boolean open = hostTree.isVisible();
         hostToggle.setIcon((open ? AppIcon.ANGLES_LEFT : AppIcon.ANGLES_RIGHT).icon(16));
-        hostToggle.setToolTipText(open ? "Sembunyikan panel host" : "Tampilkan panel host");
+        hostToggle.setToolTipText(I18n.t(open ? "host.toggle.hide" : "host.toggle.show"));
     }
 
     /** Submenu: mode panel host (di samping / tombol melayang) dan transparansi tombol melayang. */
     private JMenu buildHostPanelMenu() {
-        var menu = new JMenu("Panel host");
+        var menu = new JMenu(I18n.t("menu.settings.hostPanel"));
         var modes = new ButtonGroup();
         var config = ctx.config().current();
         record Mode(String id, String label) {
@@ -428,7 +430,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                     return;
                 }
                 applyHostMode(mode.id());
-                mutate("Gagal menyimpan pengaturan", () ->
+                mutate(I18n.t("error.saveSettings"), () ->
                         ctx.config().save(ctx.config().current().withHostPanelMode(mode.id())));
             });
             modes.add(item);
@@ -443,7 +445,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                     percent == config.hostButtonOpacity());
             item.addActionListener(e -> {
                 drawer.setOpacity(percent);
-                mutate("Gagal menyimpan pengaturan", () ->
+                mutate(I18n.t("error.saveSettings"), () ->
                         ctx.config().save(ctx.config().current().withHostButtonOpacity(percent)));
             });
             levels.add(item);
@@ -453,9 +455,35 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         return menu;
     }
 
+    /** Submenu pilihan bahasa UI; disimpan di config.json dan berlaku penuh setelah restart. */
+    private JMenu buildLanguageMenu() {
+        var menu = new JMenu(I18n.t("menu.settings.language"));
+        menu.setToolTipText(I18n.t("menu.settings.language.tooltip"));
+        var group = new ButtonGroup();
+        for (var language : I18n.SUPPORTED) {
+            var item = new JRadioButtonMenuItem(language.label(),
+                    language.tag().equals(ctx.config().current().language()));
+            item.addActionListener(e -> {
+                if (language.tag().equals(ctx.config().current().language())) {
+                    return;
+                }
+                mutate(I18n.t("error.saveSettings"), () ->
+                        ctx.config().save(ctx.config().current().withLanguage(language.tag())));
+                // pesan memakai bahasa baru, supaya jelas apa yang akan terjadi setelah restart
+                JOptionPane.showMessageDialog(this,
+                        I18n.tIn(language.tag(), "menu.settings.language.restart", language.label()),
+                        I18n.tIn(language.tag(), "menu.settings.language.restartTitle"),
+                        JOptionPane.INFORMATION_MESSAGE);
+            });
+            group.add(item);
+            menu.add(item);
+        }
+        return menu;
+    }
+
     /** Submenu pilihan tema; ganti langsung terlihat dan disimpan di config.json. */
     private JMenu buildThemeMenu() {
-        var menu = new JMenu("Tema");
+        var menu = new JMenu(I18n.t("menu.settings.theme"));
         var group = new ButtonGroup();
         for (AppTheme t : AppTheme.values()) {
             var item = new JRadioButtonMenuItem(t.label(), t == theme);
@@ -490,7 +518,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             }
         }
         updateModeToggle();
-        mutate("Gagal menyimpan pengaturan", () ->
+        mutate(I18n.t("error.saveSettings"), () ->
                 ctx.config().save(ctx.config().current().withTheme(newTheme.id()).withThemeMode(wanted.id())));
     }
 
@@ -519,7 +547,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                 for (Window w : Window.getWindows()) {
                     w.repaint();
                 }
-                mutate("Gagal menyimpan pengaturan", () ->
+                mutate(I18n.t("error.saveSettings"), () ->
                         ctx.config().save(ctx.config().current().withIconSet(set.id())));
             });
             group.add(item);
@@ -729,14 +757,14 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         List<String> active = activeWork();
         String message;
         if (active.isEmpty()) {
-            message = "Tutup TermUL?";
+            message = I18n.t("exit.confirm");
         } else {
-            var sb = new StringBuilder("Masih ada yang aktif:\n\n");
+            var sb = new StringBuilder(I18n.t("exit.activeHeader")).append("\n\n");
             active.forEach(a -> sb.append("  • ").append(a).append('\n'));
-            sb.append("\nTutup TermUL dan akhiri semuanya?\n(Pilih \"No\" untuk memeriksanya dulu.)");
+            sb.append('\n').append(I18n.t("exit.activeFooter"));
             message = sb.toString();
         }
-        int choice = JOptionPane.showConfirmDialog(this, message, "Keluar TermUL", JOptionPane.YES_NO_OPTION,
+        int choice = JOptionPane.showConfirmDialog(this, message, I18n.t("exit.title"), JOptionPane.YES_NO_OPTION,
                 active.isEmpty() ? JOptionPane.QUESTION_MESSAGE : JOptionPane.WARNING_MESSAGE);
         if (choice != JOptionPane.YES_OPTION) {
             int first = firstActiveTab();

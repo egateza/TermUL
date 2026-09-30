@@ -1,6 +1,7 @@
 package dev.egateza.termul.app;
 
 import dev.egateza.termul.app.edit.EditManager;
+import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.app.ssh.SwingCredentialProvider;
 import dev.egateza.termul.app.ssh.SwingHostKeyPrompt;
 import dev.egateza.termul.app.terminal.TerminalSettings;
@@ -58,6 +59,7 @@ public final class TermULApp {
         var store = new ProfileStore(paths.profilesFile());
         var config = new ConfigStore(paths.configFile());
         config.load();
+        I18n.use(config.current().language());
 
         var frameRef = new AtomicReference<Component>();
         var vault = new VaultGate(
