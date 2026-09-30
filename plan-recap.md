@@ -86,7 +86,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 ### Fase 6: Polish & distribusi
 - [ ] Import `~/.ssh/config`, jump host (ProxyJump)
-- [ ] Warna tab per environment (sudah dasar), konfirmasi paste multi-baris di prod
+- [x] Warna tab per environment (titik + garis di atas terminal), konfirmasi paste multi-baris di prod
 - [ ] Pengaturan font/tema
 - [ ] Profile Maven `package-win` (jlink + jpackage → .msi)
 

@@ -105,18 +105,58 @@ public final class TerminalTab extends JPanel {
         this.stateListener = listener;
     }
 
-    private java.util.function.BooleanSupplier autoSudoEnabled = () -> false; // EDT
+    private java.util.function.Supplier<HostProfile> currentProfile; // EDT; null = profil saat tab dibuka
     private VaultGate autoSudoVault;     // EDT; null = auto-inject mati
     private PromptResponder responder;   // EDT; milik connector saat ini
 
     /**
-     * Mengaktifkan auto-inject password sudo/su (guard lengkap di {@link PromptResponder}).
-     *
-     * @param enabled dibaca setiap Enter (toggle di profil langsung berlaku untuk tab yang sudah terbuka)
+     * Sumber versi terbaru profil ini (setelah diedit), dibaca saat dipakai: toggle auto-sudo, environment untuk
+     * konfirmasi paste dan warna, langsung berlaku untuk tab yang sudah terbuka.
      */
-    public void setAutoSudo(java.util.function.BooleanSupplier enabled, VaultGate vault) {
-        this.autoSudoEnabled = enabled;
+    public void setCurrentProfile(java.util.function.Supplier<HostProfile> current) {
+        this.currentProfile = current;
+        applyEnvironmentColor();
+    }
+
+    /** Vault untuk auto-inject password sudo/su (guard lengkap di {@link PromptResponder}); aktif per profil. */
+    public void setAutoSudoVault(VaultGate vault) {
         this.autoSudoVault = vault;
+    }
+
+    private HostProfile latestProfile() {
+        HostProfile p = currentProfile == null ? null : currentProfile.get();
+        return p != null ? p : profile; // profil sudah dihapus: pakai versi saat tab dibuka
+    }
+
+    /** Garis warna environment di atas terminal (prod merah, staging kuning, dev hijau). EDT. */
+    private void applyEnvironmentColor() {
+        Color color = dev.egateza.termul.app.ui.EnvColors.of(latestProfile().environment());
+        content.setBorder(color == null ? null : BorderFactory.createMatteBorder(3, 0, 0, 0, color));
+    }
+
+    /** Paste di host prod yang berisi baris baru (langsung dijalankan shell) dikonfirmasi dulu. EDT. */
+    private String confirmPaste(String text) {
+        HostProfile p = latestProfile();
+        if (!PasteGuard.needsConfirmation(text, p.environment())) {
+            return text;
+        }
+        var lines = PasteGuard.lines(text);
+        var preview = new JTextArea(PasteGuard.preview(lines));
+        preview.setEditable(false);
+        preview.setFont(new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, preview.getFont().getSize()));
+        var panel = new JPanel(new BorderLayout(0, 8));
+        panel.add(new JLabel(I18n.t("tab.paste.message", String.valueOf(lines.size()), p.name(), p.address())),
+                BorderLayout.NORTH);
+        panel.add(new JScrollPane(preview), BorderLayout.CENTER);
+        Object[] options = {I18n.t("tab.paste.ok"), I18n.t("tab.paste.cancel")};
+        int choice = JOptionPane.showOptionDialog(this, panel, I18n.t("tab.paste.title"), JOptionPane.DEFAULT_OPTION,
+                JOptionPane.WARNING_MESSAGE, null, options, options[1]);
+        focusTerminal();
+        if (choice != 0) {
+            log.info("Paste {} baris ke host prod {} dibatalkan user", lines.size(), p.address());
+            return null;
+        }
+        return text;
     }
 
     /** Dipanggil (di EDT) setiap kali terminal berhasil connect, termasuk setelah reconnect. */
@@ -277,6 +317,8 @@ public final class TerminalTab extends JPanel {
         gate.set(TerminalState.CONNECTED);
         widget = new ZoomableTermWidget(settings);
         widget.setTtyConnector(tty);
+        widget.setPasteFilter(this::confirmPaste);
+        applyEnvironmentColor();
         tty.addCloseListener(c -> SwingUtilities.invokeLater(() -> onClosed(c)));
         showCenter(widget);
         widget.start();
@@ -494,7 +536,7 @@ public final class TerminalTab extends JPanel {
         String line = cursorLine();
         if (enter && responder != null) {
             // baris kosong = disarm; Enter tetap diteruskan ke terminal
-            responder.onEnter(autoSudoVault != null && autoSudoEnabled.getAsBoolean() ? line : "");
+            responder.onEnter(autoSudoVault != null && latestProfile().autoSudo() ? line : "");
         }
         if (ctrlD && ExitGuard.isEmptyPrompt(line)) {
             if (confirmExit()) {

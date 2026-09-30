@@ -1,11 +1,13 @@
 package dev.egateza.termul.app.terminal;
 
+import com.jediterm.terminal.TerminalCopyPasteHandler;
 import com.jediterm.terminal.model.StyleState;
 import dev.egateza.termul.app.ui.ShakeEffect;
 import java.awt.AlphaComposite;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
+import java.util.function.UnaryOperator;
 import javax.swing.SwingUtilities;
 import com.jediterm.terminal.model.TerminalTextBuffer;
 import com.jediterm.terminal.ui.JediTermWidget;
@@ -38,7 +40,36 @@ public final class ZoomableTermWidget extends JediTermWidget {
         ((ZoomPanel) getTerminalPanel()).refreshColors();
     }
 
+    /**
+     * Filter untuk semua paste (shortcut, menu klik kanan, klik tengah). Dipanggil di EDT dengan teks clipboard;
+     * kembalikan teks yang dikirim, atau null untuk membatalkan.
+     */
+    public void setPasteFilter(UnaryOperator<String> filter) {
+        ((ZoomPanel) getTerminalPanel()).pasteFilter = filter;
+    }
+
     private static final class ZoomPanel extends TerminalPanel {
+        // tanpa initializer: createCopyPasteHandler() dipanggil dari constructor TerminalPanel
+        private volatile UnaryOperator<String> pasteFilter;
+
+        @Override
+        protected TerminalCopyPasteHandler createCopyPasteHandler() {
+            var delegate = super.createCopyPasteHandler();
+            return new TerminalCopyPasteHandler() {
+                @Override
+                public void setContents(String text, boolean useSystemSelectionClipboardIfAvailable) {
+                    delegate.setContents(text, useSystemSelectionClipboardIfAvailable);
+                }
+
+                @Override
+                public String getContents(boolean useSystemSelectionClipboardIfAvailable) {
+                    String text = delegate.getContents(useSystemSelectionClipboardIfAvailable);
+                    var filter = pasteFilter;
+                    return text == null || filter == null ? text : filter.apply(text);
+                }
+            };
+        }
+
         private final BellSettings bell; // null kalau settings bukan TerminalSettings: getar tetap aktif
         private final SettingsProvider settings;
         private final StyleState styleState;

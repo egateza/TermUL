@@ -62,7 +62,7 @@ Catatan implementasi: satu `sudo sh -c` per upload (backup ke `/var/backups/term
 
 ## Fase 6: Polish & distribusi
 - [ ] Import `~/.ssh/config`, jump host (ProxyJump)
-- [ ] Warna tab per environment, konfirmasi paste multi-baris di prod
+- [x] Warna tab per environment (titik di judul tab + garis di atas terminal), konfirmasi paste multi-baris di prod (semua jalur paste lewat `TerminalCopyPasteHandler`)
 - [x] Pengaturan font/tema (font + tema bawaan)
 - [ ] Tema custom (user mengatur palet sendiri):
   - [x] `CustomTheme` + `ThemeStore` di `core` (JSON per tema di `%APPDATA%\TermUL\themes\`, warna sebagai hex, id divalidasi)
