@@ -1068,6 +1068,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         tabs.setIconAt(index, OsIcons.of(profile.os()));
         tab.setConnectedListener(tty -> detectOs(profile.id(), tty));
         tab.setStateListener(this::updateTerminalMenu);
+        tab.setAutoSudo(() -> store.snapshot().find(profile.id()).map(HostProfile::autoSudo).orElse(false), ctx.vault());
         tabs.setSelectedIndex(index);
         updateCenter();
         tab.connect();

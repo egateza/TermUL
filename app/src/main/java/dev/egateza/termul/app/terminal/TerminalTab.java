@@ -13,6 +13,7 @@ import dev.egateza.termul.sftp.TerminalState;
 import dev.egateza.termul.ssh.SshConnectException;
 import dev.egateza.termul.ssh.hostkey.HostKeyRejectedException;
 import dev.egateza.termul.terminal.ExitGuard;
+import dev.egateza.termul.terminal.PromptResponder;
 import dev.egateza.termul.terminal.Reconnector;
 import dev.egateza.termul.terminal.SshTerminalFactory;
 import dev.egateza.termul.terminal.SshTtyConnector;
@@ -102,6 +103,20 @@ public final class TerminalTab extends JPanel {
     /** Dipanggil (di EDT) setiap status sesi/panel SFTP berubah: connect, gagal, berakhir, toggle SFTP. */
     public void setStateListener(Runnable listener) {
         this.stateListener = listener;
+    }
+
+    private java.util.function.BooleanSupplier autoSudoEnabled = () -> false; // EDT
+    private VaultGate autoSudoVault;     // EDT; null = auto-inject mati
+    private PromptResponder responder;   // EDT; milik connector saat ini
+
+    /**
+     * Mengaktifkan auto-inject password sudo/su (guard lengkap di {@link PromptResponder}).
+     *
+     * @param enabled dibaca setiap Enter (toggle di profil langsung berlaku untuk tab yang sudah terbuka)
+     */
+    public void setAutoSudo(java.util.function.BooleanSupplier enabled, VaultGate vault) {
+        this.autoSudoEnabled = enabled;
+        this.autoSudoVault = vault;
     }
 
     /** Dipanggil (di EDT) setiap kali terminal berhasil connect, termasuk setelah reconnect. */
@@ -243,6 +258,22 @@ public final class TerminalTab extends JPanel {
             widget.close(); // terminal lama yang beku setelah koneksi putus
         }
         connector = tty;
+        responder = new PromptResponder(profile.username(), new PromptResponder.Listener() {
+            @Override
+            public void respond(PromptResponder.Kind kind) {
+                SwingUtilities.invokeLater(() -> autoInject(kind, tty));
+            }
+
+            @Override
+            public void rejected(PromptResponder.Kind kind) {
+                SwingUtilities.invokeLater(() -> {
+                    if (tty == connector) {
+                        showNotice(I18n.t("tab.autoInject.rejected", kind == PromptResponder.Kind.SU ? "root" : "sudo"));
+                    }
+                });
+            }
+        });
+        tty.addOutputListener(responder);
         gate.set(TerminalState.CONNECTED);
         widget = new ZoomableTermWidget(settings);
         widget.setTtyConnector(tty);
@@ -461,6 +492,10 @@ public final class TerminalTab extends JPanel {
             return false;
         }
         String line = cursorLine();
+        if (enter && responder != null) {
+            // baris kosong = disarm; Enter tetap diteruskan ke terminal
+            responder.onEnter(autoSudoVault != null && autoSudoEnabled.getAsBoolean() ? line : "");
+        }
         if (ctrlD && ExitGuard.isEmptyPrompt(line)) {
             if (confirmExit()) {
                 connector.write(new byte[] {0x04});
@@ -621,6 +656,60 @@ public final class TerminalTab extends JPanel {
     }
 
     private enum InjectResult { SENT, MISSING, CANCELLED }
+
+    /**
+     * Guard {@link PromptResponder} lolos: kirim password dari vault. Tanpa dialog kalau password tidak tersimpan
+     * (vault tidak di-unlock untuk profil yang memang tidak punya password sudo/root). EDT.
+     */
+    private void autoInject(PromptResponder.Kind kind, SshTtyConnector target) {
+        VaultGate vault = autoSudoVault;
+        if (vault == null || target != connector || !target.isConnected()) {
+            return;
+        }
+        SecretType type = kind == PromptResponder.Kind.SU ? SecretType.ROOT_PASSWORD : SecretType.SUDO_PASSWORD;
+        sshOps.execute(() -> {
+            try {
+                if (!vault.vault().has(profile.id(), type)) {
+                    log.info("Auto-inject {} ke {} dilewati: password belum disimpan", type, profile.address());
+                    return;
+                }
+                if (!vault.ensureUnlocked()) {
+                    return;
+                }
+                char[] secret = vault.vault().get(profile.id(), type);
+                if (secret == null) {
+                    return;
+                }
+                try {
+                    target.writeSecret(Secrets.toUtf8WithSuffix(secret, (byte) '\r'));
+                } finally {
+                    Secrets.zero(secret);
+                }
+                log.info("Password {} di-inject otomatis ke {}", type, profile.address()); // tanpa isi secret
+            } catch (RuntimeException e) {
+                log.warn("Auto-inject {} ke {} gagal: {}", type, profile.address(), e.getMessage());
+            }
+        });
+    }
+
+    /** Pemberitahuan di atas terminal (sesi tetap berjalan) dengan tombol tutup. EDT. */
+    private void showNotice(String text) {
+        banner.removeAll();
+        banner.setBackground(new Color(0x5A2A2A));
+        banner.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
+        var label = new JLabel(text);
+        label.setForeground(Color.WHITE);
+        banner.add(label, BorderLayout.CENTER);
+        var close = new JButton(I18n.t("tab.notice.close"));
+        close.addActionListener(e -> {
+            hideBanner();
+            focusTerminal();
+        });
+        banner.add(close, BorderLayout.EAST);
+        banner.setVisible(true);
+        content.revalidate();
+        content.repaint();
+    }
 
     public void focusTerminal() {
         if (widget != null) {
