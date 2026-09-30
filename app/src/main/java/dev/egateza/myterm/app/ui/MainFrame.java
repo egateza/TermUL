@@ -103,6 +103,13 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
      * tidak disentuh.
      */
     private boolean dispatchHotkey(KeyEvent e) {
+        var tab = currentTab();
+        if (tab.isPresent() && e.getComponent() != null
+                && SwingUtilities.isDescendingFrom(e.getComponent(), tab.get())
+                && tab.get().interceptKey(e)) {
+            e.consume();
+            return true;
+        }
         if (e.getID() != KeyEvent.KEY_PRESSED || !e.isControlDown() || e.isAltDown()) {
             return false;
         }

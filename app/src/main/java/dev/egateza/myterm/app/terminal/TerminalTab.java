@@ -8,6 +8,7 @@ import dev.egateza.myterm.app.vault.VaultGate;
 import dev.egateza.myterm.core.profile.HostProfile;
 import dev.egateza.myterm.ssh.SshConnectException;
 import dev.egateza.myterm.ssh.hostkey.HostKeyRejectedException;
+import dev.egateza.myterm.terminal.ExitGuard;
 import dev.egateza.myterm.terminal.SshTerminalFactory;
 import dev.egateza.myterm.terminal.SshTtyConnector;
 import dev.egateza.myterm.vault.SecretType;
@@ -15,12 +16,15 @@ import dev.egateza.myterm.vault.Secrets;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.FlowLayout;
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.Function;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
@@ -155,10 +159,91 @@ public final class TerminalTab extends JPanel {
     }
 
     private void onClosed(SshTtyConnector tty) {
+        log.info("Sesi terminal {} berakhir (disposed={}, current={}, byUser={})",
+                tty.getName(), disposed, tty == connector, tty.isClosedByUser());
         if (disposed || tty != connector || tty.isClosedByUser()) {
             return;
         }
-        showBanner("Sesi ke " + profile.address() + " berakhir atau koneksi terputus.");
+        sessionEnded = true;
+        showBanner("Sesi ke " + profile.address() + " berakhir. Tekan Enter atau klik Reconnect untuk membuka lagi.");
+    }
+
+    private boolean sessionEnded; // EDT
+
+    /**
+     * Dipanggil dari dispatcher key global (EDT) sebelum JediTerm menerima key.
+     * <ul>
+     *   <li>Ctrl+D di prompt kosong / {@code exit}/{@code logout} + Enter → konfirmasi dulu</li>
+     *   <li>Enter setelah sesi berakhir → reconnect</li>
+     * </ul>
+     *
+     * @return true kalau event sudah ditangani (jangan diteruskan ke terminal)
+     */
+    public boolean interceptKey(KeyEvent e) {
+        if (e.getID() == KeyEvent.KEY_TYPED && swallowTyped) {
+            swallowTyped = false; // pasangan KEY_TYPED dari key yang sudah ditangani
+            return true;
+        }
+        if (e.getID() != KeyEvent.KEY_PRESSED || widget == null) {
+            return false;
+        }
+        boolean handled = handlePressed(e);
+        swallowTyped = handled;
+        return handled;
+    }
+
+    private boolean swallowTyped; // EDT
+
+    private boolean handlePressed(KeyEvent e) {
+        boolean enter = e.getKeyCode() == KeyEvent.VK_ENTER && e.getModifiersEx() == 0;
+        boolean ctrlD = e.getKeyCode() == KeyEvent.VK_D
+                && e.getModifiersEx() == InputEvent.CTRL_DOWN_MASK;
+        if (sessionEnded) {
+            if (enter) {
+                reconnect();
+                return true;
+            }
+            return false;
+        }
+        if ((!enter && !ctrlD) || connector == null || !connector.isConnected()) {
+            return false;
+        }
+        String line = cursorLine();
+        if (ctrlD && ExitGuard.isEmptyPrompt(line)) {
+            if (confirmExit()) {
+                connector.write(new byte[] {0x04});
+            }
+            return true;
+        }
+        if (enter && ExitGuard.isExitCommand(line)) {
+            // Tidak → Ctrl+U menghapus baris perintah di shell (readline)
+            connector.write(confirmExit() ? new byte[] {'\r'} : new byte[] {0x15});
+            return true;
+        }
+        return false;
+    }
+
+    private boolean confirmExit() {
+        boolean yes = JOptionPane.showConfirmDialog(this,
+                "Anda akan keluar dari sesi " + profile.address() + ". Lanjutkan?",
+                "Keluar dari sesi", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE) == JOptionPane.YES_OPTION;
+        focusTerminal();
+        return yes;
+    }
+
+    /** Teks baris tempat kursor berada (kosong kalau tidak bisa dibaca). */
+    private String cursorLine() {
+        var buffer = widget.getTerminalTextBuffer();
+        buffer.lock();
+        try {
+            int y = widget.getTerminal().getCursorY() - 1; // cursorY 1-based
+            if (y < 0 || y >= buffer.getHeight()) {
+                return "";
+            }
+            return buffer.getLine(y).getText();
+        } finally {
+            buffer.unlock();
+        }
     }
 
     private void showBanner(String text) {
@@ -172,11 +257,12 @@ public final class TerminalTab extends JPanel {
         reconnect.addActionListener(e -> reconnect());
         banner.add(reconnect, BorderLayout.EAST);
         banner.setVisible(true);
-        banner.revalidate();
-        banner.repaint();
+        content.revalidate();
+        content.repaint();
     }
 
     private void hideBanner() {
+        sessionEnded = false;
         banner.setVisible(false);
         banner.removeAll();
     }
