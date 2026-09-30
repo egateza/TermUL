@@ -85,7 +85,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
   (disiapkan 2026-10-01: nginx di `uji-1`, file root `/etc/nginx/http.d/uji.conf`; config invalid → `nginx -t` gagal → rollback)
 
 ### Fase 6: Polish & distribusi
-- [ ] Import `~/.ssh/config`, jump host (ProxyJump)
+- [x] Import `~/.ssh/config` (File → Impor dari ~/.ssh/config), jump host (ProxyJump, termasuk rantai; ProxyCommand tidak didukung)
 - [x] Warna tab per environment (titik + garis di atas terminal), konfirmasi paste multi-baris di prod
 - [ ] Pengaturan font/tema
 - [ ] Profile Maven `package-win` (jlink + jpackage → .msi)
@@ -236,7 +236,7 @@ Fase 5 dikerjakan di branch `feat/fase5-root-edit` (bercabang dari `feat/tema-cu
 
 - JediTerm 3.76 tidak ada di Maven Central → pakai repo `https://packages.jetbrains.team/maven/p/ij/intellij-dependencies`.
 - Auth `AGENT` (label "Default") **sementara** memakai key default `~/.ssh/id_ed25519|id_ecdsa|id_rsa` lalu jatuh ke password (bukan agent sungguhan). Agent Windows (named pipe `\\.\pipe\openssh-ssh-agent`) bisa dibuat dengan subclass `AbstractAgentProxy` MINA — belum dikerjakan.
-- Jump host (ProxyJump) ditolak dengan pesan jelas; dijadwalkan Fase 6.
+- Jump host (ProxyJump): local forward `127.0.0.1:<acak>` lewat koneksi jump host (listener hanya loopback, ditutup bersama koneksi tujuan); host key tujuan dicek dengan alamat aslinya. Jump host harus `AllowTcpForwarding yes`.
 - Password login/passphrase harus jadi `String` di batas API MINA — dicatat di `docs/SECURITY.md` bagian "Keterbatasan yang diketahui".
 - Integration test (`*IT`) butuh Docker Desktop menyala; tanpa Docker otomatis di-skip.
 - **Satu koneksi SSH per profil** dipakai bersama oleh semua tab/SFTP/edit (requirement N5); tiap tab = channel shell

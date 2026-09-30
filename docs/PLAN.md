@@ -61,7 +61,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 Catatan implementasi: satu `sudo sh -c` per upload (backup ke `/var/backups/termul`, `install` ke temp + `mv`, validasi, rollback) supaya rollback tetap jalan walau yang rusak `sudoers`. Hook validasi di **Pengaturan → Validasi file root (sudo)**. File di `/tmp` ditaruh di direktori privat mode 700.
 
 ## Fase 6: Polish & distribusi
-- [ ] Import `~/.ssh/config`, jump host (ProxyJump)
+- [x] Import `~/.ssh/config` (File → Impor dari ~/.ssh/config), jump host (ProxyJump, termasuk rantai; ProxyCommand tidak didukung)
 - [x] Warna tab per environment (titik di judul tab + garis di atas terminal), konfirmasi paste multi-baris di prod (semua jalur paste lewat `TerminalCopyPasteHandler`)
 - [x] Pengaturan font/tema (font + tema bawaan)
 - [ ] Tema custom (user mengatur palet sendiri):

@@ -270,6 +270,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         file.add(menuItem(AppIcon.SERVER, I18n.t("main.menu.file.newHost"), KeyStroke.getKeyStroke(KeyEvent.VK_N, InputEvent.CTRL_DOWN_MASK),
                 () -> newHost(hostTree.selectedGroup())));
         file.add(menuItem(AppIcon.FOLDER_PLUS, I18n.t("main.menu.file.newGroup"), null, () -> newGroup(hostTree.selectedGroup())));
+        file.add(menuItem(null, I18n.t("main.menu.file.importSshConfig"), null, this::importSshConfig));
         file.add(menuItem(null, I18n.t("main.menu.file.findHost"), KeyStroke.getKeyStroke(KeyEvent.VK_F, InputEvent.CTRL_DOWN_MASK),
                 () -> {
                     showHostList();
@@ -364,6 +365,31 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         EditorSettingsDialog.show(this, ctx.config().current().editors()).ifPresent(editors ->
                 mutate(I18n.t("error.saveSettings"), () ->
                         ctx.config().save(ctx.config().current().withEditors(editors))));
+    }
+
+    /** Impor host dari {@code ~/.ssh/config}: baca file di io, pilih di dialog (EDT), simpan di io. */
+    private void importSshConfig() {
+        java.nio.file.Path home = java.nio.file.Path.of(System.getProperty("user.home"));
+        java.nio.file.Path sshDir = home.resolve(".ssh");
+        java.nio.file.Path file = sshDir.resolve("config");
+        UiAsync.run(io, () -> {
+            if (!java.nio.file.Files.isRegularFile(file)) {
+                return List.<dev.egateza.termul.core.sshconfig.SshConfigImport.Candidate>of();
+            }
+            List<dev.egateza.termul.core.sshconfig.SshConfigHost> hosts;
+            try {
+                hosts = dev.egateza.termul.core.sshconfig.SshConfigParser.parse(file, sshDir, home);
+            } catch (java.io.IOException e) {
+                throw new java.io.UncheckedIOException(I18n.t("sshconfig.readFailed", file.toString()), e);
+            }
+            return dev.egateza.termul.core.sshconfig.SshConfigImport.plan(hosts, store.snapshot(),
+                    System.getProperty("user.name"), I18n.t("sshconfig.group"));
+        }, plan -> {
+            var toSave = SshConfigImportDialog.show(this, file.toString(), plan);
+            if (!toSave.isEmpty()) {
+                mutate(I18n.t("main.error.saveProfile"), () -> toSave.forEach(store::save));
+            }
+        }, err -> Dialogs.error(this, I18n.t("sshconfig.title"), err));
     }
 
     private void configureValidationHooks() {
