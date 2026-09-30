@@ -60,7 +60,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 ### Fase 4: Edit dengan editor lokal
 - [x] Konfigurasi editor per ekstensi (default `code --wait`)
 - [x] `RemoteEditSession`: download ke cache + baseline stat
-- [ ] WatchService + debounce + hash compare
+- [x] WatchService + debounce + hash compare
 - [x] Upload atomic + preserve mode
 - [~] Conflict dialog (overwrite / diff / batal) (logic konflik selesai, dialog UI belum)
 - [x] Line ending guard (LF/CRLF)
@@ -82,6 +82,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 | Tanggal | Commit | Task |
 |---|---|---|
+| 2026-09-30 | `feat(sftp): tambah EditWatcher dengan WatchService dan debounce per file` | EditWatcher (WatchService + debounce) |
 | 2026-09-30 | `feat(sftp): tambah RemoteEditSession dengan cache aman, hash compare, deteksi konflik, dan guard line ending` | RemoteEditSession + EditCache + LineEndings |
 | 2026-09-30 | `feat: tambah konfigurasi editor lokal per ekstensi (config.json) dan launcher editor Windows` | Konfigurasi editor per ekstensi |
 | 2026-09-30 | `feat(app): tambah upload/download dengan antrean + progress/cancel, drag & drop, rename, mkdir, delete, chmod di panel SFTP` | Operasi SFTP: transfer queue, DnD, rename/mkdir/delete/chmod |
@@ -105,7 +106,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 ## Langkah berikutnya
 
-- EditWatcher (WatchService + debounce) lalu EditManager di app: buka file dari panel SFTP, dialog konflik/CRLF, EditTracker.
+- EditManager di app: double-click file di panel SFTP → buka di editor, auto-upload saat save, dialog konflik (overwrite/diff/batal) & CRLF, lalu EditTracker.
 
 ## Catatan / blocker
 

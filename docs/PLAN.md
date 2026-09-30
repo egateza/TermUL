@@ -42,7 +42,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 ## Fase 4: Edit dengan editor lokal (±2 minggu)
 - [x] Konfigurasi editor per ekstensi (default `code --wait`)
 - [x] `RemoteEditSession`: download ke cache + baseline stat
-- [ ] WatchService + debounce + hash compare
+- [x] WatchService + debounce + hash compare
 - [x] Upload atomic + preserve mode
 - [ ] Conflict dialog (overwrite / diff / batal)
 - [x] Line ending guard (LF/CRLF)
