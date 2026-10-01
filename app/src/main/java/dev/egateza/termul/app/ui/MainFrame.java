@@ -8,6 +8,8 @@ import dev.egateza.termul.app.edit.ValidationHooksDialog;
 import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.app.log.LogBuffer;
 import dev.egateza.termul.app.log.LogPanel;
+import dev.egateza.termul.app.monitor.HostStatusBar;
+import dev.egateza.termul.app.monitor.ResourceMonitor;
 import dev.egateza.termul.app.sftp.ActivityBar;
 import dev.egateza.termul.app.sftp.SftpPanel;
 import dev.egateza.termul.app.sftp.SystemFileIcons;
@@ -83,6 +85,9 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private final JSplitPane logSplit;
     private final JCheckBoxMenuItem showLog = new JCheckBoxMenuItem(I18n.t("main.menu.help.showLog"));
     private int logHeight = 220; // EDT
+    private final ResourceMonitor resourceMonitor;
+    private final HostStatusBar hostStatus;
+    private final JCheckBoxMenuItem showHostStatus = new JCheckBoxMenuItem(I18n.t("main.menu.settings.hostStatus"));
     private int logDividerSize; // EDT
     // item menu Terminal yang bergantung pada tab/sesi aktif (lihat updateTerminalMenu)
     private JMenuItem miDuplicate;
@@ -210,6 +215,12 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         logDividerSize = logSplit.getDividerSize();
         logSplit.setDividerSize(0); // panel log tersembunyi: tanpa divider (tidak ada garis/titik di tepi bawah)
         getContentPane().add(logSplit, BorderLayout.CENTER);
+        // monitor resource JVM: bar "Host status" paling bawah
+        resourceMonitor = new ResourceMonitor(io);
+        hostStatus = new HostStatusBar(resourceMonitor, () -> setHostStatusVisible(false));
+        getContentPane().add(hostStatus, BorderLayout.SOUTH);
+        hostStatus.setVisible(ctx.config().current().hostStatusBar());
+        resourceMonitor.setActive(hostStatus.isVisible());
         applyHostMode(ctx.config().current().hostPanelMode());
         setJMenuBar(buildMenu());
 
@@ -305,6 +316,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     public void dispose() {
         KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(hotkeys);
         drawer.dispose();
+        resourceMonitor.close();
         super.dispose();
     }
 
@@ -396,6 +408,11 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         settings.add(buildLanguageMenu());
         settings.add(buildBellMenu());
         settings.add(buildIconSetMenu());
+        settings.addSeparator();
+        showHostStatus.setSelected(hostStatus.isVisible());
+        showHostStatus.setToolTipText(I18n.t("main.menu.settings.hostStatus.tooltip"));
+        showHostStatus.addActionListener(e -> setHostStatusVisible(showHostStatus.isSelected()));
+        settings.add(showHostStatus);
         bar.add(settings);
         bar.add(javax.swing.Box.createHorizontalGlue());
         modeToggle.setFocusable(false);
@@ -422,6 +439,19 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                         .collect(Collectors.joining("\n"))))));
         bar.add(help);
         return bar;
+    }
+
+    /** Tampilkan/sembunyikan bar "Host status" di bawah dan simpan pilihannya. EDT. */
+    private void setHostStatusVisible(boolean visible) {
+        showHostStatus.setSelected(visible);
+        if (visible == hostStatus.isVisible()) {
+            return;
+        }
+        hostStatus.setVisible(visible);
+        getContentPane().revalidate();
+        resourceMonitor.setActive(visible); // sampler hanya jalan selama bar terlihat
+        mutate(I18n.t("error.saveSettings"), () ->
+                ctx.config().save(ctx.config().current().withHostStatusBar(visible)));
     }
 
     private void configureEditors() {

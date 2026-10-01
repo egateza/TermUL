@@ -129,7 +129,7 @@
                 <!-- versi numerik untuk Windows (major.minor.build, build ≤ 65535) -->
                 <jpackage.appVersion>${termul.versionBase}.${git.total.commit.count}</jpackage.appVersion>
                 <!-- jdeps (lihat docs/SETUP.md) + jdk.unsupported (Unsafe reflektif) + jdk.localedata (locale id) -->
-                <jpackage.modules>java.base,java.desktop,java.management,java.naming,java.prefs,java.rmi,java.security.jgss,java.sql,jdk.unsupported,jdk.localedata</jpackage.modules>
+                <jpackage.modules>java.base,java.desktop,java.management,jdk.management,java.naming,java.prefs,java.rmi,java.security.jgss,java.sql,jdk.unsupported,jdk.localedata</jpackage.modules>
                 <jpackage.installerArgs/>
             </properties>
             <build>
