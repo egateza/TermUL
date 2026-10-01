@@ -21,6 +21,7 @@ import dev.egateza.termul.app.vault.VaultGate;
 import dev.egateza.termul.app.vault.VaultSudoPassword;
 import dev.egateza.termul.core.AppPaths;
 import dev.egateza.termul.core.config.ConfigStore;
+import dev.egateza.termul.core.theme.BundledThemes;
 import dev.egateza.termul.core.theme.ThemeStore;
 import dev.egateza.termul.core.profile.ProfileStore;
 import dev.egateza.termul.sftp.SftpLinks;
@@ -33,6 +34,7 @@ import dev.egateza.termul.vault.Argon2Params;
 import dev.egateza.termul.vault.DpapiKeyProtector;
 import dev.egateza.termul.vault.FileCredentialVault;
 import java.awt.Component;
+import java.io.UncheckedIOException;
 import java.time.Duration;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -65,6 +67,14 @@ public final class TermULApp {
         var config = new ConfigStore(paths.configFile());
         config.load();
         var themes = new ThemeStore(paths.themesDir());
+        try {
+            int installed = themes.installBundled(BundledThemes.load());
+            if (installed > 0) {
+                log.info("{} template tema bawaan dipasang", installed);
+            }
+        } catch (UncheckedIOException e) {
+            log.warn("Template tema bawaan tidak terpasang: {}", e.getMessage()); // tidak fatal, tema lain tetap jalan
+        }
         var customThemes = themes.list(); // baca disk di sini, bukan di EDT
         var startupTheme = UiThemes.resolve(config.current().theme(), customThemes);
         var startupMode = ThemeMode.fromId(config.current().themeMode());
