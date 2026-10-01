@@ -80,6 +80,28 @@ class ThemeStoreTest {
     }
 
     @Test
+    void installBundledAddsOnlyOnceAndNeverOverwrites() {
+        var store = new ThemeStore(dir.resolve("themes"));
+        store.save(theme("nord", "Nord punyaku"));
+
+        assertThat(store.installBundled(List.of(theme("nord", "Nord"), theme("dracula", "Dracula")))).isEqualTo(1);
+        assertThat(store.list()).extracting(CustomTheme::name).containsExactly("Dracula", "Nord punyaku");
+
+        store.delete("dracula");
+        assertThat(store.installBundled(List.of(theme("nord", "Nord"), theme("dracula", "Dracula")))).isZero();
+        assertThat(store.list()).extracting(CustomTheme::id).containsExactly("nord");
+    }
+
+    @Test
+    void installBundledAddsTemplatesNewInLaterVersion() {
+        var store = new ThemeStore(dir);
+        store.installBundled(List.of(theme("nord", "Nord")));
+
+        assertThat(store.installBundled(List.of(theme("nord", "Nord"), theme("monokai", "Monokai")))).isEqualTo(1);
+        assertThat(store.list()).extracting(CustomTheme::id).containsExactlyInAnyOrder("nord", "monokai");
+    }
+
+    @Test
     void deleteRemovesFile() {
         var store = new ThemeStore(dir);
         store.save(theme("hapus", "Hapus"));

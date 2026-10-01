@@ -7,11 +7,13 @@ import com.fasterxml.jackson.databind.json.JsonMapper;
 import dev.egateza.termul.core.io.AtomicFiles;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import org.slf4j.Logger;
@@ -24,6 +26,7 @@ import org.slf4j.LoggerFactory;
 public final class ThemeStore {
 
     private static final Logger log = LoggerFactory.getLogger(ThemeStore.class);
+    private static final String BUNDLED_MARKER = ".bundled-templates";
 
     private final Path dir;
     private final ObjectMapper mapper = JsonMapper.builder()
@@ -61,6 +64,43 @@ public final class ThemeStore {
             AtomicFiles.write(fileOf(theme.id()), mapper.writeValueAsBytes(theme));
         } catch (IOException e) {
             throw new UncheckedIOException("Gagal menyimpan tema " + theme.id(), e);
+        }
+    }
+
+    /**
+     * Pasang template bawaan yang belum pernah dipasang. Id yang sudah dipasang dicatat di {@value #BUNDLED_MARKER},
+     * jadi template yang dihapus atau diubah user tidak muncul lagi atau tertimpa; file dengan id yang sama yang sudah
+     * ada juga tidak ditimpa. Template baru di versi aplikasi berikutnya tetap terpasang sekali.
+     *
+     * @return jumlah template yang baru dipasang
+     */
+    public synchronized int installBundled(List<CustomTheme> templates) {
+        Path marker = dir.resolve(BUNDLED_MARKER);
+        try {
+            Files.createDirectories(dir);
+            var installed = new LinkedHashSet<String>();
+            if (Files.exists(marker)) {
+                Files.readAllLines(marker, StandardCharsets.UTF_8).stream()
+                        .map(String::strip).filter(s -> !s.isEmpty()).forEach(installed::add);
+            }
+            int added = 0;
+            boolean changed = false;
+            for (CustomTheme template : templates) {
+                if (!installed.add(template.id())) {
+                    continue;
+                }
+                changed = true;
+                if (!Files.exists(fileOf(template.id()))) {
+                    AtomicFiles.write(fileOf(template.id()), mapper.writeValueAsBytes(template));
+                    added++;
+                }
+            }
+            if (changed) {
+                AtomicFiles.write(marker, (String.join("\n", installed) + "\n").getBytes(StandardCharsets.UTF_8));
+            }
+            return added;
+        } catch (IOException e) {
+            throw new UncheckedIOException("Gagal memasang template tema bawaan", e);
         }
     }
 
