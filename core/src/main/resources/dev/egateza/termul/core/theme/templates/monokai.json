@@ -1,0 +1,15 @@
+{
+  "id" : "monokai",
+  "name" : "Monokai",
+  "base" : "dark",
+  "ui" : { "accent" : "#66D9EF", "background" : null, "foreground" : null, "selection" : null, "border" : null },
+  "terminal" : {
+    "background" : "#272822",
+    "foreground" : "#F8F8F2",
+    "selection" : "#49483E",
+    "ansi" : [ "#272822", "#F92672", "#A6E22E", "#F4BF75", "#66D9EF", "#AE81FF", "#A1EFE4", "#F8F8F2", "#75715E", "#F92672", "#A6E22E", "#F4BF75", "#66D9EF", "#AE81FF", "#A1EFE4", "#F9F8F5" ],
+    "backgroundImage" : null,
+    "imageVisibility" : 40,
+    "desktopWallpaper" : false
+  }
+}

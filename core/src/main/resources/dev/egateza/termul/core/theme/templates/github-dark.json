@@ -1,0 +1,15 @@
+{
+  "id" : "github-dark",
+  "name" : "GitHub Dark",
+  "base" : "dark",
+  "ui" : { "accent" : "#58A6FF", "background" : null, "foreground" : null, "selection" : null, "border" : null },
+  "terminal" : {
+    "background" : "#0D1117",
+    "foreground" : "#C9D1D9",
+    "selection" : "#264F78",
+    "ansi" : [ "#484F58", "#FF7B72", "#3FB950", "#D29922", "#58A6FF", "#BC8CFF", "#39C5CF", "#B1BAC4", "#6E7681", "#FFA198", "#56D364", "#E3B341", "#79C0FF", "#D2A8FF", "#56D4DD", "#F0F6FC" ],
+    "backgroundImage" : null,
+    "imageVisibility" : 40,
+    "desktopWallpaper" : false
+  }
+}

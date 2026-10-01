@@ -1,0 +1,15 @@
+{
+  "id" : "solarized-light",
+  "name" : "Solarized Light",
+  "base" : "light",
+  "ui" : { "accent" : "#268BD2", "background" : null, "foreground" : null, "selection" : null, "border" : null },
+  "terminal" : {
+    "background" : "#FDF6E3",
+    "foreground" : "#657B83",
+    "selection" : "#EEE8D5",
+    "ansi" : [ "#002B36", "#DC322F", "#859900", "#B58900", "#268BD2", "#D33682", "#2AA198", "#EEE8D5", "#073642", "#CB4B16", "#586E75", "#657B83", "#839496", "#6C71C4", "#93A1A1", "#FDF6E3" ],
+    "backgroundImage" : null,
+    "imageVisibility" : 40,
+    "desktopWallpaper" : false
+  }
+}

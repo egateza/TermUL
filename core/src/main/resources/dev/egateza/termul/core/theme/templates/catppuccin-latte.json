@@ -1,0 +1,15 @@
+{
+  "id" : "catppuccin-latte",
+  "name" : "Catppuccin Latte",
+  "base" : "light",
+  "ui" : { "accent" : "#8839EF", "background" : null, "foreground" : null, "selection" : null, "border" : null },
+  "terminal" : {
+    "background" : "#EFF1F5",
+    "foreground" : "#4C4F69",
+    "selection" : "#ACB0BE",
+    "ansi" : [ "#5C5F77", "#D20F39", "#40A02B", "#DF8E1D", "#1E66F5", "#EA76CB", "#179299", "#ACB0BE", "#6C6F85", "#D20F39", "#40A02B", "#DF8E1D", "#1E66F5", "#EA76CB", "#179299", "#BCC0CC" ],
+    "backgroundImage" : null,
+    "imageVisibility" : 40,
+    "desktopWallpaper" : false
+  }
+}

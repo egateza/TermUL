@@ -1,0 +1,15 @@
+{
+  "id" : "tango-light",
+  "name" : "Tango Light",
+  "base" : "light",
+  "ui" : { "accent" : "#3465A4", "background" : null, "foreground" : null, "selection" : null, "border" : null },
+  "terminal" : {
+    "background" : "#FFFFFF",
+    "foreground" : "#555753",
+    "selection" : "#C9D6E8",
+    "ansi" : [ "#000000", "#CC0000", "#4E9A06", "#C4A000", "#3465A4", "#75507B", "#06989A", "#D3D7CF", "#555753", "#EF2929", "#8AE234", "#FCE94F", "#729FCF", "#AD7FA8", "#34E2E2", "#EEEEEC" ],
+    "backgroundImage" : null,
+    "imageVisibility" : 40,
+    "desktopWallpaper" : false
+  }
+}

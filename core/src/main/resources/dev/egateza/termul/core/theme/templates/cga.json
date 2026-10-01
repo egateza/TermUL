@@ -1,0 +1,15 @@
+{
+  "id" : "cga",
+  "name" : "CGA",
+  "base" : "dark",
+  "ui" : { "accent" : "#0000AA", "background" : null, "foreground" : null, "selection" : null, "border" : null },
+  "terminal" : {
+    "background" : "#000000",
+    "foreground" : "#AAAAAA",
+    "selection" : "#555555",
+    "ansi" : [ "#000000", "#AA0000", "#00AA00", "#AA5500", "#0000AA", "#AA00AA", "#00AAAA", "#AAAAAA", "#555555", "#FF5555", "#55FF55", "#FFFF55", "#5555FF", "#FF55FF", "#55FFFF", "#FFFFFF" ],
+    "backgroundImage" : null,
+    "imageVisibility" : 40,
+    "desktopWallpaper" : false
+  }
+}

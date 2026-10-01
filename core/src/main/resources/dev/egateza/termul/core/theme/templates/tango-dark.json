@@ -1,0 +1,15 @@
+{
+  "id" : "tango-dark",
+  "name" : "Tango Dark",
+  "base" : "dark",
+  "ui" : { "accent" : "#729FCF", "background" : null, "foreground" : null, "selection" : null, "border" : null },
+  "terminal" : {
+    "background" : "#000000",
+    "foreground" : "#D3D7CF",
+    "selection" : "#3A3A3A",
+    "ansi" : [ "#000000", "#CC0000", "#4E9A06", "#C4A000", "#3465A4", "#75507B", "#06989A", "#D3D7CF", "#555753", "#EF2929", "#8AE234", "#FCE94F", "#729FCF", "#AD7FA8", "#34E2E2", "#EEEEEC" ],
+    "backgroundImage" : null,
+    "imageVisibility" : 40,
+    "desktopWallpaper" : false
+  }
+}

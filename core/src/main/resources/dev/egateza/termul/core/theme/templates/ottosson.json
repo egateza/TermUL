@@ -1,0 +1,15 @@
+{
+  "id" : "ottosson",
+  "name" : "Ottosson",
+  "base" : "dark",
+  "ui" : { "accent" : "#2F6AFF", "background" : null, "foreground" : null, "selection" : null, "border" : null },
+  "terminal" : {
+    "background" : "#000000",
+    "foreground" : "#BEBEBE",
+    "selection" : "#3A3A5A",
+    "ansi" : [ "#000000", "#BE2C21", "#3FAE3A", "#BE9A4A", "#204DBE", "#BB54BE", "#00A7B2", "#BEBEBE", "#808080", "#FF3E30", "#58EA51", "#FFC944", "#2F6AFF", "#FC74FF", "#00E1F0", "#FFFFFF" ],
+    "backgroundImage" : null,
+    "imageVisibility" : 40,
+    "desktopWallpaper" : false
+  }
+}

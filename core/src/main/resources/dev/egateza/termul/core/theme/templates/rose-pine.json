@@ -1,0 +1,15 @@
+{
+  "id" : "rose-pine",
+  "name" : "Rose Pine",
+  "base" : "dark",
+  "ui" : { "accent" : "#C4A7E7", "background" : null, "foreground" : null, "selection" : null, "border" : null },
+  "terminal" : {
+    "background" : "#191724",
+    "foreground" : "#E0DEF4",
+    "selection" : "#403D52",
+    "ansi" : [ "#26233A", "#EB6F92", "#31748F", "#F6C177", "#9CCFD8", "#C4A7E7", "#EBBCBA", "#E0DEF4", "#6E6A86", "#EB6F92", "#31748F", "#F6C177", "#9CCFD8", "#C4A7E7", "#EBBCBA", "#E0DEF4" ],
+    "backgroundImage" : null,
+    "imageVisibility" : 40,
+    "desktopWallpaper" : false
+  }
+}

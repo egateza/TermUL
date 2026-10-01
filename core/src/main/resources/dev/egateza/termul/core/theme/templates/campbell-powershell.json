@@ -1,0 +1,21 @@
+{
+  "id" : "campbell-powershell",
+  "name" : "Campbell Powershell",
+  "base" : "dark",
+  "ui" : {
+    "accent" : "#3B78FF",
+    "background" : null,
+    "foreground" : null,
+    "selection" : null,
+    "border" : null
+  },
+  "terminal" : {
+    "background" : "#012456",
+    "foreground" : "#CCCCCC",
+    "selection" : "#3A6EA5",
+    "ansi" : [ "#0C0C0C", "#C50F1F", "#13A10E", "#C19C00", "#0037DA", "#881798", "#3A96DD", "#CCCCCC", "#767676", "#E74856", "#16C60C", "#F9F1A5", "#3B78FF", "#B4009E", "#61D6D6", "#F2F2F2" ],
+    "backgroundImage" : null,
+    "imageVisibility" : 40,
+    "desktopWallpaper" : false
+  }
+}

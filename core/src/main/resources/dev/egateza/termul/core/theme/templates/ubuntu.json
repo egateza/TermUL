@@ -1,0 +1,15 @@
+{
+  "id" : "ubuntu",
+  "name" : "Ubuntu",
+  "base" : "dark",
+  "ui" : { "accent" : "#E95420", "background" : null, "foreground" : null, "selection" : null, "border" : null },
+  "terminal" : {
+    "background" : "#300A24",
+    "foreground" : "#EEEEEC",
+    "selection" : "#6B2E5F",
+    "ansi" : [ "#2E3436", "#CC0000", "#4E9A06", "#C4A000", "#3465A4", "#75507B", "#06989A", "#D3D7CF", "#555753", "#EF2929", "#8AE234", "#FCE94F", "#729FCF", "#AD7FA8", "#34E2E2", "#EEEEEC" ],
+    "backgroundImage" : null,
+    "imageVisibility" : 40,
+    "desktopWallpaper" : false
+  }
+}

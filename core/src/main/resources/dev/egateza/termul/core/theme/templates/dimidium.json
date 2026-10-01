@@ -1,0 +1,15 @@
+{
+  "id" : "dimidium",
+  "name" : "Dimidium",
+  "base" : "dark",
+  "ui" : { "accent" : "#688DFD", "background" : null, "foreground" : null, "selection" : null, "border" : null },
+  "terminal" : {
+    "background" : "#141414",
+    "foreground" : "#BAB7B6",
+    "selection" : "#3D4F66",
+    "ansi" : [ "#000000", "#CF494C", "#60B442", "#DB9C11", "#0575D8", "#AF5ED2", "#1DB6BB", "#BAB7B6", "#817E7E", "#FF643B", "#37E57B", "#FCCD1A", "#688DFD", "#ED6FE9", "#32E0FB", "#DEE3E4" ],
+    "backgroundImage" : null,
+    "imageVisibility" : 40,
+    "desktopWallpaper" : false
+  }
+}
