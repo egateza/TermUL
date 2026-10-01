@@ -97,7 +97,7 @@ public final class PromptResponder implements SshTtyConnector.OutputListener {
         tail.setLength(0);
         stripper = new AnsiStripper();
         if (kind != null) {
-            log.debug("Auto-inject {} di-arm", kind);
+            log.info("Auto-inject {} di-arm", kind);
         }
     }
 
@@ -115,6 +115,7 @@ public final class PromptResponder implements SshTtyConnector.OutputListener {
             }
             long now = nanoClock.getAsLong();
             if (!fired && now - armedAt > ARM_WINDOW.toNanos()) {
+                log.info("Auto-inject {} batal: prompt password tidak muncul dalam {} detik", armed, ARM_WINDOW_SECONDS);
                 disarm();
                 return;
             }
@@ -127,7 +128,14 @@ public final class PromptResponder implements SshTtyConnector.OutputListener {
                 tail.delete(0, tail.length() - TAIL_MAX);
             }
             if (!fired) {
-                if (isPasswordPrompt(armed, lastLine(tail))) {
+                String line = lastLine(tail);
+                String otherUser = foreignSudoUser(armed, line);
+                if (otherUser != null) {
+                    log.info("Auto-inject batal: prompt sudo untuk user '{}', bukan user profil '{}'", otherUser, username);
+                    disarm();
+                    return;
+                }
+                if (isPasswordPrompt(armed, line)) {
                     fired = true;
                     firedAt = now;
                     tail.setLength(0); // yang diamati berikutnya hanya output setelah password terkirim
@@ -156,6 +164,15 @@ public final class PromptResponder implements SshTtyConnector.OutputListener {
             }
             case SU -> SU_PROMPT.matcher(line).matches();
         };
+    }
+
+    /** User di prompt sudo yang bukan user profil (tidak pernah di-inject), atau null. */
+    private String foreignSudoUser(Kind kind, String line) {
+        if (kind != Kind.SUDO) {
+            return null;
+        }
+        var m = SUDO_PROMPT.matcher(line);
+        return m.matches() && !m.group(1).equals(username) ? m.group(1) : null;
     }
 
     private static String lastLine(CharSequence text) {
