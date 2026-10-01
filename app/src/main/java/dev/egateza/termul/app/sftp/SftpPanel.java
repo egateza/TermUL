@@ -1,5 +1,6 @@
 package dev.egateza.termul.app.sftp;
 
+import dev.egateza.termul.app.edit.EditorLauncher;
 import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.app.sftp.ActivityBar.Level;
 import dev.egateza.termul.app.ui.AppIcon;
@@ -79,10 +80,14 @@ public class SftpPanel extends JPanel {
     private boolean connecting;                  // EDT
 
     private final EditActions editActions;
+    private final SystemFileIcons fileIcons;
 
     /** Hubungan panel ke editor lokal (diwujudkan di modul wiring). */
     public interface EditActions {
-        /** @param command template editor pilihan user; null = editor default sesuai ekstensi */
+        /**
+         * @param command template editor pilihan user, {@link EditorLauncher#SYSTEM_DEFAULT} (aplikasi default
+         *                Windows), atau null = editor default sesuai ekstensi
+         */
         void edit(HostProfile profile, String remotePath, String command);
 
         /** Edit sebagai root: perubahan dipasang lewat sudo (backup, validasi, rollback). */
@@ -102,12 +107,14 @@ public class SftpPanel extends JPanel {
         Runnable onActivity(java.util.UUID profileId, java.util.function.BiConsumer<Level, String> sink);
     }
 
-    public SftpPanel(HostProfile profile, SftpLinks links, ExecutorService sshOps, EditActions editActions) {
+    public SftpPanel(HostProfile profile, SftpLinks links, ExecutorService sshOps, EditActions editActions,
+                     SystemFileIcons fileIcons) {
         super(new BorderLayout());
         this.profile = profile;
         this.links = links;
         this.sshOps = sshOps;
         this.editActions = editActions;
+        this.fileIcons = fileIcons;
 
         toolbar.setFloatable(false);
         toolbar.add(button(AppIcon.ARROW_UP, null, I18n.t("sftp.toolbar.up"), this::goUp));
@@ -189,19 +196,27 @@ public class SftpPanel extends JPanel {
     private static final javax.swing.Icon FILE_ICON = AppIcon.FILE.icon();
     private static final javax.swing.Icon LINK_ICON = AppIcon.LINK.icon();
 
-    private static javax.swing.Icon entryIcon(RemoteEntry e) {
+    /** File biasa memakai icon association Windows (seperti Explorer); folder & link tetap SVG aplikasi. */
+    private javax.swing.Icon entryIcon(RemoteEntry e) {
         return switch (e.type()) {
             case DIRECTORY -> DIR_ICON;
             case SYMLINK -> LINK_ICON;
-            case FILE, OTHER -> FILE_ICON;
+            case FILE -> {
+                var system = fileIcons.icon(e.name(), table::repaint);
+                yield system != null ? system : FILE_ICON;
+            }
+            case OTHER -> FILE_ICON;
         };
     }
 
     private JPopupMenu buildPopup() {
         var menu = new JPopupMenu();
+        var open = menuItem(I18n.t("sftp.menu.open"), () -> editSelected(EditorLauncher.SYSTEM_DEFAULT));
+        open.setFont(open.getFont().deriveFont(java.awt.Font.BOLD)); // aksi double-click
         var edit = menuItem(I18n.t("sftp.menu.edit"), () -> editSelected(null));
         var editWith = new javax.swing.JMenu(I18n.t("sftp.menu.editWith"));
         var editAsRoot = menuItem(I18n.t("sftp.menu.editAsRoot"), this::editSelectedAsRoot);
+        menu.add(open);
         menu.add(edit);
         menu.add(editWith);
         menu.add(editAsRoot);
@@ -211,6 +226,7 @@ public class SftpPanel extends JPanel {
             public void popupMenuWillBecomeVisible(javax.swing.event.PopupMenuEvent e) {
                 selectRowUnderPointer();
                 boolean file = selectedEntries().stream().anyMatch(en -> en.type() == RemoteEntry.Type.FILE);
+                open.setEnabled(file);
                 edit.setEnabled(file);
                 editWith.setEnabled(file);
                 editAsRoot.setEnabled(file);
@@ -601,9 +617,12 @@ public class SftpPanel extends JPanel {
         }
     }
 
-    /** Membuka file di editor lokal (auto-upload saat disimpan). */
+    /**
+     * Membuka file dengan aplikasi default Windows (auto-upload saat disimpan). File executable / tanpa ekstensi
+     * dibuka dengan editor dari pengaturan (lihat {@link EditorLauncher}).
+     */
     protected void openFile(RemoteEntry entry) {
-        editActions.edit(profile, entry.path(), null);
+        editActions.edit(profile, entry.path(), EditorLauncher.SYSTEM_DEFAULT);
     }
 
     private void editSelected(String command) {

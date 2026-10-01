@@ -32,6 +32,28 @@ class EditorLauncherTest {
     }
 
     @Test
+    void fileExecutableTidakDibukaLewatAssociation() {
+        assertThat(EditorLauncher.isExecutable("deploy.bat")).isTrue();
+        assertThat(EditorLauncher.isExecutable("Setup.EXE")).isTrue();
+        assertThat(EditorLauncher.isExecutable("x.ps1")).isTrue();
+        assertThat(EditorLauncher.isExecutable("app.jar")).isTrue();
+        assertThat(EditorLauncher.isExecutable("a.hta")).isTrue();
+        assertThat(EditorLauncher.isExecutable("evil.vbs. . ")).isTrue(); // titik/spasi akhir dibuang Windows
+        assertThat(EditorLauncher.isExecutable("index.php")).isFalse();
+        assertThat(EditorLauncher.isExecutable("log4j2.xml")).isFalse();
+        assertThat(EditorLauncher.isExecutable("Makefile")).isFalse();
+    }
+
+    @Test
+    void ekstensiFile() {
+        assertThat(EditorLauncher.extension("BWN.PHP")).isEqualTo("php");
+        assertThat(EditorLauncher.extension("a.tar.gz")).isEqualTo("gz");
+        assertThat(EditorLauncher.extension(".bashrc")).isEmpty();
+        assertThat(EditorLauncher.extension("monitor_db.")).isEmpty();
+        assertThat(EditorLauncher.extension("README")).isEmpty();
+    }
+
+    @Test
     void commandTidakDitemukanDibiarkan() {
         assertThat(EditorLauncher.resolve(List.of("tidak-ada-editor-xyz", "f"))).containsExactly("tidak-ada-editor-xyz", "f");
     }

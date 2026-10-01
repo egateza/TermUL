@@ -9,6 +9,7 @@ import dev.egateza.termul.app.log.LogBuffer;
 import dev.egateza.termul.app.log.LogPanel;
 import dev.egateza.termul.app.sftp.ActivityBar;
 import dev.egateza.termul.app.sftp.SftpPanel;
+import dev.egateza.termul.app.sftp.SystemFileIcons;
 import dev.egateza.termul.app.terminal.BackgroundImages;
 import dev.egateza.termul.app.terminal.SplitPanes;
 import dev.egateza.termul.app.terminal.TerminalTab;
@@ -67,6 +68,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private final AppContext ctx;
     private final ProfileStore store;
     private final ExecutorService io;
+    private final SystemFileIcons fileIcons;
     private final HostTreePanel hostTree;
     private final JTabbedPane tabs = new JTabbedPane(JTabbedPane.TOP, JTabbedPane.SCROLL_TAB_LAYOUT);
     /** Tab yang dipilih dengan Ctrl+klik untuk digabung (Ctrl+G), urutan pilih. EDT. */
@@ -120,6 +122,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         this.ctx = ctx;
         this.store = ctx.profiles();
         this.io = ctx.io();
+        this.fileIcons = new SystemFileIcons(ctx.paths().cacheDir().resolve("file-icons"), AppIcon.SIZE);
         this.onExit = onExit;
         this.hostTree = new HostTreePanel(this);
         this.customThemes = List.copyOf(customThemes);
@@ -1358,7 +1361,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                                                java.util.function.BiConsumer<ActivityBar.Level, String> sink) {
                         return ctx.edits().addActivityListener(profileId, sink);
                     }
-                }));
+                }, fileIcons));
         tab.setConnectedListener(tty -> detectOs(profile.id(), tty));
         tab.setStateListener(this::updateTerminalMenu);
         tab.setCurrentProfile(() -> store.snapshot().find(profile.id()).orElse(null));

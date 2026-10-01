@@ -281,6 +281,9 @@ public final class EditManager implements AutoCloseable {
     private void launchEditor(Entry entry) throws IOException {
         Process p = launcher.launch(entry.session.localFile(), entry.template);
         entry.editor = p;
+        if (p == null) {
+            return; // aplikasi default Windows: tidak ada proses, sesi ditutup dari tracker / saat tab ditutup
+        }
         Instant started = Instant.now();
         p.onExit().thenRun(() -> {
             boolean waited = Duration.between(started, Instant.now()).compareTo(WAIT_EDITOR_MIN) >= 0;

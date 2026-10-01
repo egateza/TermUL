@@ -2,6 +2,7 @@ package dev.egateza.termul.app.edit;
 
 import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.core.config.EditorConfig;
+import java.awt.Desktop;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -9,7 +10,10 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.function.Supplier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Menjalankan editor lokal. Di Windows, command tanpa path dicari di PATH (PATHEXT); script
@@ -17,8 +21,26 @@ import java.util.function.Supplier;
  *
  * <p>Aman karena path file yang diteruskan selalu path cache yang namanya sudah disanitasi
  * ({@code EditCache}), jadi tidak ada metakarakter {@code cmd.exe} dari nama file remote.
+ *
+ * <p>Template {@link #SYSTEM_DEFAULT} membuka file dengan aplikasi default Windows (file association), kecuali
+ * file yang dijalankan Windows saat dibuka ({@link #isExecutable}) atau tanpa ekstensi: itu dibuka dengan editor
+ * dari pengaturan, supaya file dari server tidak pernah dieksekusi di lokal.
  */
 public final class EditorLauncher {
+
+    private static final Logger log = LoggerFactory.getLogger(EditorLauncher.class);
+
+    /** Template khusus: buka dengan aplikasi default Windows (double-click / menu "Buka"). */
+    public static final String SYSTEM_DEFAULT = "<system-default>";
+
+    /** Ekstensi yang dijalankan (bukan dibuka untuk dibaca) lewat association Windows; ditambah {@code PATHEXT}. */
+    static final Set<String> EXECUTABLE_EXTENSIONS = Set.of(
+            "exe", "com", "bat", "cmd", "scr", "pif", "cpl", "msc", "msi", "msp", "mst", "appx", "appxbundle",
+            "msix", "msixbundle", "appinstaller", "application", "appref-ms", "gadget", "diagcab", "msh", "msh1",
+            "msh2", "mshxml", "msh1xml", "msh2xml", "ps1", "ps1xml", "ps2", "ps2xml", "psc1", "psc2", "psd1",
+            "psm1", "vb", "vbe", "vbs", "js", "jse", "ws", "wsc", "wsf", "wsh", "hta", "jar", "reg", "inf", "scf",
+            "lnk", "url", "website", "settingcontent-ms", "library-ms", "search-ms", "searchconnector-ms",
+            "chm", "hlp", "py", "pyw", "pyc", "pyz", "rb", "pl", "iso", "img", "vhd", "vhdx", "xll", "xbap");
 
     private final Supplier<EditorConfig> config;
 
@@ -30,8 +52,18 @@ public final class EditorLauncher {
         return launch(file, null);
     }
 
-    /** @param template command editor pilihan user; null = editor sesuai ekstensi/default dari pengaturan */
+    /**
+     * @param template command editor pilihan user, {@link #SYSTEM_DEFAULT}, atau null = editor sesuai
+     *                 ekstensi/default dari pengaturan
+     * @return proses editor; null kalau dibuka dengan aplikasi default Windows (tidak ada proses untuk ditunggu)
+     */
     public Process launch(Path file, String template) throws IOException {
+        if (SYSTEM_DEFAULT.equals(template)) {
+            if (openWithSystem(file)) {
+                return null;
+            }
+            template = null;
+        }
         List<String> command = resolve(template == null
                 ? config.get().commandFor(file) : EditorConfig.commandFor(file, template));
         var pb = new ProcessBuilder(command);
@@ -42,6 +74,49 @@ public final class EditorLauncher {
         } catch (IOException e) {
             throw new IOException(I18n.t("edit.launcher.failed", command.getFirst()), e);
         }
+    }
+
+    /** @return false kalau tidak bisa/tidak boleh dibuka lewat association (pemanggil memakai editor) */
+    private static boolean openWithSystem(Path file) {
+        String name = file.getFileName().toString();
+        if (!isWindows() || !Desktop.isDesktopSupported() || !Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) {
+            return false;
+        }
+        if (extension(name).isEmpty() || isExecutable(name)) {
+            log.info("{} tidak dibuka dengan aplikasi default (executable/tanpa ekstensi), pakai editor", name);
+            return false;
+        }
+        try {
+            Desktop.getDesktop().open(file.toFile());
+            return true;
+        } catch (IOException | RuntimeException e) {
+            log.info("Aplikasi default untuk {} tidak bisa dibuka, pakai editor: {}", name, e.toString());
+            return false;
+        }
+    }
+
+    /** True kalau Windows menjalankan file ini (bukan membukanya untuk dibaca) lewat association. */
+    static boolean isExecutable(String fileName) {
+        String ext = extension(fileName);
+        if (ext.isEmpty()) {
+            return false;
+        }
+        if (EXECUTABLE_EXTENSIONS.contains(ext)) {
+            return true;
+        }
+        for (String e : System.getenv().getOrDefault("PATHEXT", "").split(";")) {
+            if (e.strip().toLowerCase(Locale.ROOT).equals("." + ext)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Ekstensi huruf kecil tanpa titik (titik/spasi di akhir diabaikan seperti di Windows); "" kalau tidak ada. */
+    static String extension(String fileName) {
+        String name = fileName.replaceAll("[. ]+$", "");
+        int dot = name.lastIndexOf('.');
+        return dot > 0 && dot < name.length() - 1 ? name.substring(dot + 1).toLowerCase(Locale.ROOT) : "";
     }
 
     static List<String> resolve(List<String> command) {
