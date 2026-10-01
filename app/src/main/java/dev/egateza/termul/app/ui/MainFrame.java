@@ -284,6 +284,9 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private static JMenuItem findAccelerator(JMenuBar bar, KeyStroke ks) {
         for (int i = 0; i < bar.getMenuCount(); i++) {
             var menu = bar.getMenu(i);
+            if (menu == null) { // komponen bar yang bukan JMenu (glue, tombol mode)
+                continue;
+            }
             for (int j = 0; j < menu.getItemCount(); j++) {
                 var item = menu.getItem(j);
                 if (item != null && ks.equals(item.getAccelerator())) {
