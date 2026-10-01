@@ -1,5 +1,6 @@
 package dev.egateza.termul.app.terminal;
 
+import com.jediterm.core.TerminalCoordinates;
 import com.jediterm.terminal.TerminalCopyPasteHandler;
 import com.jediterm.terminal.model.StyleState;
 import dev.egateza.termul.app.ui.ShakeEffect;
@@ -117,6 +118,28 @@ public final class ZoomableTermWidget extends JediTermWidget {
 
         void refreshFont() {
             reinitFontAndResize();
+        }
+
+        private volatile TerminalCoordinates coords;
+
+        @Override
+        public void setCoordAccessor(TerminalCoordinates coords) {
+            super.setCoordAccessor(coords);
+            this.coords = coords;
+        }
+
+        /**
+         * Bug JediTerm 3.76: "Clear Buffer" dengan baris terakhir dipertahankan memasang cursor Y terminal ke 0,
+         * padahal 1-based. Akibatnya akses baris cursor jadi {@code getLine(-1)} ("Attempt to get line out of
+         * bounds: -1 < 0"). Baris yang dipertahankan ada di baris pertama layar, jadi cursor dikembalikan ke Y=1.
+         */
+        @Override
+        protected void clearBuffer(boolean keepLastLine) {
+            super.clearBuffer(keepLastLine);
+            var c = coords;
+            if (c != null && c.getY() < 1) {
+                c.setY(1);
+            }
         }
 
         /** Dipanggil dari thread emulator saat server mengirim BEL: bunyi sistem dan/atau layar bergetar sesuai {@link BellSettings}. */
