@@ -1,6 +1,7 @@
 package dev.egateza.termul.app.ui;
 
 import dev.egateza.termul.app.AppContext;
+import dev.egateza.termul.app.BuildInfo;
 import dev.egateza.termul.app.edit.EditTrackerDialog;
 import dev.egateza.termul.app.edit.EditorSettingsDialog;
 import dev.egateza.termul.app.edit.ValidationHooksDialog;
@@ -416,7 +417,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         help.addSeparator();
         help.add(menuItem(AppIcon.INFO, I18n.t("main.menu.help.about"), null, () -> Dialogs.info(this,
                 I18n.t("main.about.title"),
-                I18n.t("main.about.text", Runtime.version().toString(), ctx.paths().logDir().toString(), Arrays.stream(IconSet.values())
+                I18n.t("main.about.text", BuildInfo.load().display(), Runtime.version().toString(), ctx.paths().logDir().toString(), Arrays.stream(IconSet.values())
                         .map(s -> "  • " + s.attribution())
                         .collect(Collectors.joining("\n"))))));
         bar.add(help);

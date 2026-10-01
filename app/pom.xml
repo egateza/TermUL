@@ -67,10 +67,26 @@
 
     <properties>
         <termul.mainClass>dev.egateza.termul.app.TermULApp</termul.mainClass>
+        <!-- major.minor versi aplikasi; build number (jumlah commit git) ditambahkan saat build → mis. 0.1.105 -->
+        <termul.versionBase>0.1</termul.versionBase>
     </properties>
 
     <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <!-- hanya build.properties yang di-filter (versi + commit dari git-commit-id-maven-plugin) -->
+            <resource>
+                <directory>src/main/build-info</directory>
+                <filtering>true</filtering>
+            </resource>
+        </resources>
         <plugins>
+            <plugin>
+                <groupId>io.github.git-commit-id</groupId>
+                <artifactId>git-commit-id-maven-plugin</artifactId>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
@@ -110,8 +126,8 @@
                 <jpackage.type>app-image</jpackage.type>
                 <jpackage.input>${project.build.directory}/jpackage-input</jpackage.input>
                 <jpackage.dest>${project.build.directory}/dist</jpackage.dest>
-                <!-- versi numerik untuk Windows (tanpa -SNAPSHOT) -->
-                <jpackage.appVersion>0.1.0</jpackage.appVersion>
+                <!-- versi numerik untuk Windows (major.minor.build, build ≤ 65535) -->
+                <jpackage.appVersion>${termul.versionBase}.${git.total.commit.count}</jpackage.appVersion>
                 <!-- jdeps (lihat docs/SETUP.md) + jdk.unsupported (Unsafe reflektif) + jdk.localedata (locale id) -->
                 <jpackage.modules>java.base,java.desktop,java.management,java.naming,java.prefs,java.rmi,java.security.jgss,java.sql,jdk.unsupported,jdk.localedata</jpackage.modules>
                 <jpackage.installerArgs/>
