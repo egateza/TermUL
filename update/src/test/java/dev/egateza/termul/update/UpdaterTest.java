@@ -29,6 +29,15 @@ class UpdaterTest {
     }
 
     @Test
+    void newerVersionUntukBadge() throws Exception {
+        assertThat(updater(release.feed(key), env("0.1.100", 1)).newerVersion()).contains(ReleaseVersion.parse("0.1.200"));
+        assertThat(updater(release.feed(key), env("0.1.200", 1)).newerVersion()).isEmpty();
+        assertThat(updater(release.feed(key), env("dev", 1)).newerVersion()).isEmpty();
+        // tanpa Bootstrap / butuh installer tetap diberi tahu; dialog menjelaskan cara memasangnya
+        assertThat(updater(release.generation(2).feed(key), env("0.1.100", 0)).newerVersion()).isPresent();
+    }
+
+    @Test
     void sudahTerbaru() throws Exception {
         var check = updater(release.feed(key), env("0.1.200", 1)).check();
         assertThat(check).isInstanceOf(Updater.UpToDate.class);

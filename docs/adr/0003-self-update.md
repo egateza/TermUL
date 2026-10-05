@@ -24,7 +24,7 @@ Batasan:
    Bootstrap tidak boleh memakai SLF4J/Logback, JNA, atau AWT, karena library itu harus pertama kali dimuat oleh classloader aplikasi. Catatan bootstrap diteruskan lewat system property dan di-log oleh aplikasi.
 7. **Rollback otomatis.** Bootstrap mencatat percobaan start per versi. Aplikasi menandai versi "sehat" setelah window utama tampil. Kalau sebuah versi gagal mencapai itu 3 kali berturut-turut, bootstrap kembali ke versi bawaan.
 8. **Generation.** `UpdateProtocol.GENERATION` dinaikkan setiap kali runtime jlink (modul JDK, versi JDK) atau kode Bootstrap berubah. Rilis dengan `generation` lebih tinggi dari bootstrap yang terpasang tidak bisa dipasang lewat menu. Pengguna diarahkan ke halaman rilis untuk installer baru.
-9. **Hanya lewat menu** (Bantuan → Periksa update). Tidak ada pengecekan otomatis di background untuk saat ini. Dijalankan dari IDE (versi `dev`) atau tanpa Bootstrap, aplikasi hanya menampilkan versi terbaru dan tautan halaman rilis.
+9. **Pemasangan selalu manual.** Pengecekan otomatis (revisi 2026-10-05) berjalan 20 detik setelah start lalu setiap 12 jam, memverifikasi tanda tangan manifest, dan hanya menampilkan **badge** "Update x.y.z" di menu bar. Tidak ada yang diunduh atau dipasang tanpa klik user. Setelah dipasang, badge menjadi tombol "Restart untuk update", karena jar baru baru dimuat saat JVM start ulang. Opsi Pengaturan → Periksa update otomatis (default aktif) mematikan pengecekan. Dijalankan dari IDE (versi `dev`) tidak ada badge, dan tanpa Bootstrap dialog hanya menampilkan versi terbaru dan tautan halaman rilis.
 
 ## Konsekuensi
 - (+) Update biasa ~750 KB, dan tidak butuh hak admin walau terpasang di `Program Files`.

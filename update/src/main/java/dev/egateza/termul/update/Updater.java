@@ -6,6 +6,7 @@ import java.security.PublicKey;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.LongConsumer;
 
 /**
@@ -73,6 +74,18 @@ public final class Updater {
 
     public Environment environment() {
         return env;
+    }
+
+    /**
+     * Pemeriksaan ringan untuk badge: versi rilis terbaru (tanda tangan sudah diverifikasi) kalau lebih baru dari yang
+     * berjalan. Tidak menghitung hash jar lokal. Build dev selalu kosong.
+     */
+    public Optional<ReleaseVersion> newerVersion() throws UpdateException, InterruptedException {
+        if (env.running() == null) {
+            return Optional.empty();
+        }
+        ReleaseVersion latest = feed.fetchLatest(key).version();
+        return latest.isNewerThan(env.running()) ? Optional.of(latest) : Optional.empty();
     }
 
     public Check check() throws UpdateException, InterruptedException {

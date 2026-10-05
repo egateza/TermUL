@@ -18,7 +18,10 @@ import dev.egateza.termul.app.terminal.BackgroundImages;
 import dev.egateza.termul.app.terminal.SplitPanes;
 import dev.egateza.termul.app.terminal.TerminalTab;
 import dev.egateza.termul.app.ui.tree.HostTreePanel;
+import dev.egateza.termul.app.update.BadgeDotIcon;
+import dev.egateza.termul.app.update.RestartCommand;
 import dev.egateza.termul.app.update.UpdateDialog;
+import dev.egateza.termul.app.update.UpdateNotifier;
 import java.awt.Color;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -114,6 +117,11 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private final JButton hostToggle = new JButton();
     private final JPanel handle = new JPanel(new java.awt.GridBagLayout());
     private final JButton modeToggle = new JButton(); // pojok kanan atas menu bar: terang/gelap
+    /** Menu bar kanan: "Update x.y.z" atau "Restart untuk update"; tersembunyi kalau tidak ada. */
+    private final JButton updateBadge = new JButton(new BadgeDotIcon());
+    private final JCheckBoxMenuItem autoUpdate = new JCheckBoxMenuItem(I18n.t("main.menu.settings.autoUpdate"));
+    private JMenuItem checkUpdateItem; // EDT
+    private final UpdateNotifier updateNotifier;
     private UiTheme theme; // EDT
     private List<CustomTheme> customThemes; // EDT; disegarkan setelah editor tema ditutup
     private long backdropRequest; // EDT; nomor permintaan muat gambar latar terakhir, untuk membuang hasil yang usang
@@ -133,6 +141,8 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         this.io = ctx.io();
         this.fileIcons = new SystemFileIcons(ctx.paths().cacheDir().resolve("file-icons"), AppIcon.SIZE);
         this.onExit = onExit;
+        this.updateNotifier = UpdateNotifier.forGitHub(ctx.paths(), () -> ctx.config().current().autoUpdateCheck(),
+                this::showUpdateState);
         this.hostTree = new HostTreePanel(this);
         this.customThemes = List.copyOf(customThemes);
         this.theme = UiThemes.resolve(ctx.config().current().theme(), this.customThemes);
@@ -415,6 +425,10 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         showHostStatus.setToolTipText(I18n.t("main.menu.settings.hostStatus.tooltip"));
         showHostStatus.addActionListener(e -> setHostStatusVisible(showHostStatus.isSelected()));
         settings.add(showHostStatus);
+        autoUpdate.setSelected(ctx.config().current().autoUpdateCheck());
+        autoUpdate.setToolTipText(I18n.t("main.menu.settings.autoUpdate.tooltip"));
+        autoUpdate.addActionListener(e -> setAutoUpdate(autoUpdate.isSelected()));
+        settings.add(autoUpdate);
         settings.addSeparator();
         settings.add(menuItem(null, I18n.t("main.menu.settings.knownHosts"), null,
                 () -> new KnownHostsDialog(this, ctx.knownHosts(), io).setVisible(true)));
@@ -430,6 +444,11 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         modeToggle.addActionListener(e -> {
             applyTheme(theme, theme.effectiveMode(wantedMode).other());
         });
+        updateBadge.setVisible(false);
+        updateBadge.setFocusable(false);
+        updateBadge.putClientProperty("JButton.buttonType", "toolBarButton");
+        updateBadge.addActionListener(e -> onUpdateBadge());
+        bar.add(updateBadge);
         bar.add(modeToggle);
         updateModeToggle();
 
@@ -442,8 +461,8 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                 () -> UiAsync.run(io, () -> LogPanel.openFolder(ctx.paths().logDir()),
                         err -> Dialogs.error(this, I18n.t("main.error.openLogDir"), err))));
         help.addSeparator();
-        help.add(menuItem(null, I18n.t("main.menu.help.checkUpdate"), null,
-                () -> new UpdateDialog(this, ctx.paths(), this::restartForUpdate).setVisible(true)));
+        checkUpdateItem = menuItem(null, I18n.t("main.menu.help.checkUpdate"), null, this::openUpdateDialog);
+        help.add(checkUpdateItem);
         help.add(menuItem(AppIcon.INFO, I18n.t("main.menu.help.about"), null, this::showAbout));
         bar.add(help);
         return bar;
@@ -1395,8 +1414,62 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         while (tabs.getTabCount() > 0) {
             removeTab(0, false);
         }
+        updateNotifier.close();
         dispose();
         onExit.run();
+    }
+
+    /** Mulai pemeriksaan update di background (badge); dipanggil setelah window tampil. EDT. */
+    public void startUpdateChecks() {
+        updateNotifier.start();
+    }
+
+    private void openUpdateDialog() {
+        new UpdateDialog(this, ctx.paths(), updateNotifier, this::restartForUpdate).setVisible(true);
+    }
+
+    /** Badge update di menu bar dan titik di menu Bantuan → Periksa update. EDT. */
+    private void showUpdateState(UpdateNotifier.State state) {
+        switch (state) {
+            case UpdateNotifier.Idle _ -> updateBadge.setVisible(false);
+            case UpdateNotifier.Available(var version) -> {
+                updateBadge.setText(I18n.t("update.badge.available", version.toString()));
+                updateBadge.setToolTipText(I18n.t("update.badge.available.tooltip"));
+                updateBadge.setVisible(true);
+            }
+            case UpdateNotifier.Installed(var version) -> {
+                updateBadge.setText(I18n.t("update.badge.restart"));
+                updateBadge.setToolTipText(I18n.t("update.badge.restart.tooltip", version.toString()));
+                updateBadge.setVisible(true);
+            }
+        }
+        if (checkUpdateItem != null) {
+            checkUpdateItem.setIcon(state instanceof UpdateNotifier.Available ? updateBadge.getIcon() : null);
+        }
+        getJMenuBar().revalidate();
+        getJMenuBar().repaint();
+    }
+
+    /** Klik badge: buka dialog update, atau (update sudah terpasang) restart dengan konfirmasi. EDT. */
+    private void onUpdateBadge() {
+        if (updateNotifier.state() instanceof UpdateNotifier.Installed(var version)) {
+            RestartCommand.current().ifPresentOrElse(this::restartForUpdate, () -> Dialogs.info(this,
+                    I18n.t("update.title"), I18n.t("update.restartManual", version.toString())));
+        } else {
+            openUpdateDialog();
+        }
+    }
+
+    private void setAutoUpdate(boolean on) {
+        if (!on) {
+            updateNotifier.disabled();
+        }
+        mutate(I18n.t("error.saveSettings"), () -> {
+            ctx.config().save(ctx.config().current().withAutoUpdateCheck(on));
+            if (on) {
+                updateNotifier.checkSoon(); // setelah tersimpan, supaya pemeriksaan membaca status terbaru
+            }
+        });
     }
 
     /** Menjalankan mutasi store di thread I/O; error ditampilkan di EDT. */

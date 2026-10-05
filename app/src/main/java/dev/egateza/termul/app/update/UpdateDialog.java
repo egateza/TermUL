@@ -43,6 +43,7 @@ public final class UpdateDialog extends JDialog {
     private static final Logger log = LoggerFactory.getLogger(UpdateDialog.class);
 
     private final Consumer<List<String>> restart;
+    private final UpdateNotifier notifier;
     private final UpdateClient client = new UpdateClient();
     private final Updater updater;
     private final JTextArea status = new JTextArea();
@@ -53,10 +54,14 @@ public final class UpdateDialog extends JDialog {
     /** Pekerjaan background yang sedang jalan; hanya diakses di EDT. */
     private Thread worker;
 
-    /** @param restart dipanggil di EDT dengan perintah buka ulang; pemanggil yang menutup aplikasi */
-    public UpdateDialog(Window owner, AppPaths paths, Consumer<List<String>> restart) {
+    /**
+     * @param notifier badge di menu bar; diberi tahu hasil pemeriksaan dan pemasangan
+     * @param restart  dipanggil di EDT dengan perintah buka ulang; pemanggil yang menutup aplikasi
+     */
+    public UpdateDialog(Window owner, AppPaths paths, UpdateNotifier notifier, Consumer<List<String>> restart) {
         super(owner, I18n.t("update.title"), ModalityType.APPLICATION_MODAL);
         this.restart = restart;
+        this.notifier = notifier;
         this.updater = AppUpdates.updater(paths, client);
 
         status.setEditable(false);
@@ -116,6 +121,7 @@ public final class UpdateDialog extends JDialog {
     private void showResult(Updater.Check result) {
         SignedRelease latest = result.latest();
         String version = latest.version().toString();
+        notifier.onResult(result instanceof Updater.UpToDate ? Optional.empty() : Optional.of(latest.version()));
         switch (result) {
             case Updater.UpToDate _ -> {
                 showStatus(I18n.t("update.upToDate", runningText()), false);
@@ -158,6 +164,7 @@ public final class UpdateDialog extends JDialog {
         }), installed -> {
             String version = installed.manifest().version().toString();
             log.info("Update {} terpasang di {}", version, installed.dir());
+            notifier.installed(installed.manifest().version());
             Optional<List<String>> command = RestartCommand.current();
             if (command.isPresent()) {
                 showStatus(I18n.t("update.installed", version), false);

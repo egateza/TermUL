@@ -26,12 +26,15 @@ package dev.egateza.termul.core.config;
  *                          (kiri-kanan, default), {@value #SPLIT_VERTICAL} = atas-bawah
  * @param hostStatusBar     tampilkan bar "Host status" di bawah window: CPU/memory JVM dan tanggal/waktu host
  *                          (null di config lama = tampil)
+ * @param autoUpdateCheck   periksa rilis baru di GitHub di background dan tampilkan badge; memasang tetap manual
+ *                          (null di config lama = aktif)
  */
 public record AppConfig(EditorConfig editors, float terminalFontSize, String iconSet, int hostButtonOpacity,
                         String hostPanelMode, String theme, String themeMode, String language, Boolean bellSound,
                         Boolean bellShake, String uiFontFamily, String terminalFontFamily,
                         Boolean terminalThemeLinked, String terminalTheme, int windowOpacity,
-                        ValidationHooks validationHooks, String splitMode, Boolean hostStatusBar) {
+                        ValidationHooks validationHooks, String splitMode, Boolean hostStatusBar,
+                        Boolean autoUpdateCheck) {
 
     public static final String HOST_DOCKED = "docked";
     public static final String HOST_FLOATING = "floating";
@@ -93,104 +96,111 @@ public record AppConfig(EditorConfig editors, float terminalFontSize, String ico
             splitMode = SPLIT_HORIZONTAL; // config lama tanpa field ini: menyamping
         }
         hostStatusBar = hostStatusBar == null || hostStatusBar; // config lama: bar "Host status" tampil
+        autoUpdateCheck = autoUpdateCheck == null || autoUpdateCheck; // config lama: aktif
     }
 
     public static AppConfig defaults() {
         return new AppConfig(EditorConfig.defaults(), 14f, DEFAULT_ICON_SET, DEFAULT_OPACITY, HOST_DOCKED,
                 DEFAULT_THEME, MODE_DARK, DEFAULT_LANGUAGE, true, true, null, null, true, null, DEFAULT_OPACITY, ValidationHooks.defaults(),
-                SPLIT_HORIZONTAL, true);
+                SPLIT_HORIZONTAL, true, true);
     }
 
     public AppConfig withEditors(EditorConfig e) {
         return new AppConfig(e, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
-                language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme, windowOpacity, validationHooks, splitMode, hostStatusBar);
+                language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme, windowOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck);
     }
 
     public AppConfig withIconSet(String id) {
         return new AppConfig(editors, terminalFontSize, id, hostButtonOpacity, hostPanelMode, theme, themeMode,
-                language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme, windowOpacity, validationHooks, splitMode, hostStatusBar);
+                language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme, windowOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck);
     }
 
     public AppConfig withHostButtonOpacity(int percent) {
         return new AppConfig(editors, terminalFontSize, iconSet, percent, hostPanelMode, theme, themeMode,
-                language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme, windowOpacity, validationHooks, splitMode, hostStatusBar);
+                language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme, windowOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck);
     }
 
     public AppConfig withHostPanelMode(String mode) {
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, mode, theme, themeMode,
-                language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme, windowOpacity, validationHooks, splitMode, hostStatusBar);
+                language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme, windowOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck);
     }
 
     public AppConfig withTheme(String id) {
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, id, themeMode,
-                language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme, windowOpacity, validationHooks, splitMode, hostStatusBar);
+                language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme, windowOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck);
     }
 
     public AppConfig withThemeMode(String mode) {
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, mode,
-                language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme, windowOpacity, validationHooks, splitMode, hostStatusBar);
+                language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme, windowOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck);
     }
 
     public AppConfig withLanguage(String tag) {
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
-                tag, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme, windowOpacity, validationHooks, splitMode, hostStatusBar);
+                tag, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme, windowOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck);
     }
 
     public AppConfig withBellSound(boolean on) {
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
-                language, on, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme, windowOpacity, validationHooks, splitMode, hostStatusBar);
+                language, on, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme, windowOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck);
     }
 
     public AppConfig withBellShake(boolean on) {
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
-                language, bellSound, on, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme, windowOpacity, validationHooks, splitMode, hostStatusBar);
+                language, bellSound, on, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme, windowOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck);
     }
 
     /** @param family nama font aplikasi, atau null untuk font bawaan tema */
     public AppConfig withUiFontFamily(String family) {
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
-                language, bellSound, bellShake, family, terminalFontFamily, terminalThemeLinked, terminalTheme, windowOpacity, validationHooks, splitMode, hostStatusBar);
+                language, bellSound, bellShake, family, terminalFontFamily, terminalThemeLinked, terminalTheme, windowOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck);
     }
 
     /** @param family nama font terminal, atau null untuk pilihan otomatis */
     public AppConfig withTerminalFontFamily(String family) {
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
-                language, bellSound, bellShake, uiFontFamily, family, terminalThemeLinked, terminalTheme, windowOpacity, validationHooks, splitMode, hostStatusBar);
+                language, bellSound, bellShake, uiFontFamily, family, terminalThemeLinked, terminalTheme, windowOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck);
     }
 
     public AppConfig withTerminalThemeLinked(boolean linked) {
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
-                language, bellSound, bellShake, uiFontFamily, terminalFontFamily, linked, terminalTheme, windowOpacity, validationHooks, splitMode, hostStatusBar);
+                language, bellSound, bellShake, uiFontFamily, terminalFontFamily, linked, terminalTheme, windowOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck);
     }
 
     /** @param id id tema custom untuk warna terminal, atau null untuk warna bawaan */
     public AppConfig withTerminalTheme(String id) {
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
-                language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, id, windowOpacity, validationHooks, splitMode, hostStatusBar);
+                language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, id, windowOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck);
     }
 
     public AppConfig withWindowOpacity(int percent) {
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
                 language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme,
-                percent, validationHooks, splitMode, hostStatusBar);
+                percent, validationHooks, splitMode, hostStatusBar, autoUpdateCheck);
     }
 
     public AppConfig withValidationHooks(ValidationHooks hooks) {
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
                 language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme,
-                windowOpacity, hooks, splitMode, hostStatusBar);
+                windowOpacity, hooks, splitMode, hostStatusBar, autoUpdateCheck);
     }
 
     /** @param mode {@value #SPLIT_HORIZONTAL} (menyamping) atau {@value #SPLIT_VERTICAL} (atas-bawah) */
     public AppConfig withSplitMode(String mode) {
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
                 language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme,
-                windowOpacity, validationHooks, mode, hostStatusBar);
+                windowOpacity, validationHooks, mode, hostStatusBar, autoUpdateCheck);
     }
 
     public AppConfig withHostStatusBar(boolean on) {
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
                 language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme,
-                windowOpacity, validationHooks, splitMode, on);
+                windowOpacity, validationHooks, splitMode, on, autoUpdateCheck);
+    }
+
+    public AppConfig withAutoUpdateCheck(boolean on) {
+        return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
+                language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme,
+                windowOpacity, validationHooks, splitMode, hostStatusBar, on);
     }
 }

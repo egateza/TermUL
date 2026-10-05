@@ -117,6 +117,11 @@ aplikasi. Aplikasi menandai versi sehat (`.healthy`) setelah window utama tampil
 hash-nya sama, mengunduh sisanya, memverifikasi, lalu me-rename folder staging dan memindah pointer secara atomic.
 Restart memakai `--wait-pid=<pid>` supaya proses baru menunggu proses lama selesai.
 
+`app.update.UpdateNotifier` memeriksa rilis terbaru di background (20 detik setelah window tampil, lalu setiap 12 jam,
+thread scheduler sendiri) lewat `Updater.newerVersion()` (tanpa hash jar lokal) dan menampilkan badge di menu bar.
+Badge tidak pernah memasang apa pun; setelah pemasangan lewat dialog, badge menjadi tombol "Restart untuk update".
+Bisa dimatikan lewat `AppConfig.autoUpdateCheck`.
+
 ## Alur utama
 
 1. **Connect**: double-click host, lalu `ssh-ops` menjalankan `acquire()`: TCP connect, verifikasi host key (dialog TOFU di EDT kalau host baru), dan auth (agent, key, lalu password dari vault/prompt). Setelah itu buka `ChannelShell` + PTY, pasang connector ke JediTerm, dan tab aktif.
