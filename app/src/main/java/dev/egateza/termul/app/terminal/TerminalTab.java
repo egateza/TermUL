@@ -4,7 +4,8 @@ import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.app.sftp.SftpPanel;
 import dev.egateza.termul.app.ui.AppIcon;
 import dev.egateza.termul.app.ui.Dialogs;
-import dev.egateza.termul.app.ui.PacmanLoader;
+import dev.egateza.termul.app.ui.anim.AnimationKind;
+import dev.egateza.termul.app.ui.anim.LoadingPanel;
 import dev.egateza.termul.app.ui.Shortcuts;
 import dev.egateza.termul.app.ui.UiAsync;
 import dev.egateza.termul.app.vault.VaultGate;
@@ -240,7 +241,8 @@ public final class TerminalTab extends JPanel {
         }
         hideBanner();
         gate.set(TerminalState.CONNECTING);
-        showCenter(PacmanLoader.withMessage(I18n.t("tab.connecting", latestProfile().address())));
+        HostProfile p = latestProfile();
+        showCenter(new LoadingPanel(I18n.t("tab.connecting", p.address()), AnimationKind.promptFor(p.username(), p.host())));
         stateListener.run();
         var cancel = newConnectCancel();
         pending = UiAsync.run(sshOps,

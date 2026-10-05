@@ -18,6 +18,8 @@ import dev.egateza.termul.app.ui.ThemeMode;
 import dev.egateza.termul.app.ui.UiAsync;
 import dev.egateza.termul.app.ui.UiFont;
 import dev.egateza.termul.app.ui.UiThemes;
+import dev.egateza.termul.app.ui.anim.AnimationChoice;
+import dev.egateza.termul.app.ui.anim.LoadingPanel;
 import dev.egateza.termul.app.vault.VaultCredentialProvider;
 import dev.egateza.termul.app.vault.VaultGate;
 import dev.egateza.termul.app.vault.VaultSudoPassword;
@@ -112,6 +114,7 @@ public final class TermULApp {
             UiFont.apply(config.current().uiFontFamily()); // sebelum tema dipasang
             startupTheme.install(startupMode);
             AppIcon.use(IconSet.fromId(config.current().iconSet()));
+            LoadingPanel.use(AnimationChoice.fromId(config.current().loadingAnimation()));
             DialogSounds.install();
             var terminalSettings = new TerminalSettings(config.current().terminalFontFamily(),
                     config.current().terminalFontSize());
