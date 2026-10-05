@@ -108,7 +108,8 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] Uji end-to-end lokal di app-image: update 0.1.999 bertanda tangan dimuat + `.healthy`; jar diubah → ditolak, kembali ke bawaan
 - [x] Repo GitHub dibuat ulang dengan riwayat bersih (tanpa nama server/konteks internal), rilis pertama v0.1.127 (2026-10-05)
 - [x] Uji update dari instalasi v0.1.127 (zip dari GitHub) ke v0.1.128 lewat GitHub sungguhan: klik menu via harness Swing, unduhan hanya termul-app (489 KB), setelah buka ulang Bootstrap menjalankan 0.1.128 + `.healthy`
-- [ ] Uji tombol "Restart sekarang" dari TermUL.exe asli (butuh `jpackage.app-path`, tidak tersedia di harness)
+- [x] Uji tombol "Restart sekarang" dari TermUL.exe asli: v0.1.128 → v0.1.131, dirilis dan diuji user sendiri (2026-10-05)
+- [ ] Badge muncul di instalasi v0.1.131 untuk rilis v0.1.132
 - [x] Badge update di menu bar (pemeriksaan otomatis 20 detik setelah start + setiap 12 jam, bisa dimatikan di Pengaturan), badge berubah menjadi "Restart untuk update" setelah dipasang; diuji terhadap rilis v0.1.128 di GitHub
 
 ### Tambahan dari uji manual user (setelah Fase 4)
