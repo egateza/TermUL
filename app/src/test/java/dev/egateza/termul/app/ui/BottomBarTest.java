@@ -38,6 +38,18 @@ class BottomBarTest {
     }
 
     @Test
+    void animasiTepatDiTengahPanelWalauAdaJamDiKanan() {
+        var bar = new BottomBar();
+        for (int width : new int[] {800, 1100, 1600}) {
+            bar.setSize(width, bar.getPreferredSize().height);
+            bar.doLayout();
+            var view = bar.animationView();
+            int center = view.getX() + view.getWidth() / 2;
+            assertThat(center).as("lebar %d", width).isCloseTo(width / 2, org.assertj.core.data.Offset.offset(1));
+        }
+    }
+
+    @Test
     void gantiAnimasiDanTanpaAnimasi() {
         var bar = new BottomBar();
 

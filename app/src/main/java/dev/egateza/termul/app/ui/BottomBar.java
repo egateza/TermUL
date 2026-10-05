@@ -7,6 +7,7 @@ import dev.egateza.termul.app.ui.anim.AnimationChoice;
 import dev.egateza.termul.app.ui.anim.AnimationKind;
 import dev.egateza.termul.app.ui.anim.AnimationView;
 import java.awt.BorderLayout;
+import java.awt.Dimension;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -15,6 +16,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
+import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.Timer;
@@ -48,6 +50,13 @@ public final class BottomBar extends JPanel {
         right.add(Box.createHorizontalStrut(8));
         right.add(clock);
         add(right, BorderLayout.EAST);
+        // penyeimbang tak terlihat selebar bagian jam, supaya animasi tepat di tengah panel (bukan di tengah sisa ruang)
+        add(new JComponent() {
+            @Override
+            public Dimension getPreferredSize() {
+                return new Dimension(right.getPreferredSize().width, 0);
+            }
+        }, BorderLayout.WEST);
         updateClock();
     }
 
@@ -65,6 +74,10 @@ public final class BottomBar extends JPanel {
             }
             case AnimationChoice.Fixed(var kind) -> show(kind);
         }
+    }
+
+    AnimationView animationView() {
+        return animation;
     }
 
     AnimationKind shown() {
