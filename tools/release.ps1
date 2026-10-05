@@ -70,7 +70,9 @@ if (-not $Msi -and (Test-Path $appImage)) {
     # instalasi baru tanpa WiX: folder app-image di-zip (ekstrak lalu jalankan TermUL.exe)
     $zip = Join-Path $dist "TermUL-$version-windows.zip"
     if (Test-Path $zip) { Remove-Item -Force $zip -Confirm:$false }
-    Compress-Archive -Path $appImage -DestinationPath $zip
+    # tar.exe bawaan Windows 10+; Compress-Archive (PS 5.1) menulis path dengan backslash
+    & "$env:SystemRoot\System32\tar.exe" -a -c -f $zip -C $dist TermUL
+    if ($LASTEXITCODE -ne 0) { Fail "Gagal membuat $zip" }
 }
 foreach ($extra in @("TermUL-$version-windows.zip", "TermUL-$version-jar.zip", "TermUL-$version.msi")) {
     $path = Join-Path $dist $extra

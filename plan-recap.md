@@ -106,7 +106,8 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] Menu Bantuan → Periksa update (`UpdateDialog`), restart dengan `--wait-pid`
 - [x] `ReleaseTool` (keygen, publish) + `tools/release.ps1` (gh release create); key dibuat di `~/.termul-release/`
 - [x] Uji end-to-end lokal di app-image: update 0.1.999 bertanda tangan dimuat + `.healthy`; jar diubah → ditolak, kembali ke bawaan
-- [ ] Rilis pertama ke GitHub (butuh `gh`), lalu uji menu update dari instalasi rilis itu ke rilis berikutnya
+- [x] Repo GitHub dibuat ulang dengan riwayat bersih (tanpa nama server/konteks internal), rilis pertama v0.1.127 (2026-10-05)
+- [ ] Uji update dari instalasi v0.1.127 ke v0.1.128 lewat GitHub sungguhan
 
 ### Tambahan dari uji manual user (setelah Fase 4)
 - [x] Auth "Default": coba key `~/.ssh`, lalu jatuh ke password (sebelumnya error kalau tidak ada key)
