@@ -1,5 +1,6 @@
 package dev.egateza.termul.vault;
 
+import java.nio.file.Path;
 import java.util.UUID;
 
 /**
@@ -43,6 +44,16 @@ public interface CredentialVault {
 
     /** Kedua argumen di-zero. */
     void changeMasterPassword(char[] oldPassword, char[] newPassword);
+
+    /**
+     * "Lupa master password": mengunci vault, menyingkirkan file vault, dan menghapus key "ingat di PC ini". Setelah
+     * ini {@link #exists()} false dan vault baru bisa dibuat dengan {@link #create(char[])}. Secret lama tidak ikut.
+     *
+     * @param keepBackup true = file vault di-rename ke backup (bisa dikembalikan kalau password teringat lagi),
+     *                   false = file vault dihapus permanen
+     * @return path file backup, atau null kalau tidak ada backup (vault belum ada atau {@code keepBackup} false)
+     */
+    Path forgetMasterPassword(boolean keepBackup);
 
     /** @return true kalau OS ini punya proteksi key untuk opsi "ingat di PC ini" (saat ini hanya DPAPI Windows) */
     boolean isRememberSupported();

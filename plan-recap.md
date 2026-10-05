@@ -144,6 +144,10 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
   Transparansi tombol: 100/70/40/20% (`hostButtonOpacity`), solid lagi saat di-hover. Diverifikasi lewat screenshot.
   Juga: strip mode panel satu warna dengan daftar host; divider panel log disembunyikan bersama panelnya
   (sebelumnya meninggalkan titik-titik di tepi bawah window)
+- [x] Menu **Vault → Lupa master password...**: peringatan bahwa vault yang sedang dipakai diganti vault baru, ceklis
+  "Backup vault lama" (default aktif → rename ke `vault.bin.forgotten-<waktu>`; tidak dicentang → hapus permanen setelah
+  konfirmasi kedua), key DPAPI dihapus, lalu langsung buat master password baru. Profil tetap, password diisi ulang.
+  Pesan "terlalu banyak percobaan" menunjuk ke menu ini (permintaan user)
 - [x] Menu Terminal ikut status tab/sesi (`TerminalMenuState`): tanpa tab semua item nonaktif kecuali "File yang sedang
   diedit"; Duplikat/Reconnect/Tutup tab/Zoom butuh ada tab (Reconnect sengaja tidak menunggu sesi aktif); Panel SFTP dan
   Inject password sudo/root butuh sesi tersambung (SFTP tetap aktif selama panelnya terbuka, supaya bisa ditutup).

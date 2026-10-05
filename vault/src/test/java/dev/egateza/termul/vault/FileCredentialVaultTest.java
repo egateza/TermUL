@@ -267,6 +267,65 @@ class FileCredentialVaultTest {
     }
 
     @Test
+    void lupaMasterPasswordMemindahkanVaultDanMengizinkanVaultBaru() throws Exception {
+        var v = vault(FAKE_OS);
+        v.create(pw("master-lama"));
+        v.put(a, SecretType.SUDO_PASSWORD, pw("sudo"));
+        v.setRememberOnThisPc(true);
+        byte[] lama = Files.readAllBytes(dir.resolve("vault.bin"));
+
+        Path backup = v.forgetMasterPassword(true);
+
+        assertThat(backup.getFileName().toString()).startsWith("vault.bin.forgotten-");
+        assertThat(Files.readAllBytes(backup)).isEqualTo(lama); // tidak dihapus, bisa dikembalikan
+        assertThat(v.exists()).isFalse();
+        assertThat(v.isUnlocked()).isFalse();
+        assertThat(v.isRememberedOnThisPc()).isFalse();
+        assertThat(v.has(a, SecretType.SUDO_PASSWORD)).isFalse(); // metadata lama tidak tersisa di cache
+        assertThat(v.unlockWithOsKey()).isFalse();
+
+        v.create(pw("master-baru"));
+        assertThat(v.get(a, SecretType.SUDO_PASSWORD)).isNull();
+        v.put(a, SecretType.SUDO_PASSWORD, pw("sudo-baru"));
+        var reopened = vault(FAKE_OS);
+        reopened.unlock(pw("master-baru"));
+        assertThat(reopened.get(a, SecretType.SUDO_PASSWORD)).isEqualTo(pw("sudo-baru"));
+    }
+
+    @Test
+    void lupaMasterPasswordDuaKaliTidakMenimpaBackup() {
+        var v = vault(KeyProtector.UNAVAILABLE);
+        v.create(pw("master-satu"));
+        Path pertama = v.forgetMasterPassword(true);
+        v.create(pw("master-dua"));
+        Path kedua = v.forgetMasterPassword(true);
+
+        assertThat(kedua).isNotEqualTo(pertama);
+        assertThat(pertama).exists();
+        assertThat(kedua).exists();
+    }
+
+    @Test
+    void lupaMasterPasswordTanpaVaultMengembalikanNull() {
+        assertThat(vault(KeyProtector.UNAVAILABLE).forgetMasterPassword(true)).isNull();
+    }
+
+    @Test
+    void lupaMasterPasswordTanpaBackupMenghapusVaultLama() throws Exception {
+        var v = vault(FAKE_OS);
+        v.create(pw("master-lama"));
+        v.setRememberOnThisPc(true);
+
+        assertThat(v.forgetMasterPassword(false)).isNull();
+
+        assertThat(v.exists()).isFalse();
+        assertThat(v.isRememberedOnThisPc()).isFalse();
+        try (var files = Files.list(dir)) {
+            assertThat(files).isEmpty(); // tidak ada backup maupun key DPAPI yang tersisa
+        }
+    }
+
+    @Test
     @EnabledOnOs(OS.WINDOWS)
     void dpapiAsliRoundTrip() {
         var dpapi = new DpapiKeyProtector();

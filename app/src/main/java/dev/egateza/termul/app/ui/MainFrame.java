@@ -1188,6 +1188,8 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         menu.add(menuItem(null, I18n.t("main.menu.vault.lock"), null, () -> ctx.sshOps().execute(gate::lock)));
         menu.add(menuItem(null, I18n.t("main.menu.vault.changePassword"), null,
                 () -> ctx.sshOps().execute(gate::changeMasterPasswordInteractive)));
+        menu.add(menuItem(null, I18n.t("main.menu.vault.forgetPassword"), null,
+                () -> ctx.sshOps().execute(gate::forgetMasterPasswordInteractive)));
         if (!gate.vault().isRememberSupported()) {
             return menu; // mis. macOS: belum ada proteksi key OS, vault hanya dibuka dengan master password
         }

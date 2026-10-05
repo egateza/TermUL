@@ -11,8 +11,11 @@ import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -44,6 +47,7 @@ public final class FileCredentialVault implements CredentialVault {
     private static final byte[] CHECK_PLAINTEXT = "MYTERM-VAULT-OK".getBytes(StandardCharsets.US_ASCII);
     private static final byte[] CHECK_AAD = "key-check".getBytes(StandardCharsets.US_ASCII);
     private static final int MAX_BLOB = 1 << 20;
+    private static final DateTimeFormatter BACKUP_STAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
 
     private record EntryKey(UUID profileId, SecretType type) {
         byte[] aad() {
@@ -270,6 +274,40 @@ public final class FileCredentialVault implements CredentialVault {
             Secrets.zero(oldPassword);
             Secrets.zero(newPassword);
         }
+    }
+
+    @Override
+    public synchronized Path forgetMasterPassword(boolean keepBackup) {
+        lockInternal();
+        data = null;
+        try {
+            // Key DPAPI membuka vault lama tanpa password: jangan disisakan bersama backup
+            Files.deleteIfExists(osKeyFile);
+            if (!Files.exists(file)) {
+                return null;
+            }
+            if (!keepBackup) {
+                Files.delete(file);
+                log.info("Vault lama dihapus tanpa backup (lupa master password)");
+                return null;
+            }
+            Path backup = backupPath();
+            Files.move(file, backup, StandardCopyOption.ATOMIC_MOVE);
+            log.info("Vault lama dipindah ke {} (lupa master password)", backup.getFileName());
+            return backup;
+        } catch (IOException e) {
+            throw new VaultException("Gagal menyingkirkan file vault lama: " + file, e);
+        }
+    }
+
+    /** {@code vault.bin.forgotten-<waktu>}, ditambah nomor kalau nama itu sudah dipakai. */
+    private Path backupPath() {
+        String base = file.getFileName() + ".forgotten-" + LocalDateTime.now().format(BACKUP_STAMP);
+        Path candidate = file.resolveSibling(base);
+        for (int i = 2; Files.exists(candidate); i++) {
+            candidate = file.resolveSibling(base + "-" + i);
+        }
+        return candidate;
     }
 
     @Override

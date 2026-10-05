@@ -6,13 +6,16 @@ import dev.egateza.termul.vault.CredentialVault;
 import dev.egateza.termul.vault.Secrets;
 import dev.egateza.termul.vault.VaultException;
 import java.awt.Component;
+import java.awt.BorderLayout;
 import java.awt.GridLayout;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
+import javax.swing.JCheckBox;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
@@ -102,9 +105,11 @@ public final class VaultGate implements AutoCloseable {
         Edt.runAndWait(() -> confirm.set(JOptionPane.showConfirmDialog(parent.get(),
                 I18n.t("vault.create.confirm"),
                 I18n.t("vault.create.title"), JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE) == JOptionPane.OK_OPTION));
-        if (!confirm.get()) {
-            return false;
-        }
+        return confirm.get() && createNewVault();
+    }
+
+    /** Meminta master password baru (dua kali) lalu membuat vault. @return false kalau dibatalkan. */
+    private boolean createNewVault() {
         while (true) {
             char[][] pws = askPasswords(I18n.t("vault.create.title"),
                     new String[] {I18n.t("vault.create.password"), I18n.t("vault.create.repeat")});
@@ -128,6 +133,50 @@ public final class VaultGate implements AutoCloseable {
             } catch (VaultException e) {
                 showError(I18n.t("vault.create.title"), e.getMessage());
             }
+        }
+    }
+
+    /**
+     * "Lupa master password": setelah konfirmasi, vault yang sedang dipakai diganti vault baru. File lama di-rename
+     * ke backup (ceklis, default aktif) atau dihapus. Profil tetap ada, tetapi password yang tersimpan harus diisi
+     * ulang. Panggil di luar EDT.
+     */
+    public void forgetMasterPasswordInteractive() {
+        synchronized (unlockLock) {
+            touch();
+            if (!vault.exists()) {
+                showInfo(I18n.t("vault.forget.title"), I18n.t("vault.forget.none"));
+                return;
+            }
+            String[] options = {I18n.t("vault.forget.confirmButton"), I18n.t("vault.forget.cancelButton")};
+            var choice = new AtomicReference<Integer>(JOptionPane.CLOSED_OPTION);
+            var keepBackup = new AtomicReference<Boolean>(true);
+            Edt.runAndWait(() -> {
+                var panel = new JPanel(new BorderLayout(0, 12));
+                panel.add(new JLabel(html(I18n.t("vault.forget.confirm"))), BorderLayout.CENTER);
+                var backupBox = new JCheckBox(I18n.t("vault.forget.backup"), true);
+                panel.add(backupBox, BorderLayout.SOUTH);
+                choice.set(JOptionPane.showOptionDialog(parent.get(), panel, I18n.t("vault.forget.title"),
+                        JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE, null, options, options[1]));
+                keepBackup.set(backupBox.isSelected());
+            });
+            if (choice.get() != 0) {
+                return;
+            }
+            if (!keepBackup.get() && !confirmWarning(I18n.t("vault.forget.title"), I18n.t("vault.forget.noBackupConfirm"))) {
+                return;
+            }
+            Path backup;
+            try {
+                backup = vault.forgetMasterPassword(keepBackup.get());
+            } catch (VaultException e) {
+                showError(I18n.t("vault.forget.title"), e.getMessage());
+                return;
+            }
+            showInfo(I18n.t("vault.forget.title"), backup == null
+                    ? I18n.t("vault.forget.doneDeleted")
+                    : I18n.t("vault.forget.done", backup.getFileName().toString()));
+            createNewVault();
         }
     }
 
@@ -201,6 +250,18 @@ public final class VaultGate implements AutoCloseable {
             dialog.dispose();
         });
         return result;
+    }
+
+    /** Teks multi-baris untuk JLabel (baris baru dari i18n tetap terlihat). */
+    private static String html(String text) {
+        return "<html>" + text.replace("&", "&amp;").replace("<", "&lt;").replace("\n", "<br>") + "</html>";
+    }
+
+    private boolean confirmWarning(String title, String message) {
+        var ok = new AtomicReference<Boolean>(false);
+        Edt.runAndWait(() -> ok.set(JOptionPane.showConfirmDialog(parent.get(), message, title,
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE) == JOptionPane.OK_OPTION));
+        return ok.get();
     }
 
     private void showError(String title, String message) {

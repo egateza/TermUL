@@ -31,4 +31,7 @@ Blok key-check dipakai untuk memastikan DEK dari DPAPI memang milik vault ini. F
 - (+) Dengan DPAPI: nyaman di laptop kerja sendiri, tetap terikat ke akun Windows.
 - (−) Dengan DPAPI aktif, malware yang berjalan sebagai user yang sama bisa membuka vault. Ini trade-off yang disadari dan opsi ini default **OFF**.
 - (−) Lupa master password tanpa DPAPI = semua secret hilang (harus diisi ulang). Profil tetap aman karena tidak berisi secret.
+  Menu **Vault → Lupa master password...** mengganti vault yang sedang dipakai dengan vault baru: file lama di-rename ke
+  `vault.bin.forgotten-<waktu>` (ceklis backup, default aktif; tanpa backup = dihapus setelah konfirmasi kedua), key DPAPI
+  dihapus, lalu langsung membuat master password baru. Tidak ada jalur recovery: backup hanya berguna kalau password lama teringat.
 - DEK dan secret hasil dekripsi hanya berada di memory sebagai `byte[]`/`char[]` dan di-zero saat lock atau setelah dipakai.
