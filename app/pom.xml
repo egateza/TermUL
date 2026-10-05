@@ -165,7 +165,7 @@
                      ~49% private bytes dibanding default JVM (diukur idle, 2026-10-05): heap kecil di awal dan dibatasi
                      768 MB, Serial GC (heap ~60 MB tidak butuh G1), JIT C1 saja + code cache kecil, Java2D tanpa
                      Direct3D. Konsekuensi: kode berat CPU (enkripsi transfer besar) sedikit lebih lambat. -->
-                <jpackage.javaOptions>--java-options --enable-native-access=ALL-UNNAMED --java-options -Xms64m --java-options -Xmx768m --java-options -XX:+UseSerialGC --java-options -XX:MinHeapFreeRatio=10 --java-options -XX:MaxHeapFreeRatio=30 --java-options -XX:TieredStopAtLevel=1 --java-options -XX:ReservedCodeCacheSize=64m --java-options -Dsun.java2d.d3d=false</jpackage.javaOptions>
+                <jpackage.javaOptions>--java-options --enable-native-access=ALL-UNNAMED --java-options -Xms64m --java-options -Xmx768m --java-options -XX:+UseSerialGC --java-options -XX:MinHeapFreeRatio=10 --java-options -XX:MaxHeapFreeRatio=30 --java-options -XX:TieredStopAtLevel=1 --java-options -XX:ReservedCodeCacheSize=64m --java-options -Dsun.java2d.d3d=false --java-options -Dtermul.installer.memory=true</jpackage.javaOptions>
             </properties>
             <build>
                 <plugins>

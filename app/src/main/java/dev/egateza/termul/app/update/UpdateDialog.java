@@ -51,6 +51,8 @@ public final class UpdateDialog extends JDialog {
     private final JScrollPane notesScroll = new JScrollPane(notes);
     private final JProgressBar progress = new JProgressBar();
     private final JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+    /** Panduan pasang ulang installer; kosong kalau instalasi ini sudah memakai opsi installer terbaru. */
+    private final JPanel guideSlot = new JPanel(new BorderLayout());
     /** Pekerjaan background yang sedang jalan; hanya diakses di EDT. */
     private Thread worker;
 
@@ -78,9 +80,12 @@ public final class UpdateDialog extends JDialog {
         notesScroll.setVisible(false);
         progress.setStringPainted(false);
 
+        var body = new JPanel(new BorderLayout(0, 8));
+        body.add(notesScroll, BorderLayout.CENTER);
+        body.add(guideSlot, BorderLayout.SOUTH);
         var center = new JPanel(new BorderLayout(0, 8));
         center.add(status, BorderLayout.NORTH);
-        center.add(notesScroll, BorderLayout.CENTER);
+        center.add(body, BorderLayout.CENTER);
         center.add(progress, BorderLayout.SOUTH);
         var content = new JPanel(new BorderLayout(0, 8));
         content.setBorder(BorderFactory.createEmptyBorder(12, 12, 8, 12));
@@ -122,6 +127,7 @@ public final class UpdateDialog extends JDialog {
         SignedRelease latest = result.latest();
         String version = latest.version().toString();
         notifier.onResult(result instanceof Updater.UpToDate ? Optional.empty() : Optional.of(latest.version()));
+        showGuide(latest);
         switch (result) {
             case Updater.UpToDate _ -> {
                 showStatus(I18n.t("update.upToDate", runningText()), false);
@@ -221,6 +227,19 @@ public final class UpdateDialog extends JDialog {
         notes.setText(text);
         notes.setCaretPosition(0);
         notesScroll.setVisible(!text.isBlank());
+    }
+
+    /**
+     * Juga saat sudah versi terbaru: update lewat menu tidak membawa opsi JVM installer, jadi instalasi lama tetap
+     * ditawari pasang ulang sampai memakainya.
+     */
+    private void showGuide(SignedRelease release) {
+        guideSlot.removeAll();
+        if (InstallerInfo.needsReinstall()) {
+            InstallerInfo.installDir().ifPresent(dir -> guideSlot.add(InstallGuide.withBrowser(release.version(), dir,
+                    uri -> status.setText(status.getText() + "\n\n" + uri))));
+        }
+        guideSlot.setVisible(guideSlot.getComponentCount() > 0);
     }
 
     private void setButtons(JButton... list) {

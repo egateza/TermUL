@@ -22,6 +22,7 @@ import dev.egateza.termul.app.ui.anim.AnimationChoice;
 import dev.egateza.termul.app.ui.anim.LoadingPanel;
 import dev.egateza.termul.app.ui.tree.HostTreePanel;
 import dev.egateza.termul.app.update.BadgeDotIcon;
+import dev.egateza.termul.app.update.InstallerInfo;
 import dev.egateza.termul.app.update.RestartCommand;
 import dev.egateza.termul.app.update.UpdateDialog;
 import dev.egateza.termul.app.update.UpdateNotifier;
@@ -524,6 +525,11 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             item.addActionListener(e -> setMemoryMode(mode));
             group.add(item);
             menu.add(item);
+        }
+        if (InstallerInfo.needsReinstall()) {
+            // instalasi lama: opsi JVM hemat memori hanya didapat lewat installer baru (panduan + link di dialog update)
+            menu.addSeparator();
+            menu.add(menuItem(null, I18n.t("main.menu.settings.memory.reinstall"), null, this::openUpdateDialog));
         }
         return menu;
     }
