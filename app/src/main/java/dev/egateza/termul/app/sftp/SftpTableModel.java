@@ -4,6 +4,9 @@ import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.sftp.RemoteEntry;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
+import java.util.function.Predicate;
+import java.util.regex.Pattern;
 import javax.swing.table.AbstractTableModel;
 
 /** Model tabel isi direktori remote. Hanya diakses di EDT. */
@@ -66,6 +69,32 @@ public final class SftpTableModel extends AbstractTableModel {
             case COL_GROUP -> e.group();
             default -> "";
         };
+    }
+
+    /**
+     * Pencocok nama untuk filter folder saat ini (tanpa beda huruf besar/kecil). Query dengan {@code *}/{@code ?}
+     * dianggap wildcard terhadap seluruh nama (mis. {@code *.conf}); selain itu cukup mengandung teksnya.
+     *
+     * @return null kalau query kosong (= tanpa filter)
+     */
+    public static Predicate<RemoteEntry> nameFilter(String query) {
+        String q = query == null ? "" : query.strip().toLowerCase(Locale.ROOT);
+        if (q.isEmpty()) {
+            return null;
+        }
+        if (q.indexOf('*') < 0 && q.indexOf('?') < 0) {
+            return e -> e.name().toLowerCase(Locale.ROOT).contains(q);
+        }
+        var regex = new StringBuilder();
+        for (String part : q.split("((?<=[*?])|(?=[*?]))")) {
+            regex.append(switch (part) {
+                case "*" -> ".*";
+                case "?" -> ".";
+                default -> Pattern.quote(part);
+            });
+        }
+        var pattern = Pattern.compile(regex.toString(), Pattern.DOTALL);
+        return e -> pattern.matcher(e.name().toLowerCase(Locale.ROOT)).matches();
     }
 
     /** Comparator per kolom; direktori selalu di atas untuk kolom nama. */

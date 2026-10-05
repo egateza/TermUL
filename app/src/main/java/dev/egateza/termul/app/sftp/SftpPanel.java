@@ -6,6 +6,7 @@ import dev.egateza.termul.app.sftp.ActivityBar.Level;
 import dev.egateza.termul.app.ui.AppIcon;
 import dev.egateza.termul.app.ui.Dialogs;
 import dev.egateza.termul.app.ui.Edt;
+import dev.egateza.termul.app.ui.Shortcuts;
 import dev.egateza.termul.app.ui.UiAsync;
 import dev.egateza.termul.core.profile.HostProfile;
 import dev.egateza.termul.sftp.RemoteEntry;
@@ -51,6 +52,7 @@ import javax.swing.SwingUtilities;
 import javax.swing.ListSelectionModel;
 import javax.swing.TransferHandler;
 import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.RowFilter;
 import javax.swing.table.TableRowSorter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -69,6 +71,9 @@ public class SftpPanel extends JPanel {
     protected final SftpTableModel model = new SftpTableModel();
     protected final JTable table = new JTable(model);
     protected final JTextField pathField = new JTextField();
+    /** Filter nama untuk folder yang sedang dibuka (client-side, tanpa request ke server). */
+    private final JTextField filterField = new JTextField();
+    private final TableRowSorter<SftpTableModel> sorter = new TableRowSorter<>(model);
     /** Keterangan aktivitas panel ini (upload, download, operasi file, reconnect, edit remote). */
     protected final ActivityBar activity = new ActivityBar();
     protected final JToolBar toolbar = new JToolBar();
@@ -133,7 +138,6 @@ public class SftpPanel extends JPanel {
         table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
         table.setFillsViewportHeight(true);
         table.setShowGrid(false);
-        var sorter = new TableRowSorter<>(model);
         for (int c = 0; c < model.getColumnCount(); c++) {
             sorter.setComparator(c, SftpTableModel.comparator(c));
         }
@@ -177,6 +181,8 @@ public class SftpPanel extends JPanel {
         bind(KeyEvent.VK_F2, 0, "rename", this::renameSelected);
         bind(KeyEvent.VK_F7, 0, "mkdir", this::mkdir);
         bind(KeyEvent.VK_DELETE, 0, "delete", this::deleteSelected);
+        bind(KeyEvent.VK_ESCAPE, 0, "clearFilter", () -> filterField.setText(""));
+        installFilter();
         table.setComponentPopupMenu(buildPopup());
 
         var scroll = new JScrollPane(table);
@@ -193,6 +199,78 @@ public class SftpPanel extends JPanel {
     }
 
     private final TransferQueue transfers;
+
+    /**
+     * Kolom filter di ujung kanan toolbar. Ctrl/Cmd+F dipasang sebagai binding ancestor panel ini, sehingga
+     * mengalahkan accelerator menu "Cari host" hanya selama fokus ada di dalam panel SFTP.
+     */
+    private void installFilter() {
+        toolbar.add(javax.swing.Box.createHorizontalGlue());
+        filterField.putClientProperty("JTextField.placeholderText", I18n.t("sftp.filter.placeholder"));
+        filterField.putClientProperty("JTextField.showClearButton", true);
+        filterField.setToolTipText(I18n.t("sftp.filter.tip", Shortcuts.text(Shortcuts.menu(KeyEvent.VK_F))));
+        filterField.setColumns(14);
+        filterField.setMaximumSize(filterField.getPreferredSize());
+        filterField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            @Override
+            public void insertUpdate(javax.swing.event.DocumentEvent e) {
+                applyFilter();
+            }
+
+            @Override
+            public void removeUpdate(javax.swing.event.DocumentEvent e) {
+                applyFilter();
+            }
+
+            @Override
+            public void changedUpdate(javax.swing.event.DocumentEvent e) {
+                applyFilter();
+            }
+        });
+        toolbar.add(filterField);
+
+        getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(Shortcuts.menu(KeyEvent.VK_F), "focusFilter");
+        getActionMap().put("focusFilter", action(() -> {
+            filterField.requestFocusInWindow();
+            filterField.selectAll();
+        }));
+        // Esc: kosongkan filter, atau kembali ke tabel kalau sudah kosong. Enter/↓: lanjut pilih di tabel.
+        filterField.getInputMap().put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "clearOrBack");
+        filterField.getActionMap().put("clearOrBack", action(() -> {
+            if (filterField.getText().isEmpty()) {
+                table.requestFocusInWindow();
+            } else {
+                filterField.setText("");
+            }
+        }));
+        filterField.getInputMap().put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "toTable");
+        filterField.getInputMap().put(KeyStroke.getKeyStroke(KeyEvent.VK_DOWN, 0), "toTable");
+        filterField.getActionMap().put("toTable", action(() -> {
+            if (table.getRowCount() > 0 && table.getSelectedRow() < 0) {
+                table.setRowSelectionInterval(0, 0);
+            }
+            table.requestFocusInWindow();
+        }));
+    }
+
+    private void applyFilter() {
+        var match = SftpTableModel.nameFilter(filterField.getText());
+        sorter.setRowFilter(match == null ? null : new RowFilter<SftpTableModel, Integer>() {
+            @Override
+            public boolean include(Entry<? extends SftpTableModel, ? extends Integer> entry) {
+                return match.test(model.entryAt(entry.getIdentifier()));
+            }
+        });
+    }
+
+    private static AbstractAction action(Runnable action) {
+        return new AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                action.run();
+            }
+        };
+    }
 
     private static final javax.swing.Icon DIR_ICON = AppIcon.FOLDER.icon(AppIcon.SIZE, () -> AppIcon.FOLDER_COLOR);
     private static final javax.swing.Icon FILE_ICON = AppIcon.FILE.icon();
@@ -583,6 +661,9 @@ public class SftpPanel extends JPanel {
             String canonical = svc().canonicalize(dir);
             return new Listing(canonical, svc().list(canonical));
         }, listing -> {
+            if (!listing.dir().equals(currentDir)) {
+                filterField.setText(""); // filter hanya berlaku untuk folder tempat ia diketik; refresh mempertahankannya
+            }
             currentDir = listing.dir();
             pathField.setText(listing.dir());
             model.setEntries(listing.entries());
@@ -690,12 +771,7 @@ public class SftpPanel extends JPanel {
 
     protected void bind(int key, int modifiers, String name, Runnable action) {
         table.getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke(key, modifiers), name);
-        table.getActionMap().put(name, new AbstractAction() {
-            @Override
-            public void actionPerformed(java.awt.event.ActionEvent e) {
-                action.run();
-            }
-        });
+        table.getActionMap().put(name, action(action));
     }
 
     /** Menutup SFTP (tab ditutup). Koneksi bersama baru ditutup kalau tidak dipakai lagi (mis. sesi edit). */

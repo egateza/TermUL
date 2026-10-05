@@ -37,6 +37,38 @@ class SftpTableModelTest {
     }
 
     @Test
+    void filterNamaKosongBerartiTanpaFilter() {
+        assertThat(SftpTableModel.nameFilter(null)).isNull();
+        assertThat(SftpTableModel.nameFilter("   ")).isNull();
+    }
+
+    @Test
+    void filterNamaMengandungTeksTanpaBedaHuruf() {
+        var match = SftpTableModel.nameFilter(" Nginx ");
+        assertThat(match.test(file("nginx.conf", 1, 0))).isTrue();
+        assertThat(match.test(dir("NGINX-old"))).isTrue();
+        assertThat(match.test(file("apache2.conf", 1, 0))).isFalse();
+    }
+
+    @Test
+    void filterNamaWildcardCocokSeluruhNama() {
+        var conf = SftpTableModel.nameFilter("*.CONF");
+        assertThat(conf.test(file("nginx.conf", 1, 0))).isTrue();
+        assertThat(conf.test(file("nginx.conf.bak", 1, 0))).isFalse();
+
+        var single = SftpTableModel.nameFilter("log?.txt");
+        assertThat(single.test(file("log1.txt", 1, 0))).isTrue();
+        assertThat(single.test(file("log12.txt", 1, 0))).isFalse();
+    }
+
+    @Test
+    void filterNamaWildcardMemperlakukanKarakterRegexSebagaiTeks() {
+        var match = SftpTableModel.nameFilter("a+b(1)*");
+        assertThat(match.test(file("a+b(1).txt", 1, 0))).isTrue();
+        assertThat(match.test(file("aab1.txt", 1, 0))).isFalse();
+    }
+
+    @Test
     void formatUkuranDanMode() {
         assertThat(Formats.size(0)).isEqualTo("0 B");
         assertThat(Formats.size(1023)).isEqualTo("1023 B");
