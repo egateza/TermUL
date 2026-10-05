@@ -440,27 +440,32 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         var settings = new JMenu(I18n.t("menu.settings"));
         settings.add(menuItem(null, I18n.t("main.menu.settings.editors"), null, this::configureEditors));
         settings.add(menuItem(null, I18n.t("main.menu.settings.validationHooks"), null, this::configureValidationHooks));
-        settings.add(buildHostPanelMenu());
-        settings.add(buildThemeMenu());
-        settings.add(menuItem(null, I18n.t("menu.settings.fonts"), null, this::configureFonts));
-        settings.add(menuItem(null, I18n.t("menu.settings.windowOpacity"), null, this::configureWindowOpacity));
-        settings.add(buildLanguageMenu());
-        settings.add(buildBellMenu());
-        settings.add(buildIconSetMenu());
-        settings.add(buildAnimationMenu(I18n.t("main.menu.settings.loadingAnimation"),
+        // semua yang mengubah tampilan dikumpulkan di satu submenu
+        var display = new JMenu(I18n.t("menu.settings.display"));
+        display.add(buildThemeMenu());
+        display.add(menuItem(null, I18n.t("menu.settings.fonts"), null, this::configureFonts));
+        display.add(buildIconSetMenu());
+        display.add(menuItem(null, I18n.t("menu.settings.windowOpacity"), null, this::configureWindowOpacity));
+        display.addSeparator();
+        display.add(buildHostPanelMenu());
+        display.add(buildHostStatusMenu());
+        display.addSeparator();
+        display.add(buildAnimationMenu(I18n.t("main.menu.settings.loadingAnimation"),
                 AnimationChoice.fromId(ctx.config().current().loadingAnimation()), choice -> {
                     LoadingPanel.use(choice);
                     mutate(I18n.t("error.saveSettings"), () ->
                             ctx.config().save(ctx.config().current().withLoadingAnimation(choice.id())));
                 }));
-        settings.add(buildAnimationMenu(I18n.t("main.menu.settings.statusAnimation"),
+        display.add(buildAnimationMenu(I18n.t("main.menu.settings.statusAnimation"),
                 AnimationChoice.fromId(ctx.config().current().statusAnimation()), choice -> {
                     bottomBar.setAnimation(choice);
                     mutate(I18n.t("error.saveSettings"), () ->
                             ctx.config().save(ctx.config().current().withStatusAnimation(choice.id())));
                 }));
+        settings.add(display);
+        settings.add(buildLanguageMenu());
+        settings.add(buildBellMenu());
         settings.addSeparator();
-        settings.add(buildHostStatusMenu());
         settings.add(buildMemoryMenu());
         autoUpdate.setSelected(ctx.config().current().autoUpdateCheck());
         autoUpdate.setToolTipText(I18n.t("main.menu.settings.autoUpdate.tooltip"));
