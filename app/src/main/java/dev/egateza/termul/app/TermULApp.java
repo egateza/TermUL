@@ -12,6 +12,7 @@ import dev.egateza.termul.app.ui.Dialogs;
 import dev.egateza.termul.app.ui.IconSet;
 import dev.egateza.termul.app.ui.MainFrame;
 import dev.egateza.termul.app.ui.FontCatalog;
+import dev.egateza.termul.app.ui.MacIntegration;
 import dev.egateza.termul.app.ui.ThemeMode;
 import dev.egateza.termul.app.ui.UiAsync;
 import dev.egateza.termul.app.ui.UiFont;
@@ -51,6 +52,7 @@ public final class TermULApp {
     }
 
     public static void main(String[] args) {
+        MacIntegration.configureBeforeAwt();
         AppPaths.Detected detected = AppPaths.detect();
         AppPaths paths = detected.paths();
         // Harus diset sebelum logger pertama dibuat (dipakai logback.xml)
@@ -118,6 +120,7 @@ public final class TermULApp {
                     terminalSettings, vault, edits, sftpLinks, themes);
             var frame = new MainFrame(ctx, customThemes, () -> shutdown(io, sshOps, sessions, vault, edits, log));
             frameRef.set(frame);
+            MacIntegration.install(frame);
             frame.setVisible(true);
             UiAsync.run(io, store::load, frame::showSnapshot,
                     err -> Dialogs.error(frame, "Gagal memuat profil", err));

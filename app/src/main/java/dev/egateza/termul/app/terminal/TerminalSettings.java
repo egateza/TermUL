@@ -14,7 +14,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Pengaturan JediTerm: font monospace yang tersedia di Windows, bell bawaan sistem (BEL dari server).
+ * Pengaturan JediTerm: font monospace yang tersedia di Windows/macOS, bell bawaan sistem (BEL dari server).
  * Ukuran font bisa diubah (zoom); satu instance per tab supaya zoom tidak saling memengaruhi.
  * Family font, warna (tema), dan pengaturan bell dipakai bersama semua tab.
  */
@@ -24,7 +24,8 @@ public final class TerminalSettings extends DefaultSettingsProvider {
     public static final float MAX_SIZE = 40f;
 
     private static final List<String> PREFERRED_FONTS =
-            List.of("JetBrains Mono", "Cascadia Mono", "Cascadia Code", "Consolas", "DejaVu Sans Mono");
+            List.of("JetBrains Mono", "Cascadia Mono", "Cascadia Code", "Consolas", "SF Mono", "Menlo", "Monaco",
+                    "DejaVu Sans Mono");
 
     private final AtomicReference<String> chosenFamily; // null = otomatis; dipakai bersama semua tab
     private final float defaultSize;

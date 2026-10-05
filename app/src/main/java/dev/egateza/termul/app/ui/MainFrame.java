@@ -430,11 +430,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                 () -> UiAsync.run(io, () -> LogPanel.openFolder(ctx.paths().logDir()),
                         err -> Dialogs.error(this, I18n.t("main.error.openLogDir"), err))));
         help.addSeparator();
-        help.add(menuItem(AppIcon.INFO, I18n.t("main.menu.help.about"), null, () -> Dialogs.info(this,
-                I18n.t("main.about.title"),
-                I18n.t("main.about.text", BuildInfo.load().display(), Runtime.version().toString(), ctx.paths().logDir().toString(), Arrays.stream(IconSet.values())
-                        .map(s -> "  • " + s.attribution())
-                        .collect(Collectors.joining("\n"))))));
+        help.add(menuItem(AppIcon.INFO, I18n.t("main.menu.help.about"), null, this::showAbout));
         bar.add(help);
         return bar;
     }
@@ -458,13 +454,22 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                         ctx.config().save(ctx.config().current().withEditors(editors))));
     }
 
+    /** Dialog "Tentang TermUL" (menu Bantuan, dan menu aplikasi di macOS). EDT. */
+    void showAbout() {
+        Dialogs.info(this, I18n.t("main.about.title"),
+                I18n.t("main.about.text", BuildInfo.load().display(), Runtime.version().toString(),
+                        ctx.paths().logDir().toString(), Arrays.stream(IconSet.values())
+                                .map(s -> "  • " + s.attribution())
+                                .collect(Collectors.joining("\n"))));
+    }
+
     private static String splitGroupHint() {
         return I18n.t("main.splitGroup.hint", String.valueOf(SplitPanes.MAX_PANES), Shortcuts.menuKeyName(),
                 Shortcuts.text(Shortcuts.menu(KeyEvent.VK_G)));
     }
 
     /** Ikon aplikasi (dibuat dengan {@code tools/MakeAppIcon.java}); ukuran yang tidak ada dilewati. */
-    private static List<java.awt.Image> appIcons() {
+    static List<java.awt.Image> appIcons() {
         var images = new java.util.ArrayList<java.awt.Image>();
         for (int size : new int[] {16, 32, 48, 64, 128, 256}) {
             var url = MainFrame.class.getResource("/dev/egateza/termul/app/icons/app-" + size + ".png");
@@ -1315,8 +1320,11 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         }
     }
 
-    /** Keluar aplikasi: selalu konfirmasi; kalau masih ada sesi/transfer/edit, tampilkan daftarnya. */
-    private void exit() {
+    /**
+     * Keluar aplikasi: selalu konfirmasi; kalau masih ada sesi/transfer/edit, tampilkan daftarnya. Juga dipanggil
+     * Quit/Cmd+Q di macOS ({@link MacIntegration}). EDT.
+     */
+    void exit() {
         List<String> active = activeWork();
         String message;
         if (active.isEmpty()) {
