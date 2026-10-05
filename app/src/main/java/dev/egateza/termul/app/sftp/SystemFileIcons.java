@@ -1,5 +1,6 @@
 package dev.egateza.termul.app.sftp;
 
+import dev.egateza.termul.core.Os;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -39,7 +40,7 @@ public final class SystemFileIcons {
     public SystemFileIcons(Path probeDir, int size) {
         this.probeDir = probeDir;
         this.size = size;
-        this.enabled = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("windows");
+        this.enabled = Os.current().isWindows();
     }
 
     /**

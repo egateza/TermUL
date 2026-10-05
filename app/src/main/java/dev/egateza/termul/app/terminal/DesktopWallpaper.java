@@ -2,6 +2,7 @@ package dev.egateza.termul.app.terminal;
 
 import com.sun.jna.Library;
 import com.sun.jna.Native;
+import dev.egateza.termul.core.Os;
 import java.awt.GraphicsEnvironment;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -27,7 +28,7 @@ public final class DesktopWallpaper {
 
     /** @return true kalau OS-nya Windows dan ada GUI */
     public static boolean supported() {
-        return System.getProperty("os.name", "").startsWith("Windows") && !GraphicsEnvironment.isHeadless();
+        return Os.current().isWindows() && !GraphicsEnvironment.isHeadless();
     }
 
     /**
