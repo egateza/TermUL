@@ -144,6 +144,7 @@ public final class SessionManager implements AutoCloseable {
         client.setPasswordIdentityProvider(PasswordIdentityProvider.EMPTY_PASSWORDS_PROVIDER);
         CoreModuleProperties.PASSWORD_PROMPTS.set(client, AuthSetup.MAX_PASSWORD_ATTEMPTS);
         CoreModuleProperties.CLIENT_IDENTIFICATION.set(client, CLIENT_IDENTIFICATION);
+        CoreModuleProperties.NIO_WORKERS.set(client, nioWorkers(Runtime.getRuntime().availableProcessors()));
         if (!settings.heartbeatInterval().isZero()) {
             CoreModuleProperties.HEARTBEAT_INTERVAL.set(client, settings.heartbeatInterval());
             CoreModuleProperties.HEARTBEAT_REQUEST.set(client, HEARTBEAT_REQUEST);
@@ -151,6 +152,17 @@ public final class SessionManager implements AutoCloseable {
         }
         client.start();
     }
+
+    /**
+     * Thread I/O MINA untuk semua koneksi. Default MINA = jumlah core + 1 (13 di CPU 12 core, ditambah thread resume
+     * sejumlah yang sama), padahal I/O-nya asinkron dan klien desktop jarang membuka lebih dari belasan koneksi;
+     * {@value #MAX_NIO_WORKERS} cukup dan menghemat memori stack thread.
+     */
+    static int nioWorkers(int cores) {
+        return Math.clamp(cores, 1, MAX_NIO_WORKERS);
+    }
+
+    static final int MAX_NIO_WORKERS = 4;
 
     /**
      * Mendapatkan koneksi ke profil (membuat baru kalau belum ada / sudah putus).

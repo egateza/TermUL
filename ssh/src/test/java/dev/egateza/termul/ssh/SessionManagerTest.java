@@ -108,6 +108,43 @@ class SessionManagerTest {
     }
 
     @Test
+    void workerNioDibatasiTapiMinimalSatu() {
+        assertThat(SessionManager.nioWorkers(12)).isEqualTo(SessionManager.MAX_NIO_WORKERS);
+        assertThat(SessionManager.nioWorkers(2)).isEqualTo(2);
+        assertThat(SessionManager.nioWorkers(0)).isEqualTo(1);
+    }
+
+    /** Batas worker NIO tidak membatasi jumlah koneksi: 2x lipat MAX_NIO_WORKERS koneksi + shell berjalan bersamaan. */
+    @Test
+    void banyakKoneksiBersamaanDenganWorkerTerbatas() throws Exception {
+        int count = SessionManager.MAX_NIO_WORKERS * 2;
+        var leases = new java.util.ArrayList<SshLease>();
+        try {
+            var shells = new java.util.ArrayList<org.apache.sshd.client.channel.ChannelShell>();
+            for (int i = 0; i < count; i++) {
+                var lease = manager.acquire(profile(AuthMethod.PASSWORD, null)); // id acak: koneksi terpisah
+                leases.add(lease);
+                shells.add(lease.connection().openShell(new PtySize(80, 24), Map.of()));
+            }
+            for (int i = 0; i < count; i++) {
+                OutputStream in = shells.get(i).getInvertedIn();
+                in.write(("tab" + i + "\r").getBytes(StandardCharsets.UTF_8));
+                in.flush();
+            }
+            for (int i = 0; i < count; i++) {
+                assertThat(readUntil(shells.get(i).getInvertedOut(), "echo:tab" + i)).contains("echo:tab" + i);
+            }
+            for (var shell : shells) {
+                shell.close(false);
+            }
+        } finally {
+            for (var lease : leases) {
+                lease.close();
+            }
+        }
+    }
+
+    @Test
     void connectPasswordTofuDanShellEcho() throws Exception {
         var profile = profile(AuthMethod.PASSWORD, null);
 
