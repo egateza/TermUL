@@ -9,7 +9,7 @@ import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.app.log.LogBuffer;
 import dev.egateza.termul.app.log.LogPanel;
 import dev.egateza.termul.app.ssh.KnownHostsDialog;
-import dev.egateza.termul.app.monitor.HostStatusBar;
+import dev.egateza.termul.app.monitor.HostStatusPanel;
 import dev.egateza.termul.app.monitor.ResourceMonitor;
 import dev.egateza.termul.app.sftp.ActivityBar;
 import dev.egateza.termul.app.sftp.SftpPanel;
@@ -17,6 +17,8 @@ import dev.egateza.termul.app.sftp.SystemFileIcons;
 import dev.egateza.termul.app.terminal.BackgroundImages;
 import dev.egateza.termul.app.terminal.SplitPanes;
 import dev.egateza.termul.app.terminal.TerminalTab;
+import dev.egateza.termul.app.ui.anim.AnimationChoice;
+import dev.egateza.termul.app.ui.anim.LoadingPanel;
 import dev.egateza.termul.app.ui.tree.HostTreePanel;
 import dev.egateza.termul.app.update.BadgeDotIcon;
 import dev.egateza.termul.app.update.RestartCommand;
@@ -92,8 +94,11 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private final JCheckBoxMenuItem showLog = new JCheckBoxMenuItem(I18n.t("main.menu.help.showLog"));
     private int logHeight = 220; // EDT
     private final ResourceMonitor resourceMonitor;
-    private final HostStatusBar hostStatus;
-    private final JCheckBoxMenuItem showHostStatus = new JCheckBoxMenuItem(I18n.t("main.menu.settings.hostStatus"));
+    private final HostStatusPanel hostStatus;
+    private final BottomBar bottomBar = new BottomBar();
+    private final java.util.Map<HostStatusPanel.Mode, JRadioButtonMenuItem> hostStatusModes =
+            new java.util.EnumMap<>(HostStatusPanel.Mode.class);
+    private final JRadioButtonMenuItem hideHostStatus = new JRadioButtonMenuItem(I18n.t("main.menu.settings.hostStatus.hide"));
     private int logDividerSize; // EDT
     // item menu Terminal yang bergantung pada tab/sesi aktif (lihat updateTerminalMenu)
     private JMenuItem miDuplicate;
@@ -228,12 +233,15 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         logDividerSize = logSplit.getDividerSize();
         logSplit.setDividerSize(0); // panel log tersembunyi: tanpa divider (tidak ada garis/titik di tepi bawah)
         getContentPane().add(logSplit, BorderLayout.CENTER);
-        // monitor resource JVM: bar "Host status" paling bawah
+        // monitor resource JVM: "Host status" di kanan baris menu (dipasang di buildMenu)
         resourceMonitor = new ResourceMonitor(io);
-        hostStatus = new HostStatusBar(resourceMonitor, () -> setHostStatusVisible(false));
-        getContentPane().add(hostStatus, BorderLayout.SOUTH);
+        hostStatus = new HostStatusPanel(resourceMonitor, () -> setHostStatusVisible(false));
+        hostStatus.setMode(HostStatusPanel.Mode.fromId(ctx.config().current().hostStatusMode()));
         hostStatus.setVisible(ctx.config().current().hostStatusBar());
         resourceMonitor.setActive(hostStatus.isVisible());
+        // panel bawah selalu tampil: animasi + jam
+        bottomBar.setAnimation(AnimationChoice.fromId(ctx.config().current().statusAnimation()));
+        getContentPane().add(bottomBar, BorderLayout.SOUTH);
         applyHostMode(ctx.config().current().hostPanelMode());
         setJMenuBar(buildMenu());
 
@@ -420,11 +428,20 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         settings.add(buildLanguageMenu());
         settings.add(buildBellMenu());
         settings.add(buildIconSetMenu());
+        settings.add(buildAnimationMenu(I18n.t("main.menu.settings.loadingAnimation"),
+                AnimationChoice.fromId(ctx.config().current().loadingAnimation()), choice -> {
+                    LoadingPanel.use(choice);
+                    mutate(I18n.t("error.saveSettings"), () ->
+                            ctx.config().save(ctx.config().current().withLoadingAnimation(choice.id())));
+                }));
+        settings.add(buildAnimationMenu(I18n.t("main.menu.settings.statusAnimation"),
+                AnimationChoice.fromId(ctx.config().current().statusAnimation()), choice -> {
+                    bottomBar.setAnimation(choice);
+                    mutate(I18n.t("error.saveSettings"), () ->
+                            ctx.config().save(ctx.config().current().withStatusAnimation(choice.id())));
+                }));
         settings.addSeparator();
-        showHostStatus.setSelected(hostStatus.isVisible());
-        showHostStatus.setToolTipText(I18n.t("main.menu.settings.hostStatus.tooltip"));
-        showHostStatus.addActionListener(e -> setHostStatusVisible(showHostStatus.isSelected()));
-        settings.add(showHostStatus);
+        settings.add(buildHostStatusMenu());
         autoUpdate.setSelected(ctx.config().current().autoUpdateCheck());
         autoUpdate.setToolTipText(I18n.t("main.menu.settings.autoUpdate.tooltip"));
         autoUpdate.addActionListener(e -> setAutoUpdate(autoUpdate.isSelected()));
@@ -439,6 +456,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         settings.add(openConfigDir);
         bar.add(settings);
         bar.add(javax.swing.Box.createHorizontalGlue());
+        bar.add(hostStatus);
         modeToggle.setFocusable(false);
         modeToggle.putClientProperty("JButton.buttonType", "toolBarButton");
         modeToggle.addActionListener(e -> {
@@ -468,17 +486,62 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         return bar;
     }
 
-    /** Tampilkan/sembunyikan bar "Host status" di bawah dan simpan pilihannya. EDT. */
-    private void setHostStatusVisible(boolean visible) {
-        showHostStatus.setSelected(visible);
-        if (visible == hostStatus.isVisible()) {
+    /**
+     * Pengaturan → Host status → Tampilkan host status: tampilkan semua / grafik saja / teks saja, atau sembunyikan.
+     */
+    private JMenu buildHostStatusMenu() {
+        var show = new JMenu(I18n.t("main.menu.settings.hostStatus"));
+        show.setToolTipText(I18n.t("main.menu.settings.hostStatus.tooltip"));
+        var group = new ButtonGroup();
+        for (var mode : HostStatusPanel.Mode.values()) {
+            var item = new JRadioButtonMenuItem(mode.label());
+            item.addActionListener(e -> showHostStatus(mode));
+            group.add(item);
+            show.add(item);
+            hostStatusModes.put(mode, item);
+        }
+        show.addSeparator();
+        hideHostStatus.addActionListener(e -> setHostStatusVisible(false));
+        group.add(hideHostStatus);
+        show.add(hideHostStatus);
+        syncHostStatusMenu();
+        var menu = new JMenu(I18n.t("main.menu.settings.hostStatusGroup"));
+        menu.add(show);
+        return menu;
+    }
+
+    private void syncHostStatusMenu() {
+        (hostStatus.isVisible() ? hostStatusModes.get(hostStatus.mode()) : hideHostStatus).setSelected(true);
+    }
+
+    /** Tampilkan "Host status" dengan isi {@code mode} dan simpan pilihannya. EDT. */
+    private void showHostStatus(HostStatusPanel.Mode mode) {
+        if (mode == hostStatus.mode() && hostStatus.isVisible()) {
             return;
         }
-        hostStatus.setVisible(visible);
-        getContentPane().revalidate();
-        resourceMonitor.setActive(visible); // sampler hanya jalan selama bar terlihat
+        hostStatus.setMode(mode);
+        applyHostStatusVisible(true);
+        mutate(I18n.t("error.saveSettings"), () -> ctx.config().save(
+                ctx.config().current().withHostStatusMode(mode.id()).withHostStatusBar(true)));
+    }
+
+    /** Tampilkan/sembunyikan "Host status" di baris menu dan simpan pilihannya. EDT. */
+    private void setHostStatusVisible(boolean visible) {
+        if (visible == hostStatus.isVisible()) {
+            syncHostStatusMenu();
+            return;
+        }
+        applyHostStatusVisible(visible);
         mutate(I18n.t("error.saveSettings"), () ->
                 ctx.config().save(ctx.config().current().withHostStatusBar(visible)));
+    }
+
+    private void applyHostStatusVisible(boolean visible) {
+        hostStatus.setVisible(visible);
+        syncHostStatusMenu();
+        getJMenuBar().revalidate();
+        getJMenuBar().repaint();
+        resourceMonitor.setActive(visible); // sampler hanya jalan selama host status terlihat
     }
 
     private void configureEditors() {
@@ -950,6 +1013,31 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             });
             group.add(item);
             menu.add(item);
+        }
+        return menu;
+    }
+
+    /**
+     * Submenu radio: tanpa animasi, acak, lalu semua animasi ({@link AnimationChoice#all}); {@code onPick} hanya
+     * dipanggil kalau pilihan berubah.
+     */
+    private static JMenu buildAnimationMenu(String title, AnimationChoice selected,
+                                            java.util.function.Consumer<AnimationChoice> onPick) {
+        var menu = new JMenu(title);
+        var group = new ButtonGroup();
+        var current = new java.util.concurrent.atomic.AtomicReference<>(selected); // EDT; hanya wadah yang bisa diubah
+        for (var choice : AnimationChoice.all()) {
+            var item = new JRadioButtonMenuItem(choice.label(), choice.equals(selected));
+            item.addActionListener(e -> {
+                if (!choice.equals(current.getAndSet(choice))) {
+                    onPick.accept(choice);
+                }
+            });
+            group.add(item);
+            menu.add(item);
+            if (choice.equals(AnimationChoice.RANDOM)) {
+                menu.addSeparator();
+            }
         }
         return menu;
     }
