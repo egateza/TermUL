@@ -4,6 +4,8 @@ import dev.egateza.termul.app.i18n.I18n;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.time.LocalTime;
@@ -14,11 +16,11 @@ import java.util.Deque;
 import java.util.List;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListModel;
-import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 
@@ -49,12 +51,59 @@ public final class ActivityBar extends JPanel {
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm:ss");
     private static final int MAX_HISTORY = 200;
 
-    private final JLabel label = new JLabel(" ");
+    private static final int MAX_LINES = 4;
+
+    /**
+     * Teks aktivitas di-wrap mengikuti lebar panel SFTP (bukan satu baris panjang): lebar minimum/preferred sengaja
+     * kecil supaya pesan panjang (mis. error) tidak mengunci split pane, dan tinggi dibatasi {@link #MAX_LINES} baris.
+     * Teks utuh tetap ada di tooltip/riwayat.
+     */
+    private final JTextArea label = new JTextArea(" ") {
+        @Override
+        public Dimension getMinimumSize() {
+            return new Dimension(0, lineHeight());
+        }
+
+        @Override
+        public Dimension getPreferredSize() {
+            var size = super.getPreferredSize();
+            return new Dimension(Math.min(size.width, 120), Math.min(size.height, lineHeight() * MAX_LINES));
+        }
+
+        @Override
+        public void updateUI() {
+            super.updateUI();
+            setFont(UIManager.getFont("Label.font")); // tetap tampil seperti label, juga setelah ganti tema
+            setOpaque(false);
+            setBorder(null);
+        }
+
+        private int lineHeight() {
+            return getFontMetrics(getFont()).getHeight();
+        }
+    };
     private final Deque<Entry> history = new ArrayDeque<>(); // EDT
 
     public ActivityBar() {
         super(new BorderLayout(6, 0));
         setBorder(BorderFactory.createEmptyBorder(2, 6, 2, 6));
+        label.setLineWrap(true);
+        label.setWrapStyleWord(true);
+        label.setEditable(false);
+        label.setFocusable(false);
+        label.setHighlighter(null);
+        label.addComponentListener(new ComponentAdapter() {
+            private int lastWidth = -1;
+
+            @Override
+            public void componentResized(ComponentEvent e) {
+                // Jumlah baris wrap bergantung pada lebar: hitung ulang tinggi saat lebar panel berubah.
+                if (label.getWidth() != lastWidth) {
+                    lastWidth = label.getWidth();
+                    SwingUtilities.invokeLater(ActivityBar.this::revalidate);
+                }
+            }
+        });
         label.setToolTipText(I18n.t("activity.tooltip"));
         label.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
         label.addMouseListener(new MouseAdapter() {
@@ -95,6 +144,7 @@ public final class ActivityBar extends JPanel {
 
     private void show(Entry entry) {
         label.setText(entry.text());
+        label.setToolTipText(entry.text() + " — " + I18n.t("activity.tooltip"));
         label.setForeground(switch (entry.level()) {
             case SUCCESS -> new Color(0x2E9E5B);
             case WARN -> new Color(0xD9A441);
