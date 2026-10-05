@@ -145,34 +145,9 @@ mvnw.cmd install -DskipTests && mvnw.cmd -pl app -Ppackage-jar -DskipTests packa
 
 ## Rilis & update lewat menu (GitHub Releases)
 
-Pengguna memperbarui TermUL lewat **Bantuan → Periksa update**. Biasanya cukup mengunduh jar TermUL (~750 KB), bukan
-seluruh app-image. Desain: `docs/adr/0003-self-update.md`.
-
-Persiapan sekali:
-- `winget install GitHub.cli`, lalu `gh auth login` (akun dengan akses tulis ke `egateza/TermUL`).
-- Private key penandatangan ada di `%USERPROFILE%\.termul-release\update-signing.key` (dibuat 2026-10-05 dengan
-  `ReleaseTool keygen`, public key-nya di `UpdateKeys.PUBLIC_KEY`). **Cadangkan offline. Jangan commit.** Kalau hilang,
-  instalasi yang ada tidak bisa update lewat menu lagi.
-
-Menerbitkan rilis (dari `master` yang sudah di-commit dan di-push, karena versi = jumlah commit):
-
-```powershell
-notepad notes.txt                                   # catatan rilis: tampil di dialog update, ikut ditandatangani
-.\tools\release.ps1 -NotesFile notes.txt -Msi      # -Draft untuk memeriksa dulu di GitHub
-```
-
-Skrip ini build `package-win` + `package-jar`, membuat `manifest.json` + `.sig` dengan `ReleaseTool`, lalu
-`gh release create v<versi>` dengan semua jar, zip portable, dan `.msi`. Rilis draft belum terlihat oleh aplikasi
-sampai di-publish.
-
-Aturan:
-- Mengubah `jpackage.modules`, versi JDK runtime, atau kode `update.Bootstrap` → naikkan `UpdateProtocol.GENERATION`.
-  Instalasi lama lalu diarahkan ke halaman rilis untuk installer baru (tidak dipasang lewat menu).
-- Instalasi yang dibuat **sebelum** fitur ini (main class masih `TermULApp`, runtime tanpa `java.net.http`) perlu sekali
-  pasang installer/zip baru.
-- Uji lokal tanpa GitHub: build app-image, buat rilis dengan `ReleaseTool publish --allow-dirty`, salin folder output ke
-  `<termul.home>/cache/updates/<versi>/`, tulis versinya ke `updates/current`, lalu jalankan Bootstrap dengan
-  `-Dtermul.home=...`. Log harus berisi `Bootstrap: Menjalankan update <versi>`.
+Pengguna memperbarui TermUL lewat **Bantuan → Periksa update**. Cara menerbitkan versi baru (persiapan, langkah,
+penomoran versi, kapan butuh installer baru, private key, troubleshooting) ada di [`RELEASE.md`](RELEASE.md).
+Desain: [`adr/0003-self-update.md`](adr/0003-self-update.md).
 
 ## Ikon aplikasi (Font Awesome + Material Symbols)
 

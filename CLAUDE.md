@@ -100,4 +100,5 @@ Arah dependensi: `app → terminal, sftp → ssh → core`, `vault → core`, da
 | `docs/SECURITY.md` | Threat model, desain vault, guard auto-sudo, risiko remote edit |
 | `docs/PLAN.md` | Roadmap per fase + checklist + acceptance criteria |
 | `docs/SETUP.md` | Tools, dependensi, environment dev & test |
+| `docs/RELEASE.md` | Menerbitkan rilis baru ke GitHub Releases (update lewat menu) |
 | `docs/adr/` | Architecture Decision Records (0003: update via GitHub Releases) |
