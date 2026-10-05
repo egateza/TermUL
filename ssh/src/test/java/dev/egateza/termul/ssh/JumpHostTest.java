@@ -12,13 +12,21 @@ import dev.egateza.termul.ssh.hostkey.HostKeyInfo;
 import dev.egateza.termul.ssh.hostkey.HostKeyPrompt;
 import dev.egateza.termul.ssh.hostkey.KnownHostsStore;
 import dev.egateza.termul.ssh.testing.TestSshServer;
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.CopyOnWriteArrayList;
 import org.apache.sshd.server.forward.AcceptAllForwardingFilter;
 import org.apache.sshd.server.forward.RejectAllForwardingFilter;
@@ -39,7 +47,18 @@ class JumpHostTest {
     private final Map<UUID, HostProfile> profiles = new ConcurrentHashMap<>();
     private final List<String> trusted = new CopyOnWriteArrayList<>();
 
+    private static final SshSettings FAST = new SshSettings(Duration.ofSeconds(10), Duration.ofSeconds(10),
+            Duration.ofSeconds(10), Duration.ZERO, 0, Duration.ZERO);
+
+    /** Menerima TCP tapi tidak pernah mengirim banner SSH (server hang / tujuan tunnel yang lama dijangkau). */
+    private ServerSocket blackHole;
+    private final List<Socket> swallowed = new CopyOnWriteArrayList<>();
+
     private void start(boolean jumpAllowsForwarding) throws Exception {
+        start(jumpAllowsForwarding, FAST);
+    }
+
+    private void start(boolean jumpAllowsForwarding, SshSettings settings) throws Exception {
         jump = new TestSshServer(dir.resolve("jump.ser"), s -> s.setForwardingFilter(jumpAllowsForwarding
                 ? AcceptAllForwardingFilter.INSTANCE : RejectAllForwardingFilter.INSTANCE));
         target = new TestSshServer(dir.resolve("target.ser"));
@@ -66,10 +85,17 @@ class JumpHostTest {
                 return null;
             }
         };
-        sessions = new SessionManager(knownHosts, trust, creds,
-                new SshSettings(Duration.ofSeconds(10), Duration.ofSeconds(10), Duration.ofSeconds(10),
-                        Duration.ZERO, 0, Duration.ZERO),
-                id -> Optional.ofNullable(profiles.get(id)));
+        sessions = new SessionManager(knownHosts, trust, creds, settings, id -> Optional.ofNullable(profiles.get(id)));
+        blackHole = new ServerSocket(0, 50, InetAddress.getLoopbackAddress());
+        Thread.ofVirtual().start(() -> {
+            try {
+                while (true) {
+                    swallowed.add(blackHole.accept());
+                }
+            } catch (IOException e) {
+                // ditutup di tearDown
+            }
+        });
     }
 
     private HostProfile profile(String name, int port, UUID jumpId) {
@@ -90,6 +116,95 @@ class JumpHostTest {
         if (target != null) {
             target.close();
         }
+        if (blackHole != null) {
+            blackHole.close();
+        }
+        for (Socket s : swallowed) {
+            s.close();
+        }
+    }
+
+    @Test
+    void serverTanpaBannerTimeoutSesuaiConnectTimeoutBukanAuthTimeout() throws Exception {
+        start(true, new SshSettings(Duration.ofSeconds(1), Duration.ofMinutes(5), Duration.ofSeconds(10),
+                Duration.ZERO, 0, Duration.ZERO));
+        var hang = profile("hang", blackHole.getLocalPort(), null);
+
+        long t0 = System.nanoTime();
+        assertThatThrownBy(() -> sessions.acquire(hang))
+                .isInstanceOf(SshConnectException.class)
+                .hasMessageContaining("Timeout");
+        assertThat(Duration.ofNanos(System.nanoTime() - t0)).isLessThan(Duration.ofSeconds(10));
+        assertThat(sessions.connectionCount()).isZero();
+    }
+
+    @Test
+    void tujuanJumpHostTidakMeresponsTimeoutDenganPetunjukJumpHost() throws Exception {
+        start(true, new SshSettings(Duration.ofSeconds(1), Duration.ofMinutes(5), Duration.ofSeconds(10),
+                Duration.ZERO, 0, Duration.ZERO));
+        var bastion = profile("bastion", jump.port(), null);
+        var app = profile("app", blackHole.getLocalPort(), bastion.id());
+
+        long t0 = System.nanoTime();
+        assertThatThrownBy(() -> sessions.acquire(app))
+                .isInstanceOf(SshConnectException.class)
+                .hasMessageContaining("Timeout")
+                .hasMessageContaining("jump host");
+        assertThat(Duration.ofNanos(System.nanoTime() - t0)).isLessThan(Duration.ofSeconds(10));
+        await().atMost(Duration.ofSeconds(10)).until(() -> sessions.connectionCount() == 0);
+        await().atMost(Duration.ofSeconds(10)).until(() -> jump.server().getActiveSessions().isEmpty());
+    }
+
+    @Test
+    void connectLewatJumpHostBisaDibatalkan() throws Exception {
+        start(true, new SshSettings(Duration.ofMinutes(5), Duration.ofMinutes(5), Duration.ofSeconds(10),
+                Duration.ZERO, 0, Duration.ZERO));
+        var bastion = profile("bastion", jump.port(), null);
+        var app = profile("app", blackHole.getLocalPort(), bastion.id());
+        var cancel = new ConnectCancel();
+
+        var result = acquireAsync(app, cancel);
+        await().atMost(Duration.ofSeconds(10)).until(() -> !swallowed.isEmpty()); // tunnel sudah sampai tujuan
+        cancel.cancel();
+
+        assertThatThrownBy(() -> result.get(5, TimeUnit.SECONDS))
+                .hasCauseInstanceOf(SshConnectCancelledException.class);
+        await().atMost(Duration.ofSeconds(10)).until(() -> sessions.connectionCount() == 0);
+        await().atMost(Duration.ofSeconds(10)).until(() -> jump.server().getActiveSessions().isEmpty());
+    }
+
+    @Test
+    void batalOlehSatuPemakaiTidakMenghentikanConnectPemakaiLain() throws Exception {
+        start(true, new SshSettings(Duration.ofMinutes(5), Duration.ofMinutes(5), Duration.ofSeconds(10),
+                Duration.ZERO, 0, Duration.ZERO));
+        var hang = profile("hang", blackHole.getLocalPort(), null);
+        var first = new ConnectCancel();
+        var second = new ConnectCancel();
+        var a = acquireAsync(hang, first);
+        await().atMost(Duration.ofSeconds(10)).until(() -> !swallowed.isEmpty());
+        var b = acquireAsync(hang, second);
+        Thread.sleep(200); // b ikut menunggu koneksi yang sama
+
+        first.cancel(); // pemilik connect batal, tapi b masih menunggu: connect diteruskan
+        Thread.sleep(300);
+        assertThat(b).isNotDone();
+        assertThat(a).isNotDone();
+        assertThat(swallowed).hasSize(1);
+
+        second.cancel(); // tidak ada lagi yang menunggu: connect dihentikan
+        assertThatThrownBy(() -> b.get(5, TimeUnit.SECONDS)).hasCauseInstanceOf(SshConnectCancelledException.class);
+        assertThatThrownBy(() -> a.get(5, TimeUnit.SECONDS)).hasCauseInstanceOf(SshConnectCancelledException.class);
+        await().atMost(Duration.ofSeconds(10)).until(() -> sessions.connectionCount() == 0);
+    }
+
+    private CompletableFuture<SshLease> acquireAsync(HostProfile profile, ConnectCancel cancel) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                return sessions.acquire(profile, cancel);
+            } catch (SshConnectException e) {
+                throw new CompletionException(e);
+            }
+        }, Executors.newVirtualThreadPerTaskExecutor());
     }
 
     @Test

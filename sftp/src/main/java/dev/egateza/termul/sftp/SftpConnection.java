@@ -1,5 +1,6 @@
 package dev.egateza.termul.sftp;
 
+import dev.egateza.termul.ssh.ConnectCancel;
 import java.time.Duration;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -36,7 +37,8 @@ public final class SftpConnection implements AutoCloseable {
     /** Membuka koneksi SFTP baru (boleh memunculkan prompt login). */
     @FunctionalInterface
     public interface Opener {
-        RemoteFileService open() throws Exception;
+        /** @param cancel dibatalkan saat koneksi ini ditutup: connect yang masih berjalan dihentikan */
+        RemoteFileService open(ConnectCancel cancel) throws Exception;
     }
 
     /** Status sesi terminal untuk host ini. */
@@ -57,6 +59,7 @@ public final class SftpConnection implements AutoCloseable {
     private volatile RemoteFileService current; // null sampai pertama kali dibuka
     private volatile Status status = new Status(State.IDLE, "Belum tersambung");
     private volatile boolean closed;
+    private final ConnectCancel closing = new ConnectCancel(); // dibatalkan di close()
 
     public SftpConnection(Opener opener, SessionGate gate) {
         this.opener = opener;
@@ -125,14 +128,21 @@ public final class SftpConnection implements AutoCloseable {
             if (svc != null) {
                 svc.close(); // lepaskan lease koneksi lama
             }
+            if (closed) {
+                throw new RemoteFileException("Koneksi SFTP sudah ditutup.");
+            }
             try {
-                current = opener.open();
-            } catch (RemoteFileException e) {
-                publish(State.DISCONNECTED, e.getMessage());
-                throw e;
+                current = opener.open(closing);
             } catch (Exception e) {
+                if (closed) { // dibatalkan oleh close(): status CLOSED jangan ditimpa
+                    throw new RemoteFileException("Koneksi SFTP sudah ditutup.", e);
+                }
                 publish(State.DISCONNECTED, e.getMessage());
-                throw new RemoteFileException(e.getMessage(), e);
+                throw e instanceof RemoteFileException rfe ? rfe : new RemoteFileException(e.getMessage(), e);
+            }
+            if (closed) { // ditutup selagi membuka: hasilnya tidak dipakai lagi
+                current.close();
+                throw new RemoteFileException("Koneksi SFTP sudah ditutup.");
             }
             publish(State.CONNECTED, again ? "Tersambung kembali" : "Tersambung");
             return current;
@@ -200,6 +210,7 @@ public final class SftpConnection implements AutoCloseable {
     @Override
     public void close() {
         closed = true;
+        closing.cancel(); // hentikan connect yang mungkin masih berjalan
         var svc = current;
         if (svc != null) {
             svc.close();

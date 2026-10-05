@@ -23,17 +23,22 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import org.apache.sshd.client.SshClient;
+import org.apache.sshd.client.future.ConnectFuture;
 import org.apache.sshd.client.session.ClientSession;
 import org.apache.sshd.client.session.forward.ExplicitPortForwardingTracker;
 import org.apache.sshd.common.AttributeRepository;
 import org.apache.sshd.common.SshException;
+import org.apache.sshd.common.session.Session;
+import org.apache.sshd.common.session.SessionListener;
 import org.apache.sshd.common.keyprovider.KeyIdentityProvider;
 import org.apache.sshd.client.auth.password.PasswordIdentityProvider;
 import org.apache.sshd.common.util.net.SshdSocketAddress;
@@ -56,7 +61,10 @@ public final class SessionManager implements AutoCloseable {
         final UUID profileId;
         final String address;
         final CompletableFuture<SshConnection> future = new CompletableFuture<>();
+        /** Dibatalkan saat semua penunggu connect membatalkan: connect yang berjalan dihentikan. */
+        final ConnectCancel abort = new ConnectCancel();
         int refs; // guarded by lock
+        int waiting; // guarded by lock; pemakai yang masih menunggu connect selesai
         ScheduledFuture<?> pendingClose; // guarded by lock
 
         Entry(UUID profileId, String address) {
@@ -73,6 +81,12 @@ public final class SessionManager implements AutoCloseable {
             }
             return future.join().isOpen();
         }
+    }
+
+    /** Satu pemanggil {@link #acquire} yang sedang menunggu. Field di-guard oleh {@link SessionManager#lock}. */
+    private static final class Waiter {
+        boolean done;
+        boolean withdrawn;
     }
 
     /** Batas panjang rantai jump host. */
@@ -119,18 +133,32 @@ public final class SessionManager implements AutoCloseable {
      * Pemanggil wajib {@link SshLease#close()} setelah selesai.
      */
     public SshLease acquire(HostProfile profile) throws SshConnectException {
-        return acquire(profile, List.of());
+        return acquire(profile, new ConnectCancel());
+    }
+
+    /**
+     * Seperti {@link #acquire(HostProfile)}, tapi bisa dibatalkan selama masih connect: pemanggil langsung kembali
+     * dengan {@link SshConnectCancelledException}. Connect yang berjalan (termasuk ke jump host) ikut dihentikan kalau
+     * tidak ada pemakai lain yang masih menunggunya.
+     */
+    public SshLease acquire(HostProfile profile, ConnectCancel cancel) throws SshConnectException {
+        return acquire(profile, List.of(), cancel);
     }
 
     /** @param via profil yang sedang connect lewat profil ini (rantai jump host, untuk deteksi putaran) */
-    private SshLease acquire(HostProfile profile, List<UUID> via) throws SshConnectException {
+    private SshLease acquire(HostProfile profile, List<UUID> via, ConnectCancel cancel) throws SshConnectException {
         Objects.requireNonNull(profile, "profile");
+        Objects.requireNonNull(cancel, "cancel");
         if (closed.get()) {
             throw new IllegalStateException("SessionManager sudah ditutup");
+        }
+        if (cancel.isCancelled()) {
+            throw new SshConnectCancelledException(profile.address());
         }
         Entry entry;
         boolean owner = false;
         int refsNow;
+        var waiter = new Waiter();
         synchronized (lock) {
             entry = entries.get(profile.id());
             if (entry == null || !entry.isUsable()) {
@@ -139,23 +167,48 @@ public final class SessionManager implements AutoCloseable {
                 owner = true;
             }
             entry.refs++;
+            entry.waiting++;
             refsNow = entry.refs;
             if (entry.pendingClose != null) {
                 entry.pendingClose.cancel(false);
                 entry.pendingClose = null;
             }
         }
+        Entry acquired = entry;
+        cancel.onCancel(() -> withdraw(acquired, waiter));
 
         if (owner) {
             try {
-                entry.future.complete(connect(profile, via));
+                entry.future.complete(connect(profile, via, entry.abort));
             } catch (SshConnectException | RuntimeException e) {
-                entry.future.completeExceptionally(e);
+                Exception failure = entry.abort.isCancelled() && !(e instanceof SshConnectCancelledException)
+                        ? new SshConnectCancelledException(profile.address()) : e;
+                entry.future.completeExceptionally(failure);
                 synchronized (lock) {
                     entries.remove(profile.id(), entry);
                 }
-                throw e;
+                if (failure instanceof SshConnectException sce) {
+                    throw sce;
+                }
+                throw (RuntimeException) failure;
             }
+        } else {
+            try {
+                CompletableFuture.anyOf(entry.future, cancel.future()).join();
+            } catch (CompletionException e) {
+                // gagal connect: ditangani di bawah
+            }
+        }
+
+        synchronized (lock) {
+            if (!waiter.withdrawn) {
+                waiter.done = true;
+                entry.waiting--;
+            }
+        }
+        if (waiter.withdrawn) { // dibatalkan, tapi connect diteruskan untuk pemakai lain yang masih menunggu
+            release(entry);
+            throw new SshConnectCancelledException(profile.address());
         }
 
         try {
@@ -172,6 +225,23 @@ public final class SessionManager implements AutoCloseable {
                 throw sce;
             }
             throw new SshConnectException("Koneksi gagal", e.getCause());
+        }
+    }
+
+    /** Pemanggil {@code acquire} membatalkan; kalau tidak ada lagi yang menunggu, connect yang berjalan dihentikan. */
+    private void withdraw(Entry entry, Waiter waiter) {
+        boolean abort;
+        synchronized (lock) {
+            if (waiter.done || waiter.withdrawn) {
+                return;
+            }
+            waiter.withdrawn = true;
+            entry.waiting--;
+            abort = entry.waiting == 0 && !entry.future.isDone();
+        }
+        if (abort) {
+            log.info("Connect ke {} dibatalkan", entry.address);
+            entry.abort.cancel();
         }
     }
 
@@ -212,12 +282,13 @@ public final class SessionManager implements AutoCloseable {
         });
     }
 
-    private SshConnection connect(HostProfile profile, List<UUID> via) throws SshConnectException {
+    /** @param abort dibatalkan → session yang sedang dibuka ditutup sehingga connect cepat gagal */
+    private SshConnection connect(HostProfile profile, List<UUID> via, ConnectCancel abort) throws SshConnectException {
         if (profile.jumpHostId() == null) {
             log.info("Connect ke {}", profile.address());
-            return connectTo(profile, profile.host(), profile.port(), null);
+            return connectTo(profile, profile.host(), profile.port(), null, abort);
         }
-        return connectViaJump(profile, via);
+        return connectViaJump(profile, via, abort);
     }
 
     /**
@@ -225,7 +296,8 @@ public final class SessionManager implements AutoCloseable {
      * dari jump host. Host key diverifikasi terhadap host tujuan ({@link AppServerKeyVerifier#LOGICAL_TARGET}), bukan
      * alamat tunnel. Tunnel dan lease jump host dilepas saat koneksi tujuan tertutup. Jump host boleh berantai.
      */
-    private SshConnection connectViaJump(HostProfile profile, List<UUID> via) throws SshConnectException {
+    private SshConnection connectViaJump(HostProfile profile, List<UUID> via, ConnectCancel abort)
+            throws SshConnectException {
         UUID jumpId = profile.jumpHostId();
         var chain = new ArrayList<>(via);
         chain.add(profile.id());
@@ -234,7 +306,7 @@ public final class SessionManager implements AutoCloseable {
         }
         HostProfile jump = profiles.apply(jumpId).orElseThrow(() -> new SshConnectException(
                 "Jump host untuk " + profile.name() + " tidak ditemukan (profilnya sudah dihapus?)."));
-        SshLease jumpLease = acquire(jump, List.copyOf(chain));
+        SshLease jumpLease = acquire(jump, List.copyOf(chain), abort);
         ExplicitPortForwardingTracker tunnel = null;
         try {
             tunnel = jumpLease.connection().session().createLocalPortForwardingTracker(
@@ -245,8 +317,8 @@ public final class SessionManager implements AutoCloseable {
                     new SshdSocketAddress(profile.host(), profile.port()));
             SshConnection connection;
             try {
-                connection = connectTo(profile, local.getHostName(), local.getPort(), context);
-            } catch (HostKeyRejectedException e) {
+                connection = connectTo(profile, local.getHostName(), local.getPort(), context, abort);
+            } catch (HostKeyRejectedException | SshConnectCancelledException e) {
                 throw e;
             } catch (SshConnectException e) {
                 throw new SshConnectException(e.getMessage() + " (lewat jump host " + jump.address()
@@ -285,29 +357,79 @@ public final class SessionManager implements AutoCloseable {
     }
 
     /** @param context connection context (mis. host tujuan logis untuk tunnel), boleh null */
-    private SshConnection connectTo(HostProfile profile, String host, int port, AttributeRepository context)
-            throws SshConnectException {
+    private SshConnection connectTo(HostProfile profile, String host, int port, AttributeRepository context,
+                                    ConnectCancel abort) throws SshConnectException {
         ClientSession session;
         try {
-            session = client.connect(profile.username(), host, port, context, null)
-                    .verify(settings.connectTimeout())
-                    .getSession();
+            ConnectFuture connecting = client.connect(profile.username(), host, port, context, null);
+            abort.onCancel(connecting::cancel);
+            session = connecting.verify(settings.connectTimeout()).getSession();
         } catch (IOException | RuntimeException e) {
+            if (abort.isCancelled()) {
+                throw new SshConnectCancelledException(profile.address());
+            }
             throw translateConnect(profile, e);
         }
+        abort.onCancel(() -> session.close(true));
         try {
+            awaitServerIdentification(profile, session);
             AuthSetup.configure(session, profile, credentials);
             session.auth().verify(settings.authTimeout());
             log.info("Terautentikasi ke {}", profile.address());
             return new SshConnection(profile, session, settings.channelOpenTimeout());
         } catch (SshConnectException e) {
             session.close(true);
-            throw e;
+            throw abort.isCancelled() ? new SshConnectCancelledException(profile.address()) : e;
         } catch (IOException | RuntimeException e) {
             // terjemahkan dulu: atribut session hilang setelah close
-            SshConnectException translated = translateAuth(profile, session, e);
+            SshConnectException translated = abort.isCancelled()
+                    ? new SshConnectCancelledException(profile.address()) : translateAuth(profile, session, e);
             session.close(true);
             throw translated;
+        }
+    }
+
+    /**
+     * Menunggu banner identifikasi server ({@code SSH-2.0-...}) dalam {@link SshSettings#connectTimeout()}. TCP connect
+     * saja tidak cukup: lewat jump host, socket lokal tunnel langsung tersambung walaupun jump host masih (lama) mencoba
+     * menjangkau tujuan, dan server yang hang tidak pernah mengirim banner. Tanpa batas ini yang menunggu hanya
+     * {@link SshSettings#authTimeout()} yang sengaja panjang (memberi waktu user mengetik password/konfirmasi TOFU).
+     */
+    private void awaitServerIdentification(HostProfile profile, ClientSession session) throws SshConnectException {
+        var received = new CompletableFuture<Boolean>();
+        SessionListener listener = new SessionListener() {
+            @Override
+            public void sessionPeerIdentificationReceived(Session s, String version, List<String> extraLines) {
+                received.complete(true);
+            }
+
+            @Override
+            public void sessionClosed(Session s) {
+                received.complete(false);
+            }
+        };
+        session.addSessionListener(listener);
+        try {
+            if (session.getServerVersion() != null) {
+                return;
+            }
+            if (!session.isOpen()) {
+                received.complete(false);
+            }
+            if (!received.get(settings.connectTimeout().toMillis(), TimeUnit.MILLISECONDS)) {
+                throw new SshConnectException("Koneksi ke " + profile.host() + ":" + profile.port()
+                        + " ditutup sebelum server SSH merespons.");
+            }
+        } catch (TimeoutException e) {
+            throw new SshConnectException("Timeout: server SSH di " + profile.host() + ":" + profile.port()
+                    + " tidak merespons dalam " + settings.connectTimeout().toSeconds() + " detik.", e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new SshConnectException("Connect ke " + profile.address() + " diinterupsi.", e);
+        } catch (ExecutionException e) {
+            throw new IllegalStateException(e); // tidak terjadi: future tidak pernah gagal
+        } finally {
+            session.removeSessionListener(listener);
         }
     }
 

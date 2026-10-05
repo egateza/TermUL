@@ -5,10 +5,21 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
 import dev.egateza.termul.sftp.SftpConnection.State;
+import dev.egateza.termul.core.profile.AuthMethod;
+import dev.egateza.termul.core.profile.EnvironmentTag;
+import dev.egateza.termul.core.profile.HostProfile;
+import dev.egateza.termul.ssh.testing.TestSshServer;
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,6 +56,39 @@ class SftpConnectionTest {
 
     private void dropSftpChannel() {
         link.service().close(); // koneksi SFTP mati (seperti koneksi SSH terputus)
+    }
+
+    @Test
+    void releasingTheLastUserStopsAConnectThatIsStillRunning() throws Exception {
+        try (var hole = new ServerSocket(0, 50, InetAddress.getLoopbackAddress())) { // TCP diterima, tanpa banner SSH
+            var accepted = new CompletableFuture<Socket>();
+            Thread.ofVirtual().start(() -> {
+                try {
+                    accepted.complete(hole.accept());
+                } catch (IOException e) {
+                    accepted.completeExceptionally(e);
+                }
+            });
+            var hang = new HostProfile(UUID.randomUUID(), "hang", "", "127.0.0.1", hole.getLocalPort(),
+                    TestSshServer.USER, AuthMethod.PASSWORD, null, null, EnvironmentTag.DEV, null, null, false);
+            var hangLinks = new SftpLinks(fx.sessions);
+            var hangLink = hangLinks.acquire(hang);
+            var open = CompletableFuture.runAsync(() -> {
+                try {
+                    hangLink.ensureLive();
+                } catch (RemoteFileException e) {
+                    throw new CompletionException(e);
+                }
+            });
+
+            try (Socket ignored = accepted.get(5, TimeUnit.SECONDS)) {
+                hangLinks.release(hang); // tab ditutup selagi connect
+
+                // jauh di bawah connectTimeout fixture (10 dtk): connect dihentikan, bukan menunggu timeout
+                assertThatThrownBy(() -> open.get(3, TimeUnit.SECONDS)).hasCauseInstanceOf(RemoteFileException.class);
+                assertThat(hangLink.status().state()).isEqualTo(State.CLOSED);
+            }
+        }
     }
 
     @Test

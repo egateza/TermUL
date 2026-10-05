@@ -140,7 +140,7 @@ public final class SftpLinks {
     /** Ambil (atau buat) koneksi bersama untuk profil ini. Pasangkan dengan {@link #release}. */
     public synchronized SftpConnection acquire(HostProfile profile) {
         var slot = slots.computeIfAbsent(profile.id(), id -> new Slot(new SftpConnection(
-                () -> RemoteFileService.open(sessions.acquire(profile)), new SftpConnection.SessionGate() {
+                cancel -> RemoteFileService.open(sessions.acquire(profile, cancel)), new SftpConnection.SessionGate() {
                     @Override
                     public TerminalState state() {
                         return terminalState(id);

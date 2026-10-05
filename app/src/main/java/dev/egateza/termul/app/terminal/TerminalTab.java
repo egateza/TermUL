@@ -11,6 +11,7 @@ import dev.egateza.termul.core.profile.HostProfile;
 import dev.egateza.termul.sftp.RemoteFileException;
 import dev.egateza.termul.sftp.SftpLinks;
 import dev.egateza.termul.sftp.TerminalState;
+import dev.egateza.termul.ssh.ConnectCancel;
 import dev.egateza.termul.ssh.SshConnectException;
 import dev.egateza.termul.ssh.hostkey.HostKeyRejectedException;
 import dev.egateza.termul.terminal.ExitGuard;
@@ -61,6 +62,7 @@ public final class TerminalTab extends JPanel {
     private ZoomableTermWidget widget;   // hanya diakses di EDT
     private SshTtyConnector connector;   // hanya diakses di EDT
     private CompletableFuture<SshTtyConnector> pending; // hanya diakses di EDT
+    private ConnectCancel connectCancel; // EDT; connect/reconnect terakhir, dibatalkan saat tab ditutup
     private boolean disposed;            // hanya diakses di EDT
     private final JPanel content = new JPanel(new BorderLayout()); // banner + terminal
     private final Function<HostProfile, SftpPanel> sftpFactory;
@@ -240,10 +242,11 @@ public final class TerminalTab extends JPanel {
         gate.set(TerminalState.CONNECTING);
         showCenter(centerMessage(I18n.t("tab.connecting", profile.address())));
         stateListener.run();
+        var cancel = newConnectCancel();
         pending = UiAsync.run(sshOps,
                 () -> {
                     try {
-                        return openSession();
+                        return openSession(cancel);
                     } catch (SshConnectException e) {
                         throw new java.util.concurrent.CompletionException(e);
                     }
@@ -284,8 +287,8 @@ public final class TerminalTab extends JPanel {
      * gagal, shell yang baru dibuka ditutup dan percobaan dianggap gagal, supaya terminal dan SFTP selalu tersambung
      * bersama. Blocking: jalankan di {@code sshOps}.
      */
-    private SshTtyConnector openSession() throws SshConnectException {
-        SshTtyConnector tty = factory.open(profile, SshTerminalFactory.DEFAULT_SIZE);
+    private SshTtyConnector openSession(ConnectCancel cancel) throws SshConnectException {
+        SshTtyConnector tty = factory.open(profile, SshTerminalFactory.DEFAULT_SIZE, cancel);
         try {
             links.restoreSftp(profile);
         } catch (RemoteFileException e) {
@@ -390,7 +393,8 @@ public final class TerminalTab extends JPanel {
 
     /** Koneksi terminal putus: sambung ulang shell dan SFTP bersama. */
     private void startAutoReconnect() {
-        startReconnect(this::openSession, this::onConnected, I18n.t("tab.reconnect.what.both"));
+        var cancel = newConnectCancel();
+        startReconnect(() -> openSession(cancel), this::onConnected, I18n.t("tab.reconnect.what.both"));
     }
 
     /** Koneksi SFTP putus pada tab "SFTP saja": buka lagi kanalnya. */
@@ -485,6 +489,15 @@ public final class TerminalTab extends JPanel {
                 });
             }
         }));
+    }
+
+    /** Token untuk connect baru; connect sebelumnya yang mungkin masih berjalan dibatalkan. */
+    private ConnectCancel newConnectCancel() {
+        if (connectCancel != null) {
+            connectCancel.cancel();
+        }
+        connectCancel = new ConnectCancel();
+        return connectCancel;
     }
 
     private void cancelAutoReconnect() {
@@ -776,6 +789,9 @@ public final class TerminalTab extends JPanel {
     public void dispose() {
         disposed = true;
         cancelAutoReconnect();
+        if (connectCancel != null) {
+            connectCancel.cancel(); // hentikan connect yang masih berjalan (termasuk ke jump host)
+        }
         if (monitor != null) {
             monitor.stop();
         }

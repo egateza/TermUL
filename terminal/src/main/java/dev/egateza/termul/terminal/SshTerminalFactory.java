@@ -1,6 +1,7 @@
 package dev.egateza.termul.terminal;
 
 import dev.egateza.termul.core.profile.HostProfile;
+import dev.egateza.termul.ssh.ConnectCancel;
 import dev.egateza.termul.ssh.PtySize;
 import dev.egateza.termul.ssh.SessionManager;
 import dev.egateza.termul.ssh.ShellQuote;
@@ -30,7 +31,12 @@ public final class SshTerminalFactory {
 
     /** Blocking (network + prompt): jangan dipanggil di EDT. */
     public SshTtyConnector open(HostProfile profile, PtySize size) throws SshConnectException {
-        SshLease lease = sessions.acquire(profile);
+        return open(profile, size, new ConnectCancel());
+    }
+
+    /** Seperti {@link #open(HostProfile, PtySize)}; connect yang masih berjalan bisa dibatalkan lewat {@code cancel}. */
+    public SshTtyConnector open(HostProfile profile, PtySize size, ConnectCancel cancel) throws SshConnectException {
+        SshLease lease = sessions.acquire(profile, cancel);
         try {
             ChannelShell shell = lease.connection().openShell(size, Map.of());
             var connector = new SshTtyConnector(lease, shell, profile.name() + "#" + counter.incrementAndGet());

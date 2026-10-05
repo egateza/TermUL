@@ -78,6 +78,7 @@ public class SftpPanel extends JPanel {
     private boolean disposed;                    // EDT
     protected String currentDir;                 // EDT
     private boolean connecting;                  // EDT
+    private SftpConnection pendingLink;          // EDT; slot yang sudah diambil selagi connect masih berjalan
 
     private final EditActions editActions;
     private final SystemFileIcons fileIcons;
@@ -493,42 +494,43 @@ public class SftpPanel extends JPanel {
 
     /** Connect (sekali) lalu buka direktori awal profil atau home. */
     public void connect() {
-        if (link != null || connecting) {
+        if (link != null || connecting || disposed) {
             return;
         }
         connecting = true;
         activity.progress(I18n.t("sftp.connect.opening", profile.address()));
+        // slot diambil di sini (tanpa I/O) supaya dispose() bisa melepasnya walaupun connect belum selesai:
+        // kalau panel ini pemakai terakhir, koneksi ditutup dan connect yang berjalan ikut dihentikan
+        SftpConnection l = links.acquire(profile);
+        pendingLink = l;
+        unsubscribeLink = l.addListener(this::onLinkStatus);
         UiAsync.run(sshOps, () -> {
-            SftpConnection l = links.acquire(profile);
-            Runnable unsubscribe = l.addListener(this::onLinkStatus);
             try {
                 var svc = l.ensureLive();
-                String start = profile.initialDirectory() != null
-                        ? svc.canonicalize(profile.initialDirectory()) : svc.home();
-                return new Start(l, unsubscribe, start);
+                return profile.initialDirectory() != null ? svc.canonicalize(profile.initialDirectory()) : svc.home();
             } catch (Exception e) {
-                unsubscribe.run();
-                links.release(profile);
                 throw new CompletionException(e);
             }
         }, start -> {
             connecting = false;
-            if (disposed) { // tab ditutup selagi menyambung
-                start.unsubscribe().run();
-                sshOps.execute(() -> links.release(profile));
+            if (disposed) { // tab ditutup selagi menyambung: slot sudah dilepas di dispose()
                 return;
             }
-            link = start.link();
-            unsubscribeLink = start.unsubscribe();
+            pendingLink = null;
+            link = l;
             unsubscribeEdits = editActions.onActivity(profile.id(), activity::report);
-            navigate(start.dir());
+            navigate(start);
         }, err -> {
             connecting = false;
+            if (disposed) {
+                return;
+            }
+            pendingLink = null;
+            unsubscribeLink.run();
+            unsubscribeLink = () -> { };
+            sshOps.execute(() -> links.release(profile));
             activity.report(Level.ERROR, I18n.t("sftp.connect.failed", err.getMessage()));
         });
-    }
-
-    private record Start(SftpConnection link, Runnable unsubscribe, String dir) {
     }
 
     /**
@@ -702,8 +704,9 @@ public class SftpPanel extends JPanel {
         transfers.shutdown();
         unsubscribeLink.run();
         unsubscribeEdits.run();
-        var l = link;
+        var l = link != null ? link : pendingLink; // pendingLink: masih connect, release menghentikannya
         link = null;
+        pendingLink = null;
         if (l != null) {
             sshOps.execute(() -> links.release(profile));
         }
