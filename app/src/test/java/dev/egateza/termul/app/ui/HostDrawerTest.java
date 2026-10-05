@@ -54,19 +54,21 @@ class HostDrawerTest {
 
     @Test
     void activeClosedShowsOnlyCenteredToggleAtAnchorEdge() {
+        drawer.setStyle(HostToggleStyle.EDGE_TAB, false);
         drawer.activate();
 
         assertThat(drawer.panel().isVisible()).isFalse();
         assertThat(drawer.toggle().isVisible()).isTrue();
         var b = drawer.toggle().getBounds();
         assertThat(b.x).isEqualTo(ANCHOR_X);
-        assertThat(b.y).isEqualTo(ANCHOR_Y + (ANCHOR_H - HostDrawer.TOGGLE_HEIGHT) / 2);
-        assertThat(b.getSize()).isEqualTo(new Dimension(HostDrawer.TOGGLE_WIDTH, HostDrawer.TOGGLE_HEIGHT));
+        assertThat(b.y).isEqualTo(ANCHOR_Y + (ANCHOR_H - HostToggleStyle.TAB_HEIGHT) / 2);
+        assertThat(b.getSize()).isEqualTo(new Dimension(HostToggleStyle.TAB_WIDTH, HostToggleStyle.TAB_HEIGHT));
         assertThat(content.getParent()).isNotNull();
     }
 
     @Test
     void openCoversAnchorHeightAndMovesToggleToDrawerEdge() {
+        drawer.setStyle(HostToggleStyle.EDGE_TAB, false);
         drawer.activate();
         drawer.setOpen(true);
 
@@ -78,6 +80,32 @@ class HostDrawerTest {
         assertThat(p.width).isEqualTo(HostDrawer.DEFAULT_WIDTH);
         assertThat(p.height).isEqualTo(ANCHOR_H);
         assertThat(drawer.toggle().getX()).isEqualTo(ANCHOR_X + HostDrawer.DEFAULT_WIDTH);
+    }
+
+    @Test
+    void tabBarStyleShowsFloatingToggleOnlyWhileOpen() {
+        drawer.setStyle(HostToggleStyle.TAB_BAR, true);
+        drawer.activate();
+        assertThat(drawer.toggle().isVisible()).isFalse();
+
+        drawer.setOpen(true); // laci menutupi ikon di tab bar: tombol melayang dipakai untuk menutup
+        assertThat(drawer.toggle().isVisible()).isTrue();
+
+        drawer.setOpen(false);
+        assertThat(drawer.toggle().isVisible()).isFalse();
+
+        drawer.setStyle(HostToggleStyle.TAB_BAR, false); // belum ada tab: ikon tab bar tidak terlihat
+        assertThat(drawer.toggle().isVisible()).isTrue();
+    }
+
+    @Test
+    void hoverRevealIsInvisibleUntilHovered() {
+        drawer.setStyle(HostToggleStyle.HOVER_REVEAL, false);
+        drawer.activate();
+        assertThat(drawer.toggle().alpha()).isZero();
+
+        drawer.toggle().setHover(true);
+        assertThat(drawer.toggle().alpha()).isEqualTo(1f);
     }
 
     @Test

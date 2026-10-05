@@ -116,13 +116,14 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private JMenuItem miUngroup;
     private JMenuItem miClosePane;
     private JMenuItem miNextPane;
-    private static final int HOST_HANDLE_WIDTH = 18;
-    private static final int HOST_TOGGLE_HEIGHT = 44;
     /** Isi area utama: split (mode panel) atau area terminal saja (mode tombol melayang). */
     private final JPanel body = new JPanel(new BorderLayout());
     private final JPanel hostSide = new JPanel(new BorderLayout());
-    private final JButton hostToggle = new JButton();
-    private final JPanel handle = new JPanel(new java.awt.GridBagLayout());
+    /** Mode panel: tombol buka/tutup panel host, melayang di tepi kiri area terminal (bukan bagian panel). */
+    private final HostDrawer.Toggle dockToggle = new HostDrawer.Toggle();
+    /** Gaya {@link HostToggleStyle#TAB_BAR}: ikon panel host di ujung kiri baris tab. */
+    private final JButton tabBarToggle = new JButton(new SidebarIcon());
+    private HostToggleStyle hostToggleStyle; // EDT
     private final JButton modeToggle = new JButton(); // pojok kanan atas menu bar: terang/gelap
     /** Menu bar kanan: "Update x.y.z" atau "Restart untuk update"; tersembunyi kalau tidak ada. */
     private final JButton updateBadge = new JButton(new BadgeDotIcon());
@@ -139,6 +140,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private JSplitPane hostSplit; // hanya di mode panel, selain itu null. EDT
     private String hostMode = AppConfig.HOST_DOCKED; // EDT
     private int hostWidth = 260; // EDT
+    private int hostDividerSize; // EDT; ukuran divider bawaan LaF, dipakai lagi saat panel host dibuka
 
     public MainFrame(AppContext ctx, List<CustomTheme> customThemes, Runnable onExit) {
         super("TermUL");
@@ -208,23 +210,38 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         welcome.setFont(welcome.getFont().deriveFont(Font.PLAIN, welcome.getFont().getSize2D() + 2));
         updateCenter();
 
-        // Strip tipis di tepi kanan panel host (satu warna dengan panel, jadi terasa satu kesatuan) berisi tombol
-        // laci di tengah. Strip bagian dari sisi kiri, jadi tetap terlihat saat host tree disembunyikan.
-        hostToggle.setFocusable(false);
-        hostToggle.putClientProperty("JButton.buttonType", "toolBarButton");
-        hostToggle.putClientProperty("FlatLaf.style", "arc: 6; margin: 0,0,0,0");
-        hostToggle.setPreferredSize(new Dimension(HOST_HANDLE_WIDTH, HOST_TOGGLE_HEIGHT));
-        hostToggle.addActionListener(e -> setDockedVisible(!hostTree.isVisible()));
+        // Tombol melayang di tepi kiri area terminal, satu bentuk dengan tombol laci: panel host tidak punya strip
+        // sendiri, jadi saat disembunyikan yang tersisa hanya divider tipis.
+        hostToggleStyle = HostToggleStyle.fromId(ctx.config().current().hostToggleStyle());
+        dockToggle.onClick = () -> setDockedVisible(!hostTree.isVisible());
+        dockToggle.setStyle(hostToggleStyle);
+        dockToggle.setOpacity(ctx.config().current().hostButtonOpacity());
+        tabBarToggle.setFocusable(false);
+        tabBarToggle.putClientProperty("JButton.buttonType", "toolBarButton");
+        tabBarToggle.setToolTipText(I18n.t("hostToggle.tabBar.button"));
+        tabBarToggle.addActionListener(e -> toggleHostList());
+        dockToggle.setVisible(false);
+        getLayeredPane().add(dockToggle, Integer.valueOf(javax.swing.JLayeredPane.PALETTE_LAYER + 10));
+        var relayoutToggle = new java.awt.event.ComponentAdapter() {
+            @Override
+            public void componentResized(java.awt.event.ComponentEvent e) {
+                layoutDockToggle();
+            }
+
+            @Override
+            public void componentMoved(java.awt.event.ComponentEvent e) {
+                layoutDockToggle();
+            }
+        };
+        center.addComponentListener(relayoutToggle); // termasuk saat divider digeser
+        getLayeredPane().addComponentListener(relayoutToggle);
         updateHostToggle();
-        handle.add(hostToggle);
-        handle.setBackground(javax.swing.UIManager.getColor("Tree.background")); // satu warna dengan daftar host
-        handle.setMinimumSize(new Dimension(HOST_HANDLE_WIDTH, 0)); // lebar minimum sisi kiri saat host tree tertutup
-        hostSide.add(handle, BorderLayout.EAST);
         hostTree.setMinimumSize(new Dimension(160, 100));
         // mode tombol melayang: daftar host tampil di atas area terminal (terminal tidak di-resize)
         drawer = new HostDrawer(getLayeredPane(), center, hostTree,
                 () -> currentTab().ifPresent(TerminalTab::focusTerminal));
         drawer.setOpacity(ctx.config().current().hostButtonOpacity());
+        drawer.setStyle(hostToggleStyle, false);
         // panel log di bawah; disembunyikan dengan setVisible supaya tab terminal tidak di-reparent
         logPanel = new LogPanel(LogBuffer.global(), ctx.paths().logDir(), io, () -> setLogVisible(false));
         logPanel.setVisible(false);
@@ -665,6 +682,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             hostSplit.setContinuousLayout(true);
             hostSplit.putClientProperty("FlatLaf.style", "gripDotCount: 0"); // divider tetap bisa digeser, tanpa titik
             hostSplit.setDividerLocation(hostWidth);
+            hostDividerSize = hostSplit.getDividerSize();
             body.add(hostSplit, BorderLayout.CENTER);
             updateHostToggle();
         }
@@ -673,9 +691,52 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                         Shortcuts.text(Shortcuts.menu(KeyEvent.VK_F)))
                 + (floatingMode() ? "<br><br>" + I18n.t("main.welcome.floatingHint") : "")
                 + "</center></html>");
+        syncHostToggles();
         body.revalidate();
         body.repaint();
-        SwingUtilities.invokeLater(drawer::layout);
+        SwingUtilities.invokeLater(() -> {
+            drawer.layout();
+            layoutDockToggle();
+        });
+    }
+
+    /**
+     * Terapkan gaya tombol panel host ke tombol melayang (mode panel), laci (mode melayang), dan ikon di tab bar.
+     * Gaya tab bar memakai tombol melayang selama belum ada tab (baris tab belum tampil). EDT.
+     */
+    private void syncHostToggles() {
+        if (drawer == null) {
+            return; // dipanggil dari updateCenter() sebelum konstruktor selesai
+        }
+        boolean tabBar = hostToggleStyle == HostToggleStyle.TAB_BAR && tabs.getTabCount() > 0;
+        if (tabs.getClientProperty("JTabbedPane.leadingComponent") != (tabBar ? tabBarToggle : null)) {
+            tabs.putClientProperty("JTabbedPane.leadingComponent", tabBar ? tabBarToggle : null);
+        }
+        dockToggle.setStyle(hostToggleStyle);
+        dockToggle.setVisible(!floatingMode() && !tabBar);
+        drawer.setStyle(hostToggleStyle, tabBar);
+        layoutDockToggle();
+        getLayeredPane().repaint();
+    }
+
+    /** Tombol panel host di tepi kiri area terminal, posisinya sesuai gaya. EDT. */
+    private void layoutDockToggle() {
+        if (!dockToggle.isVisible()) {
+            return;
+        }
+        var origin = SwingUtilities.convertPoint(center, 0, 0, getLayeredPane());
+        boolean open = hostTree.isVisible();
+        int line = origin.x - (open ? hostDividerSize : 1) / 2 - 1; // tengah divider di kiri area terminal
+        dockToggle.place(new java.awt.Rectangle(origin.x, origin.y, center.getWidth(), center.getHeight()), line, open);
+    }
+
+    /** Ikon panel host di tab bar: buka/tutup laci (mode melayang) atau panel di samping. EDT. */
+    private void toggleHostList() {
+        if (floatingMode()) {
+            drawer.setOpen(!drawer.isOpen());
+        } else {
+            setDockedVisible(!hostTree.isVisible());
+        }
     }
 
     /** Pastikan daftar host terlihat (untuk Ctrl+F): membuka laci atau panel di samping. */
@@ -693,23 +754,23 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             return;
         }
         if (!visible) {
-            hostWidth = Math.max(160 + HOST_HANDLE_WIDTH, hostSplit.getDividerLocation());
+            hostWidth = Math.max(160, hostSplit.getDividerLocation());
             var owner = KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
             if (owner != null && SwingUtilities.isDescendingFrom(owner, hostTree)) {
                 currentTab().ifPresent(TerminalTab::focusTerminal);
             }
         }
         hostTree.setVisible(visible);
-        hostSplit.setEnabled(visible); // divider tidak bisa digeser saat hanya strip yang tersisa
+        hostSplit.setEnabled(visible); // divider tidak bisa digeser saat panel tertutup
+        hostSplit.setDividerSize(visible ? hostDividerSize : 1); // tertutup: tinggal garis tipis di tepi kiri
         hostSplit.revalidate();
-        hostSplit.setDividerLocation(visible ? hostWidth : hostSide.getMinimumSize().width);
+        hostSplit.setDividerLocation(visible ? hostWidth : 0);
         updateHostToggle();
     }
 
     private void updateHostToggle() {
-        boolean open = hostTree.isVisible();
-        hostToggle.setIcon((open ? AppIcon.ANGLES_LEFT : AppIcon.ANGLES_RIGHT).icon(16));
-        hostToggle.setToolTipText(I18n.t(open ? "host.toggle.hide" : "host.toggle.show"));
+        dockToggle.setOpen(hostTree.isVisible());
+        layoutDockToggle(); // gaya lingkaran pindah dari garis pembatas ke tepi saat panel ditutup
     }
 
     /** Submenu: mode panel host (di samping / tombol melayang) dan transparansi tombol melayang. */
@@ -735,6 +796,24 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             menu.add(item);
         }
         menu.addSeparator();
+        var style = new JMenu(I18n.t("main.menu.hostPanel.style"));
+        var styles = new ButtonGroup();
+        for (var choice : HostToggleStyle.values()) {
+            var item = new JRadioButtonMenuItem(choice.label(), choice == hostToggleStyle);
+            item.setToolTipText(choice.tooltip());
+            item.addActionListener(e -> {
+                if (choice == hostToggleStyle) {
+                    return;
+                }
+                hostToggleStyle = choice;
+                syncHostToggles();
+                mutate(I18n.t("error.saveSettings"), () ->
+                        ctx.config().save(ctx.config().current().withHostToggleStyle(choice.id())));
+            });
+            styles.add(item);
+            style.add(item);
+        }
+        menu.add(style);
         var opacity = new JMenu(I18n.t("main.menu.hostPanel.opacity"));
         opacity.setToolTipText(I18n.t("main.menu.hostPanel.opacity.tooltip"));
         var levels = new ButtonGroup();
@@ -743,6 +822,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                     percent == config.hostButtonOpacity());
             item.addActionListener(e -> {
                 drawer.setOpacity(percent);
+                dockToggle.setOpacity(percent);
                 mutate(I18n.t("error.saveSettings"), () ->
                         ctx.config().save(ctx.config().current().withHostButtonOpacity(percent)));
             });
@@ -977,8 +1057,6 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         theme = newTheme;
         wantedMode = wanted;
         theme.install(wanted);
-        // warna yang di-set manual tidak ikut berubah lewat updateUI
-        handle.setBackground(javax.swing.UIManager.getColor("Tree.background"));
         refreshLaf();
         updateModeToggle();
         var next = ctx.config().current().withTheme(newTheme.id()).withThemeMode(wanted.id());
@@ -1474,6 +1552,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             center.add(wanted, BorderLayout.CENTER);
             center.revalidate();
             center.repaint();
+            syncHostToggles(); // baris tab muncul/hilang: ikon panel host di tab bar ikut
         }
     }
 

@@ -39,8 +39,6 @@ import java.awt.event.KeyEvent;
  */
 public final class HostDrawer {
 
-    static final int TOGGLE_WIDTH = 22;
-    static final int TOGGLE_HEIGHT = 48;
     static final int MIN_WIDTH = 220;
     static final int DEFAULT_WIDTH = 280;
     private static final int GRIP_WIDTH = 5;
@@ -56,6 +54,7 @@ public final class HostDrawer {
     private int width = DEFAULT_WIDTH;
     private boolean active; // false = mode panel di samping: laci dan tombol tidak dipakai
     private boolean open;
+    private boolean tabBarButton; // gaya TAB_BAR dan ikonnya di tab bar terlihat: tombol melayang hanya saat laci terbuka
 
     /**
      * @param layers            layered pane window (tempat laci dan tombol digambar di atas konten)
@@ -175,10 +174,25 @@ public final class HostDrawer {
         }
     }
 
+    /**
+     * @param style        gaya tombol
+     * @param tabBarButton ikon panel host di tab bar sedang terlihat (gaya {@link HostToggleStyle#TAB_BAR});
+     *                     tombol melayang lalu hanya tampil saat laci terbuka (laci menutupi ikon itu)
+     */
+    public void setStyle(HostToggleStyle style, boolean tabBarButton) {
+        toggle.setStyle(style);
+        this.tabBarButton = style == HostToggleStyle.TAB_BAR && tabBarButton;
+        layout();
+        layers.repaint();
+    }
+
+    private boolean toggleWanted() {
+        return active && (!tabBarButton || open);
+    }
+
     /** @param percent {@value AppConfig#MIN_OPACITY}..100; di luar itu dibatasi */
     public void setOpacity(int percent) {
-        toggle.opacity = Math.max(AppConfig.MIN_OPACITY, Math.min(100, percent));
-        toggle.repaint();
+        toggle.setOpacity(percent);
     }
 
     public void dispose() {
@@ -216,7 +230,9 @@ public final class HostDrawer {
             panel.setBounds(origin.x, origin.y, w, anchor.getHeight());
             x += w;
         }
-        toggle.setBounds(x, origin.y + (anchor.getHeight() - TOGGLE_HEIGHT) / 2, TOGGLE_WIDTH, TOGGLE_HEIGHT);
+        toggle.place(new java.awt.Rectangle(x, origin.y, anchor.getWidth() - (x - origin.x), anchor.getHeight()),
+                x - GRIP_WIDTH / 2, open);
+        toggle.setVisible(toggleWanted());
         panel.revalidate();
     }
 
@@ -254,14 +270,21 @@ public final class HostDrawer {
         return c != null ? c : Color.GRAY;
     }
 
-    /** Tombol melayang: kapsul menempel di tepi kiri; opasitas diatur, kembali solid saat kursor di atasnya. */
+    /**
+     * Tombol melayang di tepi kiri area terminal; bentuknya mengikuti {@link HostToggleStyle}. Opasitas diatur, kembali
+     * solid saat kursor di atasnya. Gaya {@link HostToggleStyle#HOVER_REVEAL} baru tampil saat kursor mendekati tepi.
+     */
     static final class Toggle extends JComponent {
         private static final int ARC = 14;
 
         Runnable onClick = () -> { };
         int opacity = AppConfig.DEFAULT_OPACITY;
+        private HostToggleStyle style = HostToggleStyle.EDGE_CIRCLE;
         private boolean hover;
         private boolean open;
+        private boolean near; // kursor di revealZone (hanya untuk HOVER_REVEAL)
+        private java.awt.Rectangle revealZone = new java.awt.Rectangle(); // koordinat parent
+        private final java.awt.event.AWTEventListener proximity = this::onPointer;
 
         Toggle() {
             setOpaque(false);
@@ -287,6 +310,45 @@ public final class HostDrawer {
             });
         }
 
+        @Override
+        public void addNotify() {
+            super.addNotify();
+            Toolkit.getDefaultToolkit().addAWTEventListener(proximity,
+                    AWTEvent.MOUSE_MOTION_EVENT_MASK | AWTEvent.MOUSE_EVENT_MASK);
+        }
+
+        @Override
+        public void removeNotify() {
+            Toolkit.getDefaultToolkit().removeAWTEventListener(proximity);
+            super.removeNotify();
+        }
+
+        /** @param percent {@value AppConfig#MIN_OPACITY}..100; di luar itu dibatasi */
+        void setOpacity(int percent) {
+            opacity = Math.max(AppConfig.MIN_OPACITY, Math.min(100, percent));
+            repaint();
+        }
+
+        void setStyle(HostToggleStyle style) {
+            this.style = style;
+            near = false;
+            repaint();
+        }
+
+        HostToggleStyle style() {
+            return style;
+        }
+
+        /**
+         * Pasang posisi sesuai gaya (lihat {@link HostToggleStyle#bounds}).
+         *
+         * @param area area terminal yang terlihat, dalam koordinat parent tombol ini
+         */
+        void place(java.awt.Rectangle area, int lineX, boolean openLeft) {
+            setBounds(style.bounds(area, lineX, openLeft));
+            revealZone = HostToggleStyle.revealZone(area);
+        }
+
         void setHover(boolean hover) {
             this.hover = hover;
             repaint();
@@ -299,27 +361,131 @@ public final class HostDrawer {
         }
 
         float alpha() {
+            if (style.floating() == HostToggleStyle.HOVER_REVEAL) {
+                return hover || near ? 1f : 0f;
+            }
             return hover ? 1f : opacity / 100f;
+        }
+
+        private void onPointer(AWTEvent e) {
+            if (style.floating() != HostToggleStyle.HOVER_REVEAL || !isShowing() || getParent() == null
+                    || !(e instanceof MouseEvent me) || !(e.getSource() instanceof Component c)) {
+                return;
+            }
+            boolean inside = SwingUtilities.getWindowAncestor(c) == SwingUtilities.getWindowAncestor(this)
+                    && me.getID() != MouseEvent.MOUSE_EXITED
+                    && revealZone.contains(SwingUtilities.convertPoint(c, me.getPoint(), getParent()));
+            if (inside != near) {
+                near = inside;
+                repaint();
+            }
         }
 
         @Override
         protected void paintComponent(Graphics g) {
+            float alpha = alpha();
+            if (alpha <= 0f) {
+                return;
+            }
             var g2 = (Graphics2D) g.create();
             try {
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setComposite(AlphaComposite.SrcOver.derive(alpha()));
-                Color bg = UIManager.getColor("Button.background");
-                g2.setColor(bg != null ? bg : Color.DARK_GRAY);
-                // sisi kiri sengaja di luar komponen supaya hanya sudut kanan yang membulat
-                g2.fillRoundRect(-ARC, 0, getWidth() + ARC, getHeight(), ARC, ARC);
-                g2.setColor(borderColor());
-                g2.drawRoundRect(-ARC, 0, getWidth() + ARC - 1, getHeight() - 1, ARC, ARC);
-                Icon icon = (open ? AppIcon.ANGLES_LEFT : AppIcon.ANGLES_RIGHT).icon();
-                icon.paintIcon(this, g2, (getWidth() - icon.getIconWidth()) / 2 - 1,
-                        (getHeight() - icon.getIconHeight()) / 2);
+                g2.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
+                g2.setComposite(AlphaComposite.SrcOver.derive(alpha));
+                int w = getWidth();
+                int h = getHeight();
+                switch (style.floating()) {
+                    case EDGE_TAB -> {
+                        g2.setColor(buttonColor());
+                        // sisi kiri sengaja di luar komponen supaya hanya sudut kanan yang membulat
+                        g2.fillRoundRect(-ARC, 0, w + ARC, h, ARC, ARC);
+                        g2.setColor(borderColor());
+                        g2.drawRoundRect(-ARC, 0, w + ARC - 1, h - 1, ARC, ARC);
+                        Icon icon = (open ? AppIcon.ANGLES_LEFT : AppIcon.ANGLES_RIGHT).icon();
+                        icon.paintIcon(this, g2, (w - icon.getIconWidth()) / 2 - 1, (h - icon.getIconHeight()) / 2);
+                    }
+                    case GRABBER -> {
+                        if (hover) {
+                            g2.setColor(buttonColor());
+                            g2.fillRoundRect(0, 0, w - 2, h, 10, 10);
+                            g2.setColor(borderColor());
+                            g2.drawRoundRect(0, 0, w - 3, h - 1, 10, 10);
+                            chevron(g2, (w - 2) / 2f, h / 2f, foreground());
+                        } else {
+                            // garis tipis samar: lebih samar dari opasitas pilihan user, supaya benar-benar minimal
+                            g2.setComposite(AlphaComposite.SrcOver.derive(alpha * 0.55f));
+                            g2.setColor(foreground());
+                            g2.fillRoundRect(3, (h - 38) / 2, 4, 38, 4, 4);
+                        }
+                    }
+                    case HOVER_REVEAL -> {
+                        g2.setColor(hover ? hoverColor() : buttonColor());
+                        g2.fillRoundRect(0, 0, w - 1, h - 1, 8, 8);
+                        g2.setColor(borderColor());
+                        g2.drawRoundRect(0, 0, w - 1, h - 1, 8, 8);
+                        chevron(g2, w / 2f, h / 2f, foreground());
+                    }
+                    case CORNER -> {
+                        int d = w - 8;
+                        shadow(g2, 4, 4, d);
+                        Color accent = UIManager.getColor("Component.accentColor");
+                        g2.setColor(accent != null ? accent : new Color(0xE2733A));
+                        g2.fillOval(4, 3, d, d);
+                        chevron(g2, 4 + d / 2f, 3 + d / 2f, Color.WHITE);
+                    }
+                    default -> { // EDGE_CIRCLE
+                        int d = w - 6;
+                        shadow(g2, 3, 3, d);
+                        g2.setColor(hover ? hoverColor() : buttonColor());
+                        g2.fillOval(3, 2, d, d);
+                        g2.setColor(borderColor());
+                        g2.drawOval(3, 2, d - 1, d - 1);
+                        chevron(g2, 3 + d / 2f, 2 + d / 2f, foreground());
+                    }
+                }
             } finally {
                 g2.dispose();
             }
+        }
+
+        /** Bayangan lembut di bawah lingkaran berdiameter {@code d} yang digambar di (x, y - 1). */
+        private static void shadow(Graphics2D g2, int x, int y, int d) {
+            var old = g2.getComposite();
+            float base = old instanceof AlphaComposite ac ? ac.getAlpha() : 1f;
+            g2.setColor(Color.BLACK);
+            for (int i = 3; i >= 1; i--) {
+                g2.setComposite(AlphaComposite.SrcOver.derive(base * 0.10f));
+                g2.fillOval(x - i, y - i + 1, d + 2 * i, d + 2 * i);
+            }
+            g2.setComposite(old);
+        }
+
+        /** Satu chevron berpusat di (cx, cy): menunjuk ke kiri saat panel terbuka, ke kanan saat tertutup. */
+        private void chevron(Graphics2D g2, float cx, float cy, Color color) {
+            float s = 3.5f;
+            float dir = open ? 1f : -1f;
+            var path = new java.awt.geom.Path2D.Float();
+            path.moveTo(cx + dir * s * 0.5f, cy - s);
+            path.lineTo(cx - dir * s * 0.5f, cy);
+            path.lineTo(cx + dir * s * 0.5f, cy + s);
+            g2.setColor(color);
+            g2.setStroke(new java.awt.BasicStroke(1.7f, java.awt.BasicStroke.CAP_ROUND, java.awt.BasicStroke.JOIN_ROUND));
+            g2.draw(path);
+        }
+
+        private static Color buttonColor() {
+            Color c = UIManager.getColor("Button.background");
+            return c != null ? c : Color.DARK_GRAY;
+        }
+
+        private static Color hoverColor() {
+            Color c = UIManager.getColor("Button.hoverBackground");
+            return c != null ? c : buttonColor().brighter();
+        }
+
+        private static Color foreground() {
+            Color c = UIManager.getColor("Label.foreground");
+            return c != null ? c : Color.LIGHT_GRAY;
         }
     }
 }

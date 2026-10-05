@@ -28,6 +28,7 @@ class ConfigStoreTest {
         assertThat(config.language()).isEqualTo(AppConfig.DEFAULT_LANGUAGE);
         assertThat(config.bellSound()).isTrue();
         assertThat(config.bellShake()).isTrue();
+        assertThat(config.hostToggleStyle()).isEqualTo(AppConfig.DEFAULT_HOST_TOGGLE);
     }
 
     @Test
@@ -36,7 +37,7 @@ class ConfigStoreTest {
         new ConfigStore(file).save(AppConfig.defaults().withIconSet("material").withHostButtonOpacity(40)
                 .withHostPanelMode(AppConfig.HOST_FLOATING).withTheme("default")
                 .withThemeMode(AppConfig.MODE_LIGHT).withLanguage("en").withBellSound(false)
-                .withBellShake(false));
+                .withBellShake(false).withHostToggleStyle("grabber"));
 
         var loaded = new ConfigStore(file).load();
 
@@ -47,6 +48,7 @@ class ConfigStoreTest {
         assertThat(loaded.language()).isEqualTo("en");
         assertThat(loaded.bellSound()).isFalse();
         assertThat(loaded.bellShake()).isFalse();
+        assertThat(loaded.hostToggleStyle()).isEqualTo("grabber");
     }
 
     @Test
