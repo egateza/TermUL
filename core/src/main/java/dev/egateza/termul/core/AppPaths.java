@@ -125,6 +125,11 @@ public record AppPaths(Path configDir, Path cacheDir) {
         return cacheDir.resolve("edit");
     }
 
+    /** Update aplikasi yang diunduh lewat menu (lihat {@code docs/adr/0003-self-update.md}); tidak ikut roaming. */
+    public Path updatesDir() {
+        return cacheDir.resolve("updates");
+    }
+
     private static Path envPath(Function<String, String> env, String name, Path fallback) {
         String value = env.apply(name);
         return value == null || value.isBlank() ? fallback : Path.of(value);

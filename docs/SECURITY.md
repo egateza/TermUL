@@ -8,7 +8,7 @@ Aplikasi ini memegang akses SSH dan password sudo/root ke server produksi. Kalau
 |---|---|---|
 | Pencurian file vault/profil | Laptop hilang, malware membaca `%APPDATA%` | Vault terenkripsi (DPAPI terikat user Windows, atau master password + Argon2id). Profil tidak berisi secret. |
 | MITM saat connect | DNS/ARP spoofing di jaringan kantor | Strict host key checking + TOFU dengan fingerprint. Host key berubah = koneksi ditolak. |
-| **Prompt spoofing** | Remote mencetak `[sudo] password for ega:` (log di-`cat`, script jahat) sehingga auto-fill mengirim password ke proses lain | Guard auto-trigger (lihat bawah), dan hotkey sebagai default |
+| **Prompt spoofing** | Remote mencetak `[sudo] password for user:` (log di-`cat`, script jahat) sehingga auto-fill mengirim password ke proses lain | Guard auto-trigger (lihat bawah), dan hotkey sebagai default |
 | Secret bocor via log/crash | Password masuk stack trace/log | Tidak ada `String` untuk secret. Logger tidak menerima objek secret. Review wajib. |
 | Secret tertinggal di memory | Heap dump | `char[]`/`byte[]` di-zero setelah pakai. Tidak ada cache password di memory lebih dari yang diperlukan (atau cache dengan TTL, opsional). |
 | Lockout akun | Password vault salah, lalu auto-retry memicu `pam_faillock` | One-shot: berhenti saat `Sorry, try again`. |
@@ -69,6 +69,22 @@ Rekomendasi operasional (di luar aplikasi): untuk server prod, pertimbangkan aks
 - Implementasi (`SudoWriter`): file baru ditulis ke `/tmp/termul-<acak>/` (direktori dibuat mode 700 **sebelum** ada isinya), lalu satu `sudo -S -k -p '' sh -c <script>` sebagai root: `readlink -f` target (symlink tetap symlink), backup `cp -p` ke `/var/backups/termul` (mode 700, 10 versi per file), `install -m/-o/-g` sesuai file lama ke temp di direktori yang sama, `mv -f` (atomic), hook validasi, dan rollback dari backup kalau validasi gagal. Semua dalam satu sudo sehingga rollback tetap jalan walau yang rusak `sudoers`.
 - `-k` memaksa sudo selalu membaca password dari stdin (tidak memakai cache), supaya password tidak pernah sampai ke script. Tanpa password tersimpan dicoba `sudo -n` dulu (NOPASSWD), baru user diminta (tidak disimpan). Password salah tidak diulang.
 - Hook validasi (`config.json` → `validationHooks`) adalah command milik user sendiri yang dijalankan sebagai root; hanya bisa diubah lewat config lokal.
+
+## Update aplikasi
+
+Detail di `docs/adr/0003-self-update.md`.
+
+- Manifest rilis ditandatangani Ed25519. Public key ditanam di kode (`UpdateKeys`), private key hanya di mesin rilis
+  (`~/.termul-release/update-signing.key`, di luar repo, cadangkan offline). `ReleaseTool` menolak menerbitkan rilis yang
+  tanda tangannya tidak cocok dengan public key aplikasi, atau build dari working tree `-dirty`.
+- Setiap jar diverifikasi ukuran + SHA-256 saat dipasang **dan setiap start** (oleh Bootstrap dari kode bawaan installer),
+  jadi folder update yang diubah setelah terpasang tidak dijalankan.
+- Tidak ada downgrade: menu hanya memasang versi lebih baru dari yang berjalan; Bootstrap hanya memakai update yang lebih
+  baru dari versi bawaan. URL wajib HTTPS (redirect ke HTTP tidak diikuti), ukuran respons dan jar dibatasi, nama file di
+  manifest tidak boleh berisi folder.
+- Risiko sisa: malware dengan hak user yang sama bisa mengganggu folder update (terdeteksi, lalu fallback ke versi bawaan),
+  sama seperti ia sudah bisa membuka DPAPI. Kebocoran private key = update palsu diterima semua instalasi: buat key baru,
+  naikkan `UpdateProtocol.GENERATION`, dan distribusikan installer baru.
 
 ## Keterbatasan yang diketahui
 

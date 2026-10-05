@@ -31,7 +31,8 @@ import javax.swing.JOptionPane;
 public final class Launcher {
 
     static final int REQUIRED = 25;
-    static final String MAIN_CLASS = "dev.egateza.termul.app.TermULApp";
+    /** Bootstrap memilih update terpasang atau versi bawaan (docs/adr/0003-self-update.md). */
+    static final String MAIN_CLASS = "dev.egateza.termul.update.Bootstrap";
     /** Penanda proses hasil relaunch, supaya tidak relaunch berulang. */
     static final String RELAUNCHED = "termul.relaunched";
     /** Sama dengan {@code AppPaths.HOME_OVERRIDE_PROPERTY}; diteruskan ke proses relaunch. */

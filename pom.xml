@@ -18,6 +18,7 @@
         <module>ssh</module>
         <module>terminal</module>
         <module>sftp</module>
+        <module>update</module>
         <module>app</module>
     </modules>
 
@@ -104,6 +105,11 @@
             <dependency>
                 <groupId>dev.egateza.termul</groupId>
                 <artifactId>termul-sftp</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.egateza.termul</groupId>
+                <artifactId>termul-update</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

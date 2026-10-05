@@ -36,6 +36,10 @@
             <artifactId>termul-sftp</artifactId>
         </dependency>
         <dependency>
+            <groupId>dev.egateza.termul</groupId>
+            <artifactId>termul-update</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.jetbrains.jediterm</groupId>
             <artifactId>jediterm-ui</artifactId>
         </dependency>
@@ -67,6 +71,8 @@
 
     <properties>
         <termul.mainClass>dev.egateza.termul.app.TermULApp</termul.mainClass>
+        <!-- main class distribusi (app-image, fat jar): memilih update terpasang atau versi bawaan (ADR 0003) -->
+        <termul.bootstrapClass>dev.egateza.termul.update.Bootstrap</termul.bootstrapClass>
         <!-- major.minor versi aplikasi; build number (jumlah commit git) ditambahkan saat build → mis. 0.1.105 -->
         <termul.versionBase>0.1</termul.versionBase>
     </properties>
@@ -151,8 +157,9 @@
                 <jpackage.dest>${project.build.directory}/dist</jpackage.dest>
                 <!-- versi numerik untuk Windows (major.minor.build, build ≤ 65535) -->
                 <jpackage.appVersion>${termul.versionBase}.${git.total.commit.count}</jpackage.appVersion>
-                <!-- jdeps (lihat docs/SETUP.md) + jdk.unsupported (Unsafe reflektif) + jdk.localedata (locale id) -->
-                <jpackage.modules>java.base,java.desktop,java.management,jdk.management,java.naming,java.prefs,java.rmi,java.security.jgss,java.sql,jdk.unsupported,jdk.localedata</jpackage.modules>
+                <!-- jdeps (lihat docs/SETUP.md) + jdk.unsupported (Unsafe reflektif) + jdk.localedata (locale id) + java.net.http (update).
+                     Mengubah daftar ini = naikkan UpdateProtocol.GENERATION. -->
+                <jpackage.modules>java.base,java.desktop,java.management,jdk.management,java.naming,java.prefs,java.rmi,java.security.jgss,java.sql,jdk.unsupported,jdk.localedata,java.net.http</jpackage.modules>
                 <jpackage.installerArgs/>
             </properties>
             <build>
@@ -236,7 +243,7 @@
                                 </goals>
                                 <configuration>
                                     <executable>${java.home}/bin/jpackage</executable>
-                                    <commandlineArgs>--type ${jpackage.type} --name TermUL --app-version ${jpackage.appVersion} --vendor egateza --description "SSH client pribadi" --input "${jpackage.input}" --main-jar ${project.build.finalName}.jar --main-class ${termul.mainClass} --dest "${jpackage.dest}" --icon "${project.basedir}/src/main/packaging/termul.ico" --add-modules ${jpackage.modules} --jlink-options "--strip-debug --no-man-pages --no-header-files --include-locales=en,id" --java-options --enable-native-access=ALL-UNNAMED ${jpackage.installerArgs}</commandlineArgs>
+                                    <commandlineArgs>--type ${jpackage.type} --name TermUL --app-version ${jpackage.appVersion} --vendor egateza --description "SSH client pribadi" --input "${jpackage.input}" --main-jar ${project.build.finalName}.jar --main-class ${termul.bootstrapClass} --dest "${jpackage.dest}" --icon "${project.basedir}/src/main/packaging/termul.ico" --add-modules ${jpackage.modules} --jlink-options "--strip-debug --no-man-pages --no-header-files --include-locales=en,id" --java-options --enable-native-access=ALL-UNNAMED ${jpackage.installerArgs}</commandlineArgs>
                                 </configuration>
                             </execution>
                         </executions>

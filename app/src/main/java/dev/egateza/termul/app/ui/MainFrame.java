@@ -18,7 +18,9 @@ import dev.egateza.termul.app.terminal.BackgroundImages;
 import dev.egateza.termul.app.terminal.SplitPanes;
 import dev.egateza.termul.app.terminal.TerminalTab;
 import dev.egateza.termul.app.ui.tree.HostTreePanel;
+import dev.egateza.termul.app.update.UpdateDialog;
 import java.awt.Color;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
@@ -440,6 +442,8 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                 () -> UiAsync.run(io, () -> LogPanel.openFolder(ctx.paths().logDir()),
                         err -> Dialogs.error(this, I18n.t("main.error.openLogDir"), err))));
         help.addSeparator();
+        help.add(menuItem(null, I18n.t("main.menu.help.checkUpdate"), null,
+                () -> new UpdateDialog(this, ctx.paths(), this::restartForUpdate).setVisible(true)));
         help.add(menuItem(AppIcon.INFO, I18n.t("main.menu.help.about"), null, this::showAbout));
         bar.add(help);
         return bar;
@@ -502,7 +506,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             List<dev.egateza.termul.core.sshconfig.SshConfigHost> hosts;
             try {
                 hosts = dev.egateza.termul.core.sshconfig.SshConfigParser.parse(file, sshDir, home);
-            } catch (java.io.IOException e) {
+            } catch (IOException e) {
                 throw new java.io.UncheckedIOException(I18n.t("sshconfig.readFailed", file.toString()), e);
             }
             return dev.egateza.termul.core.sshconfig.SshConfigImport.plan(hosts, store.snapshot(),
@@ -1335,17 +1339,45 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
      * Quit/Cmd+Q di macOS ({@link MacIntegration}). EDT.
      */
     void exit() {
+        if (confirmQuit(I18n.t("exit.title"), I18n.t("exit.confirm"))) {
+            closeAndExit();
+        }
+    }
+
+    /**
+     * Tutup TermUL lalu buka ulang dengan perintah {@code command} (setelah update terpasang). Proses baru menunggu
+     * proses ini selesai (argumen {@code --wait-pid}). EDT.
+     */
+    private void restartForUpdate(List<String> command) {
+        if (!confirmQuit(I18n.t("update.restart.title"), I18n.t("update.restart.confirm"))) {
+            return;
+        }
+        try {
+            new ProcessBuilder(command).redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                    .redirectError(ProcessBuilder.Redirect.DISCARD).start();
+        } catch (IOException e) {
+            Dialogs.error(this, I18n.t("update.restart.failed"), e);
+            return;
+        }
+        closeAndExit();
+    }
+
+    /**
+     * Konfirmasi menutup aplikasi; kalau masih ada sesi/edit aktif, daftarnya ditampilkan. Ditolak = tab aktif pertama
+     * (atau daftar edit) ditampilkan. EDT.
+     */
+    private boolean confirmQuit(String title, String idleMessage) {
         List<String> active = activeWork();
         String message;
         if (active.isEmpty()) {
-            message = I18n.t("exit.confirm");
+            message = idleMessage;
         } else {
             var sb = new StringBuilder(I18n.t("exit.activeHeader")).append("\n\n");
             active.forEach(a -> sb.append("  • ").append(a).append('\n'));
             sb.append('\n').append(I18n.t("exit.activeFooter"));
             message = sb.toString();
         }
-        int choice = JOptionPane.showConfirmDialog(this, message, I18n.t("exit.title"), JOptionPane.YES_NO_OPTION,
+        int choice = JOptionPane.showConfirmDialog(this, message, title, JOptionPane.YES_NO_OPTION,
                 active.isEmpty() ? JOptionPane.QUESTION_MESSAGE : JOptionPane.WARNING_MESSAGE);
         if (choice != JOptionPane.YES_OPTION) {
             int first = firstActiveTab();
@@ -1354,8 +1386,12 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             } else if (!ctx.edits().entries().isEmpty()) {
                 showEditTracker();
             }
-            return;
+            return false;
         }
+        return true;
+    }
+
+    private void closeAndExit() {
         while (tabs.getTabCount() > 0) {
             removeTab(0, false);
         }

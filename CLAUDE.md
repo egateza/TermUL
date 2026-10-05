@@ -15,7 +15,7 @@ Ini **bukan** terminal emulator lokal. PTY berada di server remote, sedangkan ap
 
 ## Pemilik & konteks pemakaian
 
-- Dipakai sendiri untuk mengelola server Linux (Ubuntu) produksi dan staging, termasuk platform Backend. **Keamanan credential adalah requirement utama, bukan fitur tambahan.**
+- SSH client untuk mengelola server Linux (Ubuntu). **Keamanan credential adalah requirement utama, bukan fitur tambahan.**
 - OS host utama: Windows; macOS juga didukung (lokasi data, shortcut Cmd, editor, JAR portable — lihat `docs/SETUP.md`). Project berada di `D:\IdeaProjects\my-personal-terminal`, IDE IntelliJ IDEA.
 - Bahasa komunikasi: Bahasa Indonesia, istilah teknis tetap dalam bahasa Inggris.
 
@@ -43,10 +43,11 @@ termul/
 ├─ ssh/        SessionManager, koneksi MINA, known_hosts, auth (key/agent/password), jump host
 ├─ terminal/   JediTerm TtyConnector, PromptResponder (sudo inject)
 ├─ sftp/       RemoteFileService, RemoteEditSession (download → watch → upload atomic)
+├─ update/     update via GitHub Releases: manifest Ed25519, delta jar, Bootstrap (main class distribusi), ReleaseTool
 └─ app/        Swing UI (host tree, tabs, SFTP panel, dialogs), wiring, main()
 ```
 
-Arah dependensi: `app → terminal, sftp → ssh → core`, dan `vault → core`. **`core` tidak boleh bergantung pada Swing atau MINA.**
+Arah dependensi: `app → terminal, sftp → ssh → core`, `vault → core`, dan `app → update → core`. **`core` tidak boleh bergantung pada Swing atau MINA.**
 
 ### Konvensi Maven
 - Parent `pom.xml` (packaging `pom`) memegang semua versi library di `<properties>` + `<dependencyManagement>`, dan versi plugin di `<pluginManagement>`. POM modul **tidak boleh** menulis versi sendiri.
@@ -68,6 +69,7 @@ Arah dependensi: `app → terminal, sftp → ssh → core`, dan `vault → core`
 3. Host key wajib diverifikasi terhadap `known_hosts` milik aplikasi. Host baru memakai TOFU dengan dialog fingerprint (SHA256). Kalau host key berubah, **tolak** koneksi dan tampilkan peringatan keras. Tidak boleh ada `AcceptAllServerKeyVerifier`, termasuk di kode dev.
 4. Auto-sudo trigger hanya boleh aktif dengan guard lengkap (armed window, match di baris terakhir, one-shot, berhenti saat "Sorry, try again"). Lihat `docs/SECURITY.md`.
 5. Upload remote edit wajib atomic (temp file lalu rename), memeriksa konflik (stat remote sebelum upload), dan mempertahankan mode file.
+6. Update aplikasi hanya dipasang/dijalankan kalau tanda tangan Ed25519 manifest valid (public key di `UpdateKeys`) dan SHA-256 setiap jar cocok; tidak boleh downgrade. Private key rilis tidak pernah masuk repo. Lihat `docs/adr/0003-self-update.md`.
 
 ### Lintas OS (Windows & macOS)
 - Cek OS lewat `dev.egateza.termul.core.Os`, jangan parsing `os.name` sendiri.
@@ -98,4 +100,4 @@ Arah dependensi: `app → terminal, sftp → ssh → core`, dan `vault → core`
 | `docs/SECURITY.md` | Threat model, desain vault, guard auto-sudo, risiko remote edit |
 | `docs/PLAN.md` | Roadmap per fase + checklist + acceptance criteria |
 | `docs/SETUP.md` | Tools, dependensi, environment dev & test |
-| `docs/adr/` | Architecture Decision Records |
+| `docs/adr/` | Architecture Decision Records (0003: update via GitHub Releases) |

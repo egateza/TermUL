@@ -96,7 +96,26 @@ Lokasi per OS (`AppPaths`): Windows `%APPDATA%` / `%LOCALAPPDATA%`; macOS `~/Lib
   logs\               log aplikasi (tanpa secret)
 %LOCALAPPDATA%\TermUL\
   edit\<profileId>\<remote-path>   cache file yang sedang diedit
+  updates\current                  versi update aktif (pointer, ditulis atomic)
+  updates\<versi>\                 jar update + manifest.json(.sig), .healthy/.attempts
 ```
+
+## Update aplikasi (ADR 0003)
+
+Main class app-image dan fat jar adalah `update.Bootstrap`, bukan `TermULApp`. Setiap start, Bootstrap:
+
+1. membaca versi bawaan dari `build.properties` di jar aplikasi (build dev → langsung `TermULApp`),
+2. memilih `updates/<current>` kalau versinya lebih baru dari versi bawaan, tanda tangan manifest valid (public key dari
+   kode bawaan), semua SHA-256 cocok, `generation` didukung, dan belum gagal start 3 kali,
+3. memuat jar update dengan `URLClassLoader` ber-parent platform classloader (class lama di classpath bawaan tidak
+   terlihat), set context classloader, lalu memanggil `main`. Kalau syarat tidak terpenuhi, `TermULApp` bawaan dipanggil
+   langsung.
+
+Bootstrap tidak memakai SLF4J/JNA/AWT; catatannya diteruskan lewat system property `termul.update.notes` dan di-log
+aplikasi. Aplikasi menandai versi sehat (`.healthy`) setelah window utama tampil. Menu Bantuan → Periksa update
+(`app.update.UpdateDialog` → `update.Updater`) mengambil `manifest.json` rilis terbaru di GitHub, menyalin jar lokal yang
+hash-nya sama, mengunduh sisanya, memverifikasi, lalu me-rename folder staging dan memindah pointer secara atomic.
+Restart memakai `--wait-pid=<pid>` supaya proses baru menunggu proses lama selesai.
 
 ## Alur utama
 

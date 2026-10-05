@@ -6,6 +6,7 @@ import dev.egateza.termul.app.ssh.SwingCredentialProvider;
 import dev.egateza.termul.app.ssh.SwingHostKeyPrompt;
 import dev.egateza.termul.app.terminal.BackgroundImages;
 import dev.egateza.termul.app.terminal.TerminalSettings;
+import dev.egateza.termul.app.update.AppUpdates;
 import dev.egateza.termul.app.ui.AppIcon;
 import dev.egateza.termul.app.ui.DialogSounds;
 import dev.egateza.termul.app.ui.Dialogs;
@@ -60,6 +61,7 @@ public final class TermULApp {
         Logger log = LoggerFactory.getLogger(TermULApp.class);
         log.info("TermUL start, config={}, cache={}", paths.configDir(), paths.cacheDir());
         detected.notes().forEach(note -> log.warn("{}", note));
+        AppUpdates.logBootstrapNotes(log);
 
         Thread.setDefaultUncaughtExceptionHandler((t, e) -> log.error("Uncaught exception di thread {}", t.getName(), e));
 
@@ -123,6 +125,7 @@ public final class TermULApp {
             frameRef.set(frame);
             MacIntegration.install(frame);
             frame.setVisible(true);
+            io.execute(() -> AppUpdates.markHealthy(paths, log)); // rollback otomatis tidak dipicu untuk versi ini
             UiAsync.run(io, store::load, frame::showSnapshot,
                     err -> Dialogs.error(frame, "Gagal memuat profil", err));
         });

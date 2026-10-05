@@ -41,7 +41,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 ### Fase 1: acceptance (manual, oleh user) — lulus, dikonfirmasi user 2026-10-01
 - [x] Connect ke 3 server di 3 tab, `htop` & `vim` tampil benar, resize berfungsi
-  (sudah dikonfirmasi user 2026-09-30: SSH ke `server01` (192.0.2.10) berhasil — login password dari vault, TOFU
+  (sudah dikonfirmasi user 2026-09-30: SSH ke server staging berhasil — login password dari vault, TOFU
   host key, beberapa tab satu koneksi, inject sudo, logout + reconnect; belum: 3 server berbeda, htop/vim, resize)
 - [x] Tutup tab tidak meninggalkan thread/koneksi bocor (thread dump `jcmd <pid> Thread.print` sebelum/sesudah;
   log harus menunjukkan `Pemakai koneksi … dilepas (sisa: 0)` lalu `Menutup koneksi` setelah grace 30 detik)
@@ -81,7 +81,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] `PromptResponder` auto-trigger dengan semua guard + unit test spoofing
 - [x] Toggle auto-trigger per host (default OFF untuk prod)
 - [x] Acceptance (manual): edit `/etc/nginx/sites-available/x` dari VS Code → owner `root:root` tetap; config invalid di-rollback;
-  auto-sudo: `sudo ls` di host dengan toggle aktif mengirim password sekali, prompt palsu (`echo "[sudo] password for ega: "`) tidak memicu
+  auto-sudo: `sudo ls` di host dengan toggle aktif mengirim password sekali, prompt palsu (`echo "[sudo] password for user: "`) tidak memicu
   (disiapkan 2026-10-01: nginx di `uji-1`, file root `/etc/nginx/http.d/uji.conf`; config invalid → `nginx -t` gagal → rollback)
 
 ### Fase 6: Polish & distribusi
@@ -99,6 +99,14 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] Profile `package-jar`: fat jar `TermUL.jar` (shade, launcher Java 8 yang mencari JDK 25 kalau di-double-click dengan Java lama) + zip dengan launcher `TermUL.command`/`termul.sh`/`TermUL.cmd` (build dari Windows)
 - [ ] Uji manual di MacBook (keyboard, editor, Gatekeeper, SFTP drag & drop dari Finder)
 - [ ] Opsional: Keychain macOS untuk "ingat di Mac ini", SSH agent via `SSH_AUTH_SOCK`, `.app`/`.dmg` via jpackage (CI macOS)
+
+### Update lewat menu (permintaan user 2026-10-05, ADR 0003)
+- [x] Modul `update`: manifest bertanda tangan Ed25519, delta per jar, `UpdateStore` (staging atomic, pointer, rollback setelah 3 kali gagal start), `UpdateClient` (GitHub Releases, HTTPS), `Updater`
+- [x] `Bootstrap` sebagai main class app-image + fat jar (verifikasi ulang setiap start, classloader terpisah); `java.net.http` di runtime jlink
+- [x] Menu Bantuan → Periksa update (`UpdateDialog`), restart dengan `--wait-pid`
+- [x] `ReleaseTool` (keygen, publish) + `tools/release.ps1` (gh release create); key dibuat di `~/.termul-release/`
+- [x] Uji end-to-end lokal di app-image: update 0.1.999 bertanda tangan dimuat + `.healthy`; jar diubah → ditolak, kembali ke bawaan
+- [ ] Rilis pertama ke GitHub (butuh `gh`), lalu uji menu update dari instalasi rilis itu ke rilis berikutnya
 
 ### Tambahan dari uji manual user (setelah Fase 4)
 - [x] Auth "Default": coba key `~/.ssh`, lalu jatuh ke password (sebelumnya error kalau tidak ada key)
@@ -224,7 +232,7 @@ Yang tersisa: merge branch, uji installer `.msi` (butuh WiX), keputusan `MaxSess
 - Perlu fallback `MaxSessions` / opsi koneksi terpisah per tab?
 
 **Prosedur acceptance Fase 1** (AI bisa membantu langkah 4–5):
-1. ~~Koneksi ke server nyata~~ ✔ (server01). Buat 2 profil lagi ke container uji (sudah dijalankan 2026-09-30):
+1. ~~Koneksi ke server nyata~~ ✔ (server staging). Buat 2 profil lagi ke container uji (sudah dijalankan 2026-09-30):
    `uji-1` = `127.0.0.1:2222`, `uji-2` = `127.0.0.1:2223`, user `dev` / password `devpass` (sudo pakai password yang sama;
    htop, vim, bash, terminfo sudah di-install). Stop: `docker stop myterm-sshd myterm-sshd2`; hapus: `docker rm -f ...`.
    Kalau container dihapus lalu dibuat ulang, host key berubah → TermUL akan MENOLAK koneksi (benar), hapus entry lama
@@ -248,7 +256,7 @@ Yang tersisa: merge branch, uji installer `.msi` (butuh WiX), keputusan `MaxSess
    simpan config nginx yang valid (owner/mode tetap, backup di `/var/backups/termul`) dan yang invalid (rollback + dialog
    output `nginx -t`). Auto-sudo: centang di Edit host, lalu `sudo ls` / `su -`. Hook validasi: Pengaturan → Validasi file root.
    Keterbatasan: shell login harus POSIX (bash/dash/zsh); prompt `sudo-rs` (`[sudo: authenticate] Password:`) belum dikenali
-   auto-sudo (hotkey tetap bisa); prompt shell dengan spasi di depan (mis. `(venv) ega@host:~$`) tidak meng-arm; file yang
+   auto-sudo (hotkey tetap bisa); prompt shell dengan spasi di depan (mis. `(venv) user@host:~$`) tidak meng-arm; file yang
    tidak bisa **dibaca** user login belum bisa dibuka (download masih lewat SFTP biasa).
 4. Lalu **Fase 6** (lihat checklist di atas).
 
