@@ -58,6 +58,12 @@ class FileCredentialVaultTest {
     }
 
     @Test
+    void opsiIngatHanyaDidukungKalauAdaProteksiOs() {
+        assertThat(vault(FAKE_OS).isRememberSupported()).isTrue();
+        assertThat(vault(KeyProtector.UNAVAILABLE).isRememberSupported()).isFalse(); // mis. macOS
+    }
+
+    @Test
     void roundTripAntarInstance() {
         var v = vault(KeyProtector.UNAVAILABLE);
         assertThat(v.exists()).isFalse();

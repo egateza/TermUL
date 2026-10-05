@@ -44,6 +44,9 @@ public interface CredentialVault {
     /** Kedua argumen di-zero. */
     void changeMasterPassword(char[] oldPassword, char[] newPassword);
 
+    /** @return true kalau OS ini punya proteksi key untuk opsi "ingat di PC ini" (saat ini hanya DPAPI Windows) */
+    boolean isRememberSupported();
+
     boolean isRememberedOnThisPc();
 
     /** Mengaktifkan/mematikan opsi "ingat di PC ini" (DPAPI). Vault harus unlocked untuk mengaktifkan. */

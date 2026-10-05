@@ -273,6 +273,11 @@ public final class FileCredentialVault implements CredentialVault {
     }
 
     @Override
+    public boolean isRememberSupported() {
+        return protector.isAvailable();
+    }
+
+    @Override
     public synchronized boolean isRememberedOnThisPc() {
         return Files.exists(osKeyFile);
     }
