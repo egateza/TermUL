@@ -57,6 +57,9 @@ import java.util.concurrent.ExecutorService;
 import javax.swing.JButton;
 import javax.swing.JCheckBoxMenuItem;
 import javax.swing.JFrame;
+import dev.egateza.termul.app.ui.idle.HomeScreen;
+import dev.egateza.termul.app.ui.idle.IdleOverlay;
+import dev.egateza.termul.app.ui.idle.IdleState;
 import javax.swing.JLabel;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
@@ -87,8 +90,14 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     /** Tab yang dipilih dengan Ctrl+klik untuk digabung (Ctrl+G), urutan pilih. EDT. */
     private final java.util.Set<java.awt.Component> marked = new java.util.LinkedHashSet<>();
     private final JPanel center = new JPanel(new BorderLayout());
-    private final JLabel welcome = new JLabel(
-            "", SwingConstants.CENTER);
+    /** Isi area terminal selama belum ada tab: jam, host terakhir/favorit, animasi. */
+    private final HomeScreen home = new HomeScreen(this::open);
+    /** Layar idle (glass pane): menutupi window setelah sekian menit tanpa input atau lewat shortcut. */
+    private final IdleOverlay idleOverlay = new IdleOverlay(this::wakeFromIdle);
+    private final IdleState idle = new IdleState(nowMillis()); // EDT
+    private final javax.swing.Timer idleTimer = new javax.swing.Timer(5000, e -> checkIdle());
+    /** Setiap input keyboard/mouse di aplikasi (termasuk dialog) menunda layar idle. Dipanggil di EDT. */
+    private final java.awt.event.AWTEventListener activity = e -> idle.activity(nowMillis());
     private final Runnable onExit;
     private final KeyEventDispatcher hotkeys = this::dispatchHotkey;
     private final LogPanel logPanel;
@@ -171,6 +180,11 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             public void windowClosing(WindowEvent e) {
                 exit();
             }
+
+            @Override
+            public void windowDeactivated(WindowEvent e) {
+                idle.focusLost(); // lepas tombol pembangun tidak akan sampai ke window ini lagi
+            }
         });
 
         tabs.putClientProperty("JTabbedPane.tabClosable", true);
@@ -207,7 +221,11 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                 updateTerminalMenu();
             }
         });
-        welcome.setFont(welcome.getFont().deriveFont(Font.PLAIN, welcome.getFont().getSize2D() + 2));
+        var idleAnimation = AnimationChoice.fromId(ctx.config().current().idleAnimation());
+        home.setAnimation(idleAnimation);
+        home.setSnapshot(store.snapshot());
+        idleOverlay.setAnimation(idleAnimation);
+        setGlassPane(idleOverlay);
         updateCenter();
 
         // Tombol melayang di tepi kiri area terminal, satu bentuk dengan tombol laci: panel host tidak punya strip
@@ -269,11 +287,78 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
         store.addListener(s -> SwingUtilities.invokeLater(() -> {
             hostTree.setSnapshot(s);
+            home.setSnapshot(s);
             reloadTerminalColors(); // warna khusus host / environment yang diubah di Edit host
         }));
         // belum ada tab: langsung tampilkan daftar host (mode tombol melayang), menutup otomatis saat host dibuka
         SwingUtilities.invokeLater(() -> drawer.setOpen(true));
         KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(hotkeys);
+        java.awt.Toolkit.getDefaultToolkit().addAWTEventListener(activity, java.awt.AWTEvent.KEY_EVENT_MASK
+                | java.awt.AWTEvent.MOUSE_EVENT_MASK | java.awt.AWTEvent.MOUSE_MOTION_EVENT_MASK
+                | java.awt.AWTEvent.MOUSE_WHEEL_EVENT_MASK);
+        idleTimer.start();
+    }
+
+    private static long nowMillis() {
+        return System.nanoTime() / 1_000_000;
+    }
+
+    /** Timer 5 detik: tampilkan layar idle kalau tidak ada input selama waktu yang diatur. EDT. */
+    private void checkIdle() {
+        if (isVisible() && idle.shouldActivate(nowMillis(), ctx.config().current().idleMinutes())) {
+            showIdle();
+        }
+    }
+
+    /** Tutupi window dengan layar idle; sesi tetap berjalan. EDT. */
+    private void showIdle() {
+        if (idle.isActive()) {
+            return;
+        }
+        javax.swing.MenuSelectionManager.defaultManager().clearSelectedPath(); // menu terbuka tetap di atas glass pane
+        idle.activate();
+        idleOverlay.showIdle(tabs.getTabCount());
+    }
+
+    /** Layar idle dibangunkan dengan mouse. EDT. */
+    private void wakeFromIdle() {
+        idle.deactivate(nowMillis());
+        hideIdle();
+    }
+
+    private void hideIdle() {
+        idleOverlay.setVisible(false);
+        SwingUtilities.invokeLater(() -> currentTab().ifPresent(TerminalTab::focusTerminal));
+    }
+
+    /**
+     * Keyboard selama layar idle: tombol pertama hanya membangunkan layar, dan event tombol itu (termasuk karakter
+     * dan auto-repeat) ditelan sampai dilepas, supaya Enter/Ctrl+C tidak terkirim ke server. Dialog lain tidak
+     * disentuh. @return true kalau event ditelan
+     */
+    private boolean dispatchIdleKey(KeyEvent e) {
+        var c = e.getComponent();
+        var window = c instanceof Window w ? w : c == null ? null : SwingUtilities.getWindowAncestor(c);
+        if (window != this) {
+            return false;
+        }
+        var kind = switch (e.getID()) {
+            case KeyEvent.KEY_PRESSED -> IdleState.Key.PRESSED;
+            case KeyEvent.KEY_TYPED -> IdleState.Key.TYPED;
+            default -> IdleState.Key.RELEASED;
+        };
+        return switch (idle.onKey(kind, e.getKeyCode(), nowMillis())) {
+            case PASS -> false;
+            case SWALLOW -> {
+                e.consume();
+                yield true;
+            }
+            case WAKE -> {
+                e.consume();
+                hideIdle();
+                yield true;
+            }
+        };
     }
 
     /**
@@ -282,6 +367,9 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
      * tidak disentuh. Lihat {@link Shortcuts#isAppCombo}.
      */
     private boolean dispatchHotkey(KeyEvent e) {
+        if (dispatchIdleKey(e)) {
+            return true;
+        }
         var tab = currentGroup().flatMap(g -> g.paneOf(e.getComponent())); // panel split tempat key diketik
         if (tab.isPresent() && tab.get().interceptKey(e)) {
             e.consume();
@@ -342,11 +430,25 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             if (menu == null) { // komponen bar yang bukan JMenu (glue, tombol mode)
                 continue;
             }
-            for (int j = 0; j < menu.getItemCount(); j++) {
-                var item = menu.getItem(j);
-                if (item != null && ks.equals(item.getAccelerator())) {
-                    return item;
+            var item = findAccelerator(menu, ks);
+            if (item != null) {
+                return item;
+            }
+        }
+        return null;
+    }
+
+    /** Termasuk submenu (mis. Pengaturan → Tampilan → Layar idle). */
+    private static JMenuItem findAccelerator(JMenu menu, KeyStroke ks) {
+        for (int j = 0; j < menu.getItemCount(); j++) {
+            var item = menu.getItem(j);
+            if (item instanceof JMenu sub) {
+                var found = findAccelerator(sub, ks);
+                if (found != null) {
+                    return found;
                 }
+            } else if (item != null && ks.equals(item.getAccelerator())) {
+                return item;
             }
         }
         return null;
@@ -355,6 +457,8 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     @Override
     public void dispose() {
         KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(hotkeys);
+        java.awt.Toolkit.getDefaultToolkit().removeAWTEventListener(activity);
+        idleTimer.stop();
         drawer.dispose();
         resourceMonitor.close();
         super.dispose();
@@ -462,6 +566,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                     mutate(I18n.t("error.saveSettings"), () ->
                             ctx.config().save(ctx.config().current().withStatusAnimation(choice.id())));
                 }));
+        display.add(buildIdleMenu());
         settings.add(display);
         settings.add(buildLanguageMenu());
         settings.add(buildBellMenu());
@@ -691,7 +796,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             body.add(hostSplit, BorderLayout.CENTER);
             updateHostToggle();
         }
-        welcome.setText("<html><center><b>TermUL</b><br><br>" + I18n.t("main.welcome.open") + "<br>"
+        home.setHint("<html><center>" + I18n.t("main.welcome.open") + "<br>"
                 + I18n.t("main.welcome.shortcuts", Shortcuts.text(Shortcuts.menu(KeyEvent.VK_N)),
                         Shortcuts.text(Shortcuts.menu(KeyEvent.VK_F)))
                 + (floatingMode() ? "<br><br>" + I18n.t("main.welcome.floatingHint") : "")
@@ -1074,7 +1179,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         com.formdev.flatlaf.FlatLaf.updateUI();
         // FlatLaf.updateUI hanya menjangkau komponen yang sedang ada di window; yang terlepas dari hierarki
         // (tabs saat belum ada tab, host tree di mode melayang, dst.) harus diperbarui sendiri
-        for (var detached : new java.awt.Component[] {tabs, welcome, hostTree, hostSide, logPanel, editTracker}) {
+        for (var detached : new java.awt.Component[] {tabs, home, hostTree, hostSide, logPanel, editTracker}) {
             if (detached != null) {
                 SwingUtilities.updateComponentTreeUI(detached);
             }
@@ -1158,6 +1263,41 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                 menu.addSeparator();
             }
         }
+        return menu;
+    }
+
+    /** Pilihan waktu idle di menu (menit; 0 = mati). */
+    private static final int[] IDLE_MINUTES = {0, 5, 10, 15, 30, 60};
+
+    /** Pengaturan → Tampilan → Layar idle: tampilkan sekarang, waktu idle, dan animasinya. */
+    private JMenu buildIdleMenu() {
+        var menu = new JMenu(I18n.t("main.menu.settings.idle"));
+        menu.setToolTipText(I18n.t("main.menu.settings.idle.tooltip"));
+        menu.add(menuItem(null, I18n.t("main.menu.settings.idle.now"), Shortcuts.menuShift(KeyEvent.VK_I), this::showIdle));
+        menu.addSeparator();
+        var group = new ButtonGroup();
+        int current = ctx.config().current().idleMinutes();
+        var choices = java.util.stream.IntStream.concat(Arrays.stream(IDLE_MINUTES), java.util.stream.IntStream.of(current))
+                .distinct().sorted().toArray(); // nilai lain dari config.json (mis. 45) tetap terlihat terpilih
+        for (int minutes : choices) {
+            var item = new JRadioButtonMenuItem(minutes == 0 ? I18n.t("main.menu.settings.idle.off")
+                    : I18n.t("main.menu.settings.idle.minutes", String.valueOf(minutes)), minutes == current);
+            item.addActionListener(e -> {
+                idle.activity(nowMillis()); // hitung ulang dari sekarang
+                mutate(I18n.t("error.saveSettings"), () ->
+                        ctx.config().save(ctx.config().current().withIdleMinutes(minutes)));
+            });
+            group.add(item);
+            menu.add(item);
+        }
+        menu.addSeparator();
+        menu.add(buildAnimationMenu(I18n.t("main.menu.settings.idleAnimation"),
+                AnimationChoice.fromId(ctx.config().current().idleAnimation()), choice -> {
+                    home.setAnimation(choice);
+                    idleOverlay.setAnimation(choice);
+                    mutate(I18n.t("error.saveSettings"), () ->
+                            ctx.config().save(ctx.config().current().withIdleAnimation(choice.id())));
+                }));
         return menu;
     }
 
@@ -1553,8 +1693,11 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     }
 
     private void updateCenter() {
-        var wanted = tabs.getTabCount() == 0 ? welcome : tabs;
+        var wanted = tabs.getTabCount() == 0 ? home : tabs;
         if (center.getComponentCount() == 0 || center.getComponent(0) != wanted) {
+            if (wanted == home) {
+                home.reshuffle(); // animasi acak: berganti setiap beranda tampil lagi
+            }
             center.removeAll();
             center.add(wanted, BorderLayout.CENTER);
             center.revalidate();

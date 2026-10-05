@@ -148,6 +148,14 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
   "Backup vault lama" (default aktif → rename ke `vault.bin.forgotten-<waktu>`; tidak dicentang → hapus permanen setelah
   konfirmasi kedua), key DPAPI dihapus, lalu langsung buat master password baru. Profil tetap, password diisi ulang.
   Pesan "terlalu banyak percobaan" menunjuk ke menu ini (permintaan user)
+- [x] **Layar beranda** (belum ada tab) menggantikan teks welcome: jam besar + tanggal, tombol host *Terakhir dipakai* dan
+  *Favorit* (maks. 8) yang langsung membuka terminal, animasi berskala, petunjuk shortcut (`app.ui.idle.HomeScreen`)
+- [x] **Layar idle**: glass pane (`IdleOverlay`) menutupi seluruh window (menu, daftar host, terminal) setelah N menit tanpa
+  input di aplikasi, atau lewat `Ctrl+Shift+I`. Sesi SSH tetap jalan. Tombol pertama hanya membangunkan layar: event tombol
+  itu (karakter, auto-repeat, tombol lain selama ditahan) ditelan sampai dilepas (`IdleState`, unit test Enter/Ctrl+C);
+  klik/gerakan mouse > 8 px juga membangunkan. Pengaturan → Tampilan → Layar idle: Mati/5/10/15/30/60 menit
+  (`idleMinutes`, default 15) + animasi (`idleAnimation`, default acak; dipakai juga di beranda). Diverifikasi lewat
+  render PNG (permintaan user)
 - [x] Menu Terminal ikut status tab/sesi (`TerminalMenuState`): tanpa tab semua item nonaktif kecuali "File yang sedang
   diedit"; Duplikat/Reconnect/Tutup tab/Zoom butuh ada tab (Reconnect sengaja tidak menunggu sesi aktif); Panel SFTP dan
   Inject password sudo/root butuh sesi tersambung (SFTP tetap aktif selama panelnya terbuka, supaya bisa ditutup).

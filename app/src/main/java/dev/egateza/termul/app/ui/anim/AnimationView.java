@@ -19,6 +19,7 @@ public final class AnimationView extends JComponent {
     static final int FRAME_MS = 33;
 
     private final Animation.Size size;
+    private final int scale;
     private Animation animation; // EDT
     private final Timer timer = new Timer(FRAME_MS, e -> {
         if (isShowing()) {
@@ -28,10 +29,19 @@ public final class AnimationView extends JComponent {
     });
 
     public AnimationView(Animation.Size size, Animation animation) {
+        this(size, animation, 1);
+    }
+
+    /** @param scale pembesaran gambar (mis. 3 untuk layar idle); animasi tetap digambar di ukuran {@code size} */
+    public AnimationView(Animation.Size size, Animation animation, int scale) {
+        if (scale < 1) {
+            throw new IllegalArgumentException("scale < 1: " + scale);
+        }
         this.size = size;
+        this.scale = scale;
         this.animation = animation;
         setOpaque(false);
-        var dim = new Dimension(size.width(), size.height());
+        var dim = new Dimension(size.width() * scale, size.height() * scale);
         setPreferredSize(dim);
         setMinimumSize(dim);
         setMaximumSize(dim);
@@ -79,10 +89,11 @@ public final class AnimationView extends JComponent {
         try {
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-            int x0 = (getWidth() - size.width()) / 2;
-            int y0 = (getHeight() - size.height()) / 2;
-            g2.clipRect(x0, y0, size.width(), size.height());
+            int x0 = (getWidth() - size.width() * scale) / 2;
+            int y0 = (getHeight() - size.height() * scale) / 2;
+            g2.clipRect(x0, y0, size.width() * scale, size.height() * scale);
             g2.translate(x0, y0);
+            g2.scale(scale, scale);
             animation.paint(g2, size.width(), size.height(), Palette.current());
         } finally {
             g2.dispose();
