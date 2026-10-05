@@ -1,5 +1,6 @@
 package dev.egateza.termul.ssh.hostkey;
 
+import dev.egateza.termul.core.io.AtomicFiles;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
@@ -10,8 +11,11 @@ import java.nio.file.StandardOpenOption;
 import java.security.GeneralSecurityException;
 import java.security.PublicKey;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import org.apache.sshd.client.config.hosts.KnownHostEntry;
 import org.apache.sshd.common.config.keys.AuthorizedKeyEntry;
 import org.apache.sshd.common.config.keys.KeyUtils;
@@ -37,6 +41,77 @@ public final class KnownHostsStore {
 
     public Path file() {
         return file;
+    }
+
+    /**
+     * Satu entry known_hosts untuk ditampilkan/dihapus.
+     *
+     * @param line        isi baris apa adanya (identitas saat {@link #remove})
+     * @param hosts       pola host, atau {@code null} kalau entry di-hash ({@code |1|...})
+     * @param marker      {@code @revoked}/{@code @cert-authority} tanpa {@code @}, atau {@code null}
+     * @param algorithm   tipe key, mis. {@code ssh-ed25519}
+     * @param fingerprint {@code SHA256:...}, atau {@code null} kalau key tidak bisa dibaca
+     */
+    public record Entry(String line, String hosts, String marker, String algorithm, String fingerprint) {
+        public boolean hashed() {
+            return hosts == null;
+        }
+    }
+
+    /** Semua entry yang bisa di-parse, urut sesuai file (komentar dan baris rusak dilewati). */
+    public synchronized List<Entry> entries() {
+        var result = new ArrayList<Entry>();
+        for (String line : readLines()) {
+            Entry entry = parse(line);
+            if (entry != null) {
+                result.add(entry);
+            }
+        }
+        return result;
+    }
+
+    /** Entry (bukan {@code @revoked}/{@code @cert-authority}) yang cocok dengan host:port, termasuk entry hashed. */
+    public synchronized List<Entry> entriesFor(String host, int port) {
+        var result = new ArrayList<Entry>();
+        for (String line : readLines()) {
+            Entry entry = parse(line);
+            if (entry != null && entry.marker() == null && matches(line, host, port)) {
+                result.add(entry);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Menghapus baris yang isinya sama persis dengan {@link Entry#line()} entry yang diberikan. Baris lain (komentar,
+     * {@code @revoked}, dll.) tetap utuh; file ditulis ulang secara atomic.
+     *
+     * @return jumlah baris yang dihapus
+     */
+    public synchronized int remove(Collection<Entry> toRemove) {
+        Set<String> lines = new HashSet<>();
+        toRemove.forEach(e -> lines.add(e.line()));
+        var kept = new ArrayList<String>();
+        int removed = 0;
+        for (String line : readLines()) {
+            if (lines.contains(line)) {
+                removed++;
+            } else {
+                kept.add(line);
+            }
+        }
+        if (removed == 0) {
+            return 0;
+        }
+        var content = new StringBuilder();
+        kept.forEach(l -> content.append(l).append(System.lineSeparator()));
+        try {
+            AtomicFiles.write(file, content.toString().getBytes(StandardCharsets.UTF_8));
+        } catch (IOException e) {
+            throw new UncheckedIOException("Gagal menulis known_hosts: " + file, e);
+        }
+        log.info("{} entry dihapus dari known_hosts", removed);
+        return removed;
     }
 
     /** Semua key yang tercatat untuk host:port (entry {@code @revoked} diabaikan, jadi dianggap tidak cocok). */
@@ -70,6 +145,46 @@ public final class KnownHostsStore {
     /** Pola host format OpenSSH. */
     public static String hostPattern(String host, int port) {
         return port == 22 ? host : "[" + host + "]:" + port;
+    }
+
+    private List<String> readLines() {
+        try {
+            return Files.readAllLines(file, StandardCharsets.UTF_8);
+        } catch (NoSuchFileException e) {
+            return List.of();
+        } catch (IOException e) {
+            throw new UncheckedIOException("Gagal membaca known_hosts: " + file, e);
+        }
+    }
+
+    private static KnownHostEntry parseEntry(String line) {
+        String trimmed = line.strip();
+        if (trimmed.isEmpty() || trimmed.startsWith("#")) {
+            return null;
+        }
+        try {
+            return KnownHostEntry.parseKnownHostEntry(trimmed);
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    private static Entry parse(String line) {
+        KnownHostEntry entry = parseEntry(line);
+        if (entry == null || entry.getKeyEntry() == null) {
+            return null;
+        }
+        String[] tokens = line.strip().split("\\s+");
+        int hostsIndex = entry.getMarker() != null ? 1 : 0;
+        String hosts = entry.getHashedEntry() != null || tokens.length <= hostsIndex ? null : tokens[hostsIndex];
+        PublicKey key = resolve(entry.getKeyEntry());
+        return new Entry(line, hosts, entry.getMarker(), entry.getKeyEntry().getKeyType(),
+                key == null ? null : HostKeyInfo.fingerprint(key));
+    }
+
+    private static boolean matches(String line, String host, int port) {
+        KnownHostEntry entry = parseEntry(line);
+        return entry != null && entry.isHostMatch(host, port);
     }
 
     private List<KnownHostEntry> readEntries() {

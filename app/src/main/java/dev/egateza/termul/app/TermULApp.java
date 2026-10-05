@@ -90,8 +90,9 @@ public final class TermULApp {
         var vault = new VaultGate(
                 new FileCredentialVault(paths.vaultFile(), Argon2Params.defaults(), new DpapiKeyProtector()),
                 frameRef::get, Duration.ofMinutes(15));
+        var knownHosts = new KnownHostsStore(paths.knownHostsFile());
         var sessions = new SessionManager(
-                new KnownHostsStore(paths.knownHostsFile()),
+                knownHosts,
                 new SwingHostKeyPrompt(frameRef::get),
                 new VaultCredentialProvider(vault, new SwingCredentialProvider(frameRef::get)),
                 SshSettings.defaults(), id -> store.snapshot().find(id));
@@ -117,7 +118,7 @@ public final class TermULApp {
             terminalSettings.bell().setSound(config.current().bellSound());
             terminalSettings.bell().setShake(config.current().bellShake());
             var ctx = new AppContext(paths, config, store, io, sshOps, sessions, new SshTerminalFactory(sessions),
-                    terminalSettings, vault, edits, sftpLinks, themes);
+                    terminalSettings, vault, edits, sftpLinks, themes, knownHosts);
             var frame = new MainFrame(ctx, customThemes, () -> shutdown(io, sshOps, sessions, vault, edits, log));
             frameRef.set(frame);
             MacIntegration.install(frame);

@@ -1,5 +1,6 @@
 package dev.egateza.termul.ssh;
 
+import dev.egateza.termul.core.profile.AuthMethod;
 import dev.egateza.termul.core.profile.HostProfile;
 import dev.egateza.termul.ssh.auth.AuthSetup;
 import dev.egateza.termul.ssh.auth.CredentialProvider;
@@ -56,10 +57,22 @@ public final class SessionManager implements AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(SessionManager.class);
 
+    /**
+     * Field profil yang menentukan koneksi. Kalau berubah (mis. username diperbaiki), koneksi lama tidak dipakai untuk
+     * pemakai baru; pemakai lama tetap memakainya sampai dilepas.
+     */
+    record Target(String host, int port, String username, AuthMethod authMethod, String privateKeyPath,
+                  UUID jumpHostId) {
+        static Target of(HostProfile p) {
+            return new Target(p.host(), p.port(), p.username(), p.authMethod(), p.privateKeyPath(), p.jumpHostId());
+        }
+    }
+
     /** State per profil. Semua field di-guard oleh {@link SessionManager#lock}. */
     static final class Entry {
         final UUID profileId;
         final String address;
+        final Target target;
         final CompletableFuture<SshConnection> future = new CompletableFuture<>();
         /** Dibatalkan saat semua penunggu connect membatalkan: connect yang berjalan dihentikan. */
         final ConnectCancel abort = new ConnectCancel();
@@ -67,9 +80,10 @@ public final class SessionManager implements AutoCloseable {
         int waiting; // guarded by lock; pemakai yang masih menunggu connect selesai
         ScheduledFuture<?> pendingClose; // guarded by lock
 
-        Entry(UUID profileId, String address) {
-            this.profileId = profileId;
-            this.address = address;
+        Entry(HostProfile profile) {
+            this.profileId = profile.id();
+            this.address = profile.address();
+            this.target = Target.of(profile);
         }
 
         boolean isUsable() {
@@ -91,6 +105,14 @@ public final class SessionManager implements AutoCloseable {
 
     /** Batas panjang rantai jump host. */
     static final int MAX_JUMPS = 4;
+
+    /**
+     * Banner client ({@code SSH-2.0-TermUL}) dan nama global request keep-alive, supaya koneksi TermUL mudah dikenali
+     * di log server ({@code remote software version TermUL}, {@code rtype keepalive@termul}). RFC 4253: tanpa spasi
+     * dan tanpa tanda minus.
+     */
+    static final String CLIENT_IDENTIFICATION = "TermUL";
+    static final String HEARTBEAT_REQUEST = "keepalive@termul";
 
     private final Function<UUID, Optional<HostProfile>> profiles;
     private final SshClient client;
@@ -121,8 +143,10 @@ public final class SessionManager implements AutoCloseable {
         client.setKeyIdentityProvider(KeyIdentityProvider.EMPTY_KEYS_PROVIDER);
         client.setPasswordIdentityProvider(PasswordIdentityProvider.EMPTY_PASSWORDS_PROVIDER);
         CoreModuleProperties.PASSWORD_PROMPTS.set(client, AuthSetup.MAX_PASSWORD_ATTEMPTS);
+        CoreModuleProperties.CLIENT_IDENTIFICATION.set(client, CLIENT_IDENTIFICATION);
         if (!settings.heartbeatInterval().isZero()) {
             CoreModuleProperties.HEARTBEAT_INTERVAL.set(client, settings.heartbeatInterval());
+            CoreModuleProperties.HEARTBEAT_REQUEST.set(client, HEARTBEAT_REQUEST);
             CoreModuleProperties.HEARTBEAT_NO_REPLY_MAX.set(client, settings.heartbeatMaxMissed());
         }
         client.start();
@@ -146,9 +170,12 @@ public final class SessionManager implements AutoCloseable {
     }
 
     /** @param via profil yang sedang connect lewat profil ini (rantai jump host, untuk deteksi putaran) */
-    private SshLease acquire(HostProfile profile, List<UUID> via, ConnectCancel cancel) throws SshConnectException {
-        Objects.requireNonNull(profile, "profile");
+    private SshLease acquire(HostProfile requested, List<UUID> via, ConnectCancel cancel) throws SshConnectException {
+        Objects.requireNonNull(requested, "profile");
         Objects.requireNonNull(cancel, "cancel");
+        // Pemanggil (tab, panel SFTP, sesi edit) bisa memegang versi profil saat dibuka: pakai versi terbaru dari
+        // store, supaya username/host/key yang sudah diperbaiki langsung berlaku saat "Coba lagi"/reconnect.
+        HostProfile profile = profiles.apply(requested.id()).orElse(requested);
         if (closed.get()) {
             throw new IllegalStateException("SessionManager sudah ditutup");
         }
@@ -161,10 +188,21 @@ public final class SessionManager implements AutoCloseable {
         var waiter = new Waiter();
         synchronized (lock) {
             entry = entries.get(profile.id());
-            if (entry == null || !entry.isUsable()) {
-                entry = new Entry(profile.id(), profile.address());
+            if (entry == null || !entry.isUsable() || !entry.target.equals(Target.of(profile))) {
+                Entry outdated = entry;
+                entry = new Entry(profile);
                 entries.put(profile.id(), entry);
                 owner = true;
+                if (outdated != null && outdated.isUsable()) {
+                    log.info("Profil {} diubah (host/user/auth): koneksi baru dibuat, koneksi lama ke {} dipakai "
+                            + "sampai pemakainya selesai", profile.name(), outdated.address);
+                    if (outdated.refs == 0) {
+                        if (outdated.pendingClose != null) {
+                            outdated.pendingClose.cancel(false);
+                        }
+                        closeEntry(outdated);
+                    }
+                }
             }
             entry.refs++;
             entry.waiting++;
@@ -249,7 +287,11 @@ public final class SessionManager implements AutoCloseable {
         synchronized (lock) {
             entry.refs--;
             log.info("Pemakai koneksi {} dilepas (sisa: {})", entry.address, entry.refs);
-            if (entry.refs > 0 || entries.get(entry.profileId) != entry) {
+            if (entry.refs > 0) {
+                return;
+            }
+            if (entries.get(entry.profileId) != entry) { // sudah diganti koneksi baru (profil diubah / putus)
+                closeEntry(entry);
                 return;
             }
             if (closed.get() || settings.releaseGrace().isZero()) {

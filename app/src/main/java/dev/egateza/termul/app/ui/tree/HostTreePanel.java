@@ -53,6 +53,9 @@ public final class HostTreePanel extends JPanel {
 
         void delete(HostProfile profile);
 
+        /** Hapus host key profil ini dari known_hosts (mis. server di-reinstall); konfirmasi dulu. */
+        void forgetHostKey(HostProfile profile);
+
         void newGroup(String parent);
 
         void renameGroup(String group);
@@ -257,6 +260,8 @@ public final class HostTreePanel extends JPanel {
                 menu.add(item(AppIcon.STAR, I18n.t(favorite ? "tree.menu.unfavorite" : "tree.menu.favorite"),
                         () -> actions.setFavorite(p, !favorite)));
                 menu.add(item(null, I18n.t("tree.menu.delete"), () -> actions.delete(p)));
+                menu.addSeparator();
+                menu.add(item(null, I18n.t("tree.menu.forgetHostKey"), () -> actions.forgetHostKey(p)));
             }
             case GroupNode g -> {
                 menu.add(item(AppIcon.SERVER, I18n.t("tree.menu.newHostInGroup"), () -> actions.newHost(g.path())));

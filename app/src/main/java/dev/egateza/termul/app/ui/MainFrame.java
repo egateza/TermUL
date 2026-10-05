@@ -8,6 +8,7 @@ import dev.egateza.termul.app.edit.ValidationHooksDialog;
 import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.app.log.LogBuffer;
 import dev.egateza.termul.app.log.LogPanel;
+import dev.egateza.termul.app.ssh.KnownHostsDialog;
 import dev.egateza.termul.app.monitor.HostStatusBar;
 import dev.egateza.termul.app.monitor.ResourceMonitor;
 import dev.egateza.termul.app.sftp.ActivityBar;
@@ -31,6 +32,7 @@ import dev.egateza.termul.core.profile.OsInfo;
 import dev.egateza.termul.core.profile.ProfileStore;
 import dev.egateza.termul.core.theme.CustomTheme;
 import dev.egateza.termul.ssh.OsDetector;
+import dev.egateza.termul.ssh.hostkey.KnownHostsStore;
 import dev.egateza.termul.terminal.SshTtyConnector;
 import dev.egateza.termul.sftp.edit.RemoteEditSession;
 import dev.egateza.termul.vault.SecretType;
@@ -411,6 +413,14 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         showHostStatus.setToolTipText(I18n.t("main.menu.settings.hostStatus.tooltip"));
         showHostStatus.addActionListener(e -> setHostStatusVisible(showHostStatus.isSelected()));
         settings.add(showHostStatus);
+        settings.addSeparator();
+        settings.add(menuItem(null, I18n.t("main.menu.settings.knownHosts"), null,
+                () -> new KnownHostsDialog(this, ctx.knownHosts(), io).setVisible(true)));
+        var openConfigDir = menuItem(AppIcon.FOLDER_OPEN, I18n.t("main.menu.settings.openConfigDir"), null,
+                () -> UiAsync.run(io, () -> LogPanel.openFolder(ctx.paths().configDir()),
+                        err -> Dialogs.error(this, I18n.t("main.error.openConfigDir"), err)));
+        openConfigDir.setToolTipText(ctx.paths().configDir().toString());
+        settings.add(openConfigDir);
         bar.add(settings);
         bar.add(javax.swing.Box.createHorizontalGlue());
         modeToggle.setFocusable(false);
@@ -1459,6 +1469,24 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             SecretChange.discardAll(result.secrets());
             Dialogs.error(this, I18n.t("main.error.saveSecret"), err);
         });
+    }
+
+    @Override
+    public void forgetHostKey(HostProfile profile) {
+        KnownHostsStore knownHosts = ctx.knownHosts();
+        String label = KnownHostsStore.hostPattern(profile.host(), profile.port());
+        UiAsync.run(io, () -> knownHosts.entriesFor(profile.host(), profile.port()), entries -> {
+            if (entries.isEmpty()) {
+                Dialogs.info(this, I18n.t("knownHosts.remove.title"), I18n.t("knownHosts.forget.none", profile.name(), label));
+                return;
+            }
+            if (!KnownHostsDialog.confirmRemove(this, entries)) {
+                return;
+            }
+            UiAsync.run(io, () -> knownHosts.remove(entries),
+                    removed -> Dialogs.info(this, I18n.t("knownHosts.remove.title"), I18n.t("knownHosts.forget.done", label)),
+                    err -> Dialogs.error(this, I18n.t("knownHosts.error.write"), err));
+        }, err -> Dialogs.error(this, I18n.t("knownHosts.error.read"), err));
     }
 
     @Override

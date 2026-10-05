@@ -4,6 +4,7 @@ import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.app.sftp.SftpPanel;
 import dev.egateza.termul.app.ui.AppIcon;
 import dev.egateza.termul.app.ui.Dialogs;
+import dev.egateza.termul.app.ui.PacmanLoader;
 import dev.egateza.termul.app.ui.Shortcuts;
 import dev.egateza.termul.app.ui.UiAsync;
 import dev.egateza.termul.app.vault.VaultGate;
@@ -37,7 +38,6 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 import javax.swing.JTextArea;
-import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -240,7 +240,7 @@ public final class TerminalTab extends JPanel {
         }
         hideBanner();
         gate.set(TerminalState.CONNECTING);
-        showCenter(centerMessage(I18n.t("tab.connecting", profile.address())));
+        showCenter(PacmanLoader.withMessage(I18n.t("tab.connecting", latestProfile().address())));
         stateListener.run();
         var cancel = newConnectCancel();
         pending = UiAsync.run(sshOps,
@@ -311,7 +311,7 @@ public final class TerminalTab extends JPanel {
             widget.close(); // terminal lama yang beku setelah koneksi putus
         }
         connector = tty;
-        responder = new PromptResponder(profile.username(), new PromptResponder.Listener() {
+        responder = new PromptResponder(latestProfile().username(), new PromptResponder.Listener() {
             @Override
             public void respond(PromptResponder.Kind kind) {
                 SwingUtilities.invokeLater(() -> autoInject(kind, tty));
@@ -350,7 +350,7 @@ public final class TerminalTab extends JPanel {
         if (disposed) {
             return;
         }
-        log.info("Connect ke {} gagal: {}", profile.address(), error.getMessage());
+        log.info("Connect ke {} gagal: {}", latestProfile().address(), error.getMessage());
         String message = error instanceof SshConnectException ? error.getMessage()
                 : I18n.t("tab.error.unexpected", String.valueOf(error));
         var text = new JTextArea(message);
@@ -822,9 +822,5 @@ public final class TerminalTab extends JPanel {
         content.add(c, BorderLayout.CENTER);
         content.revalidate();
         content.repaint();
-    }
-
-    private static JLabel centerMessage(String text) {
-        return new JLabel(text, SwingConstants.CENTER);
     }
 }

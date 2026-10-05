@@ -25,10 +25,12 @@ import java.security.KeyPairGenerator;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.apache.sshd.common.config.keys.writer.openssh.OpenSSHKeyEncryptionContext;
 import org.apache.sshd.common.config.keys.writer.openssh.OpenSSHKeyPairResourceWriter;
 import org.junit.jupiter.api.AfterEach;
@@ -88,14 +90,21 @@ class SessionManagerTest {
     }
 
     private SessionManager newManager(Duration grace) {
-        var settings = new SshSettings(Duration.ofSeconds(10), Duration.ofSeconds(10), Duration.ofSeconds(10),
+        return new SessionManager(knownHosts, acceptAll, credentials, settings(grace));
+    }
+
+    private static SshSettings settings(Duration grace) {
+        return new SshSettings(Duration.ofSeconds(10), Duration.ofSeconds(10), Duration.ofSeconds(10),
                 Duration.ofSeconds(1), 2, grace);
-        return new SessionManager(knownHosts, acceptAll, credentials, settings);
     }
 
     private HostProfile profile(AuthMethod auth, String keyPath) {
-        return new HostProfile(UUID.randomUUID(), "test", "", "127.0.0.1", server.port(), TestSshServer.USER,
-                auth, keyPath, null, EnvironmentTag.DEV, null, null, false);
+        return profile(UUID.randomUUID(), "127.0.0.1", TestSshServer.USER, auth, keyPath);
+    }
+
+    private HostProfile profile(UUID id, String host, String user, AuthMethod auth, String keyPath) {
+        return new HostProfile(id, "test", "", host, server.port(), user, auth, keyPath, null, EnvironmentTag.DEV,
+                null, null, false);
     }
 
     @Test
@@ -121,6 +130,13 @@ class SessionManagerTest {
             shell.close(false);
         }
         assertThat(Files.readString(knownHosts.file())).startsWith("[127.0.0.1]:" + server.port());
+    }
+
+    @Test
+    void bannerClientMenandaiTermUL() throws Exception {
+        try (SshLease lease = manager.acquire(profile(AuthMethod.PASSWORD, null))) {
+            assertThat(lease.connection().session().getClientVersion()).isEqualTo("SSH-2.0-TermUL");
+        }
     }
 
     @Test
@@ -169,6 +185,48 @@ class SessionManagerTest {
                 .hasMessageContaining("gagal");
         assertThat(passwordPrompts.get()).isBetween(1, 3);
         assertThat(manager.connectionCount()).isZero();
+    }
+
+    @Test
+    void usernameYangDiperbaikiLangsungDipakaiWalauPemanggilMemegangProfilLama() throws Exception {
+        UUID id = UUID.randomUUID();
+        var stale = profile(id, "127.0.0.1", "salah", AuthMethod.PASSWORD, null);
+        var current = new AtomicReference<>(stale);
+        manager.close();
+        manager = new SessionManager(knownHosts, acceptAll, credentials, settings(Duration.ZERO),
+                pid -> Optional.of(current.get()).filter(p -> p.id().equals(pid)));
+
+        assertThatThrownBy(() -> manager.acquire(stale)).isInstanceOf(SshConnectException.class);
+
+        current.set(profile(id, "127.0.0.1", TestSshServer.USER, AuthMethod.PASSWORD, null)); // profil diedit
+        try (SshLease lease = manager.acquire(stale)) { // mis. tombol "Coba lagi" di tab yang lama
+            assertThat(lease.connection().profile().username()).isEqualTo(TestSshServer.USER);
+        }
+    }
+
+    @Test
+    void profilDiubahTidakMemakaiUlangKoneksiLama() throws Exception {
+        UUID id = UUID.randomUUID();
+        var current = new AtomicReference<>(profile(id, "127.0.0.1", TestSshServer.USER, AuthMethod.PASSWORD, null));
+        manager.close();
+        manager = new SessionManager(knownHosts, acceptAll, credentials, settings(Duration.ofSeconds(30)),
+                pid -> Optional.of(current.get()).filter(p -> p.id().equals(pid)));
+
+        SshLease a = manager.acquire(current.get());
+        SshLease other = manager.acquire(current.get()); // tab lain yang masih memakai koneksi lama
+        SshConnection first = a.connection();
+        a.close();
+
+        current.set(profile(id, "localhost", TestSshServer.USER, AuthMethod.PASSWORD, null));
+        SshLease b = manager.acquire(current.get());
+        assertThat(b.connection()).isNotSameAs(first);
+        assertThat(first.isOpen()).isTrue(); // pemakai lama tidak diputus
+        assertThat(manager.connectionCount()).isEqualTo(1);
+
+        other.close(); // pemakai terakhir koneksi lama: langsung ditutup, tanpa grace
+        await().atMost(Duration.ofSeconds(5)).until(() -> !first.isOpen());
+        assertThat(b.connection().isOpen()).isTrue();
+        b.close();
     }
 
     @Test

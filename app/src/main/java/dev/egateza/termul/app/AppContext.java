@@ -9,6 +9,7 @@ import dev.egateza.termul.core.profile.ProfileStore;
 import dev.egateza.termul.core.theme.ThemeStore;
 import dev.egateza.termul.sftp.SftpLinks;
 import dev.egateza.termul.ssh.SessionManager;
+import dev.egateza.termul.ssh.hostkey.KnownHostsStore;
 import dev.egateza.termul.terminal.SshTerminalFactory;
 import java.util.concurrent.ExecutorService;
 
@@ -17,9 +18,11 @@ import java.util.concurrent.ExecutorService;
  *
  * @param io         executor single-thread untuk disk I/O (profil, config)
  * @param sshOps     executor untuk operasi SSH blocking (connect, exec, SFTP)
+ * @param knownHosts known_hosts aplikasi (instance yang sama dengan verifier di {@code sessions})
  */
 public record AppContext(AppPaths paths, ConfigStore config, ProfileStore profiles, ExecutorService io,
                          ExecutorService sshOps,
                          SessionManager sessions, SshTerminalFactory terminals, TerminalSettings terminalSettings,
-                         VaultGate vault, EditManager edits, SftpLinks sftpLinks, ThemeStore themes) {
+                         VaultGate vault, EditManager edits, SftpLinks sftpLinks, ThemeStore themes,
+                         KnownHostsStore knownHosts) {
 }

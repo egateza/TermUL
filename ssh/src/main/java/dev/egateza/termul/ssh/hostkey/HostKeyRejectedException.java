@@ -23,7 +23,8 @@ public final class HostKeyRejectedException extends SshConnectException {
                     Kemungkinan ada serangan man-in-the-middle, atau server di-reinstall.
                     Fingerprint baru: %s
                     Fingerprint tersimpan: %s
-                    Koneksi ditolak. Hapus entry lama di pengaturan known_hosts kalau perubahan ini memang sah."""
+                    Koneksi ditolak. Kalau perubahan ini memang sah (sudah dicek ke server), hapus entry lama lewat klik kanan
+                    host > Lupakan host key, atau menu Pengaturan > Known hosts."""
                     .formatted(c.presented().hostLabel(), c.presented().fingerprint(), String.join(", ", c.knownFingerprints()));
             case HostKeyVerdict.RejectedByUser r -> "Host key " + r.presented().hostLabel() + " tidak dipercaya. Koneksi dibatalkan.";
             case HostKeyVerdict.Trusted t -> "Host key diterima";

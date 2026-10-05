@@ -7,6 +7,7 @@ import dev.egateza.termul.app.ui.ShakeEffect;
 import java.awt.AlphaComposite;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.event.KeyEvent;
 import java.awt.image.BufferedImage;
 import java.util.function.UnaryOperator;
 import javax.swing.SwingUtilities;
@@ -139,6 +140,20 @@ public final class ZoomableTermWidget extends JediTermWidget {
             var c = coords;
             if (c != null && c.getY() < 1) {
                 c.setY(1);
+            }
+        }
+
+        /**
+         * JediTerm 3.76 tidak menghapus selection saat user mengetik, jadi blok tetap tersorot padahal teks di
+         * bawahnya sudah berubah. Setiap karakter yang diketik (KEY_TYPED, termasuk Enter/Backspace) menghapus
+         * selection, kecuali kombinasi Cmd (shortcut macOS seperti Cmd+C tetap mempertahankan blok).
+         */
+        @Override
+        public void processKeyEvent(KeyEvent e) {
+            super.processKeyEvent(e);
+            if (e.getID() == KeyEvent.KEY_TYPED && !e.isMetaDown() && getSelection() != null) {
+                scrollArea(0, 0, 0); // satu-satunya jalur publik ke updateSelection(null); dy=0 tidak menggeser apa pun
+                repaint();
             }
         }
 
