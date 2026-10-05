@@ -2,6 +2,7 @@ package dev.egateza.termul.app;
 
 import dev.egateza.termul.app.edit.EditManager;
 import dev.egateza.termul.app.i18n.I18n;
+import dev.egateza.termul.app.monitor.MemoryTuning;
 import dev.egateza.termul.app.ssh.SwingCredentialProvider;
 import dev.egateza.termul.app.ssh.SwingHostKeyPrompt;
 import dev.egateza.termul.app.terminal.BackgroundImages;
@@ -72,6 +73,7 @@ public final class TermULApp {
         var store = new ProfileStore(paths.profilesFile());
         var config = new ConfigStore(paths.configFile());
         config.load();
+        MemoryTuning.platform().apply(MemoryTuning.Mode.fromId(config.current().memoryMode()));
         var themes = new ThemeStore(paths.themesDir());
         try {
             int installed = themes.installBundled(BundledThemes.load());

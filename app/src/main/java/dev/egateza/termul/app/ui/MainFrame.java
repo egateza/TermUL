@@ -10,6 +10,7 @@ import dev.egateza.termul.app.log.LogBuffer;
 import dev.egateza.termul.app.log.LogPanel;
 import dev.egateza.termul.app.ssh.KnownHostsDialog;
 import dev.egateza.termul.app.monitor.HostStatusPanel;
+import dev.egateza.termul.app.monitor.MemoryTuning;
 import dev.egateza.termul.app.monitor.ResourceMonitor;
 import dev.egateza.termul.app.sftp.ActivityBar;
 import dev.egateza.termul.app.sftp.SftpPanel;
@@ -442,6 +443,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                 }));
         settings.addSeparator();
         settings.add(buildHostStatusMenu());
+        settings.add(buildMemoryMenu());
         autoUpdate.setSelected(ctx.config().current().autoUpdateCheck());
         autoUpdate.setToolTipText(I18n.t("main.menu.settings.autoUpdate.tooltip"));
         autoUpdate.addActionListener(e -> setAutoUpdate(autoUpdate.isSelected()));
@@ -508,6 +510,34 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         var menu = new JMenu(I18n.t("main.menu.settings.hostStatusGroup"));
         menu.add(show);
         return menu;
+    }
+
+    /** Pengaturan → Penggunaan memori: hemat / normal, langsung berlaku tanpa restart. */
+    private JMenu buildMemoryMenu() {
+        var menu = new JMenu(I18n.t("main.menu.settings.memory"));
+        menu.setToolTipText(I18n.t("main.menu.settings.memory.tooltip"));
+        var group = new ButtonGroup();
+        var selected = MemoryTuning.Mode.fromId(ctx.config().current().memoryMode());
+        for (var mode : MemoryTuning.Mode.values()) {
+            var item = new JRadioButtonMenuItem(mode.label(), mode == selected);
+            item.setToolTipText(I18n.t("main.menu.settings.memory." + mode.id() + ".tooltip"));
+            item.addActionListener(e -> setMemoryMode(mode));
+            group.add(item);
+            menu.add(item);
+        }
+        return menu;
+    }
+
+    private void setMemoryMode(MemoryTuning.Mode mode) {
+        if (mode == MemoryTuning.Mode.fromId(ctx.config().current().memoryMode())) {
+            return;
+        }
+        MemoryTuning.platform().apply(mode);
+        if (mode == MemoryTuning.Mode.SAVER) {
+            resourceMonitor.runGc(); // kembalikan cadangan heap sekarang, tidak menunggu GC berikutnya
+        }
+        mutate(I18n.t("error.saveSettings"), () ->
+                ctx.config().save(ctx.config().current().withMemoryMode(mode.id())));
     }
 
     private void syncHostStatusMenu() {
