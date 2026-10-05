@@ -1,6 +1,7 @@
 package dev.egateza.termul.app.edit;
 
 import dev.egateza.termul.app.i18n.I18n;
+import dev.egateza.termul.core.Os;
 import dev.egateza.termul.core.config.EditorConfig;
 import java.awt.Desktop;
 import java.io.File;
@@ -18,29 +19,38 @@ import org.slf4j.LoggerFactory;
 /**
  * Menjalankan editor lokal. Di Windows, command tanpa path dicari di PATH (PATHEXT); script
  * {@code .cmd}/{@code .bat} (mis. {@code code.cmd} milik VS Code) dijalankan lewat {@code cmd.exe /c}.
+ * Di macOS, aplikasi yang dibuka dari Finder hanya mendapat PATH minimal, jadi command tanpa path juga dicari di
+ * folder CLI yang umum ({@link #extraUnixDirs}), dan {@code code} jatuh ke CLI di dalam bundle VS Code.
  *
  * <p>Aman karena path file yang diteruskan selalu path cache yang namanya sudah disanitasi
  * ({@code EditCache}), jadi tidak ada metakarakter {@code cmd.exe} dari nama file remote.
  *
- * <p>Template {@link #SYSTEM_DEFAULT} membuka file dengan aplikasi default Windows (file association), kecuali
- * file yang dijalankan Windows saat dibuka ({@link #isExecutable}) atau tanpa ekstensi: itu dibuka dengan editor
- * dari pengaturan, supaya file dari server tidak pernah dieksekusi di lokal.
+ * <p>Template {@link #SYSTEM_DEFAULT} membuka file dengan aplikasi default OS (file association Windows /
+ * LaunchServices macOS), kecuali file yang dijalankan OS saat dibuka ({@link #isExecutable}) atau tanpa ekstensi: itu
+ * dibuka dengan editor dari pengaturan, supaya file dari server tidak pernah dieksekusi di lokal.
  */
 public final class EditorLauncher {
 
     private static final Logger log = LoggerFactory.getLogger(EditorLauncher.class);
 
-    /** Template khusus: buka dengan aplikasi default Windows (double-click / menu "Buka"). */
+    /** Template khusus: buka dengan aplikasi default OS (double-click / menu "Buka"). */
     public static final String SYSTEM_DEFAULT = "<system-default>";
 
-    /** Ekstensi yang dijalankan (bukan dibuka untuk dibaca) lewat association Windows; ditambah {@code PATHEXT}. */
+    /**
+     * Ekstensi yang dijalankan (bukan dibuka untuk dibaca) lewat association Windows atau macOS; ditambah
+     * {@code PATHEXT}. Daftar gabungan dipakai di semua OS: lebih aman membuka file seperti itu dengan editor.
+     */
     static final Set<String> EXECUTABLE_EXTENSIONS = Set.of(
             "exe", "com", "bat", "cmd", "scr", "pif", "cpl", "msc", "msi", "msp", "mst", "appx", "appxbundle",
             "msix", "msixbundle", "appinstaller", "application", "appref-ms", "gadget", "diagcab", "msh", "msh1",
             "msh2", "mshxml", "msh1xml", "msh2xml", "ps1", "ps1xml", "ps2", "ps2xml", "psc1", "psc2", "psd1",
             "psm1", "vb", "vbe", "vbs", "js", "jse", "ws", "wsc", "wsf", "wsh", "hta", "jar", "reg", "inf", "scf",
             "lnk", "url", "website", "settingcontent-ms", "library-ms", "search-ms", "searchconnector-ms",
-            "chm", "hlp", "py", "pyw", "pyc", "pyz", "rb", "pl", "iso", "img", "vhd", "vhdx", "xll", "xbap");
+            "chm", "hlp", "py", "pyw", "pyc", "pyz", "rb", "pl", "iso", "img", "vhd", "vhdx", "xll", "xbap",
+            // macOS: bundle aplikasi/installer, script yang dibuka Terminal, AppleScript/Automator, lokasi/URL
+            "app", "command", "tool", "sh", "bash", "zsh", "csh", "ksh", "tcsh", "fish", "pkg", "mpkg", "dmg",
+            "terminal", "scpt", "scptd", "applescript", "workflow", "action", "prefpane", "kext", "plugin",
+            "bundle", "dylib", "webloc", "inetloc", "fileloc", "jnlp");
 
     private final Supplier<EditorConfig> config;
 
@@ -55,7 +65,7 @@ public final class EditorLauncher {
     /**
      * @param template command editor pilihan user, {@link #SYSTEM_DEFAULT}, atau null = editor sesuai
      *                 ekstensi/default dari pengaturan
-     * @return proses editor; null kalau dibuka dengan aplikasi default Windows (tidak ada proses untuk ditunggu)
+     * @return proses editor; null kalau dibuka dengan aplikasi default OS (tidak ada proses untuk ditunggu)
      */
     public Process launch(Path file, String template) throws IOException {
         if (SYSTEM_DEFAULT.equals(template)) {
@@ -79,7 +89,7 @@ public final class EditorLauncher {
     /** @return false kalau tidak bisa/tidak boleh dibuka lewat association (pemanggil memakai editor) */
     private static boolean openWithSystem(Path file) {
         String name = file.getFileName().toString();
-        if (!isWindows() || !Desktop.isDesktopSupported() || !Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) {
+        if (!Desktop.isDesktopSupported() || !Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) {
             return false;
         }
         if (extension(name).isEmpty() || isExecutable(name)) {
@@ -95,7 +105,7 @@ public final class EditorLauncher {
         }
     }
 
-    /** True kalau Windows menjalankan file ini (bukan membukanya untuk dibaca) lewat association. */
+    /** True kalau OS menjalankan file ini (bukan membukanya untuk dibaca) lewat association. */
     static boolean isExecutable(String fileName) {
         String ext = extension(fileName);
         if (ext.isEmpty()) {
@@ -120,8 +130,8 @@ public final class EditorLauncher {
     }
 
     static List<String> resolve(List<String> command) {
-        if (!isWindows()) {
-            return command;
+        if (!Os.current().isWindows()) {
+            return resolveUnix(command, System.getenv("PATH"), Path.of(System.getProperty("user.home")));
         }
         String exe = command.getFirst();
         Path resolved = exe.contains("\\") || exe.contains("/") ? Path.of(exe) : findOnPath(exe);
@@ -164,7 +174,47 @@ public final class EditorLauncher {
         return null;
     }
 
-    private static boolean isWindows() {
-        return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("windows");
+    /** macOS/Linux: command tanpa path diganti path absolut kalau ditemukan; kalau tidak, dibiarkan apa adanya. */
+    static List<String> resolveUnix(List<String> command, String pathEnv, Path home) {
+        String exe = command.getFirst();
+        if (exe.contains("/")) {
+            return command;
+        }
+        var dirs = new ArrayList<Path>();
+        if (pathEnv != null) {
+            for (String dir : pathEnv.split(":")) {
+                if (!dir.isBlank()) {
+                    dirs.add(Path.of(dir));
+                }
+            }
+        }
+        dirs.addAll(extraUnixDirs(home));
+        Path resolved = dirs.stream().map(d -> d.resolve(exe)).filter(EditorLauncher::isRunnable).findFirst()
+                .orElse(null);
+        if (resolved == null && exe.equals("code")) {
+            resolved = vsCodeCli(home).stream().filter(EditorLauncher::isRunnable).findFirst().orElse(null);
+        }
+        if (resolved == null) {
+            return command;
+        }
+        var result = new ArrayList<String>(command);
+        result.set(0, resolved.toString());
+        return result;
+    }
+
+    /** Folder CLI yang umum di macOS tapi tidak ada di PATH aplikasi yang dibuka dari Finder/Dock. */
+    static List<Path> extraUnixDirs(Path home) {
+        return List.of(Path.of("/opt/homebrew/bin"), Path.of("/usr/local/bin"), home.resolve(".local").resolve("bin"),
+                home.resolve("bin"));
+    }
+
+    /** CLI {@code code} di dalam bundle VS Code, kalau "Install 'code' command in PATH" belum dijalankan. */
+    static List<Path> vsCodeCli(Path home) {
+        String cli = "Visual Studio Code.app/Contents/Resources/app/bin/code";
+        return List.of(Path.of("/Applications").resolve(cli), home.resolve("Applications").resolve(cli));
+    }
+
+    private static boolean isRunnable(Path p) {
+        return Files.isRegularFile(p) && Files.isExecutable(p);
     }
 }

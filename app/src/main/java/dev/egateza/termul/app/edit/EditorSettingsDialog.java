@@ -2,6 +2,7 @@ package dev.egateza.termul.app.edit;
 
 import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.app.ui.Dialogs;
+import dev.egateza.termul.core.Os;
 import dev.egateza.termul.core.config.EditorConfig;
 import dev.egateza.termul.core.config.EditorConfig.NamedEditor;
 import java.awt.BorderLayout;
@@ -163,20 +164,33 @@ public final class EditorSettingsDialog {
         table.setRowSelectionInterval(target, target);
     }
 
+    /**
+     * Command untuk program yang dipilih dari file chooser. Bundle {@code .app} macOS dibuka lewat {@code open -a}
+     * (langsung kembali, sesi edit tetap dipantau); selain itu program dijalankan langsung.
+     */
+    static String programCommand(String path) {
+        String quoted = "\"" + path + "\" " + EditorConfig.FILE_PLACEHOLDER;
+        return path.endsWith(".app") || path.endsWith(".app/") ? "open -a " + quoted : quoted;
+    }
+
     /** Form tambah/ubah satu editor (seksi Editor + Pemilihan otomatis). Diulang sampai valid atau dibatalkan. */
     private static Optional<NamedEditor> editOne(Component parent, List<NamedEditor> all, NamedEditor existing) {
         var name = new JTextField(existing == null ? "" : existing.name());
         var command = new JTextField(existing == null ? "" : existing.command(), 34);
         var mask = new JTextField(existing == null ? NamedEditor.ALL : existing.mask());
         var browse = new JButton(I18n.t("edit.form.browse"));
+        boolean mac = Os.current().isMac();
         browse.addActionListener(e -> {
             var chooser = new JFileChooser();
             chooser.setDialogTitle(I18n.t("edit.form.chooseTitle"));
-            chooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter(
-                    I18n.t("edit.form.programFilter"), "exe", "cmd", "bat"));
+            if (mac) {
+                chooser.setFileSelectionMode(JFileChooser.FILES_AND_DIRECTORIES); // bundle .app adalah folder
+            } else {
+                chooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter(
+                        I18n.t("edit.form.programFilter"), "exe", "cmd", "bat"));
+            }
             if (chooser.showOpenDialog(parent) == JFileChooser.APPROVE_OPTION) {
-                command.setText("\"" + chooser.getSelectedFile().getAbsolutePath() + "\" "
-                        + EditorConfig.FILE_PLACEHOLDER);
+                command.setText(programCommand(chooser.getSelectedFile().getAbsolutePath()));
                 if (name.getText().isBlank()) {
                     String file = chooser.getSelectedFile().getName();
                     int dot = file.lastIndexOf('.');
@@ -184,11 +198,12 @@ public final class EditorSettingsDialog {
                 }
             }
         });
-        var notepad = new JButton(I18n.t("edit.form.notepad"));
+        var notepad = new JButton(I18n.t(mac ? "edit.form.textEdit" : "edit.form.notepad"));
         notepad.addActionListener(e -> {
-            command.setText("notepad " + EditorConfig.FILE_PLACEHOLDER);
+            // TextEdit lewat "open -e": langsung kembali (tanpa menunggu), sesi edit tetap dipantau
+            command.setText((mac ? "open -e " : "notepad ") + EditorConfig.FILE_PLACEHOLDER);
             if (name.getText().isBlank()) {
-                name.setText("Notepad");
+                name.setText(mac ? "TextEdit" : "Notepad");
             }
         });
 
