@@ -165,7 +165,8 @@ public class SftpPanel extends JPanel {
         bind(KeyEvent.VK_BACK_SPACE, 0, "up", this::goUp);
         bind(KeyEvent.VK_F5, 0, "refresh", this::refresh);
 
-        toolbar.add(button(AppIcon.UPLOAD, I18n.t("sftp.toolbar.upload"), I18n.t("sftp.toolbar.upload.tip"), this::chooseUpload));
+        toolbar.add(button(AppIcon.UPLOAD, I18n.t("sftp.toolbar.upload"), I18n.t("sftp.toolbar.upload.tip",
+                dev.egateza.termul.core.Os.current().isMac() ? "Finder" : "Explorer"), this::chooseUpload));
         toolbar.add(button(AppIcon.DOWNLOAD, I18n.t("sftp.toolbar.download"), I18n.t("sftp.toolbar.download.tip"), this::downloadSelected));
         toolbar.addSeparator();
         toolbar.add(button(AppIcon.FOLDER_PLUS, null, I18n.t("sftp.toolbar.mkdir.tip"), this::mkdir));

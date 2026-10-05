@@ -66,7 +66,7 @@ public final class FontSettingsDialog {
         form.setBorder(BorderFactory.createEmptyBorder(10, 10, 6, 10));
         addRow(form, 0, I18n.t("font.ui"), uiBox, uiPreview);
         addRow(form, 2, I18n.t("font.terminal"), terminalBox, terminalPreview);
-        var hint = new JLabel(I18n.t("font.hint"));
+        var hint = new JLabel(I18n.t("font.hint", Shortcuts.menuKeyName()));
         var g = new GridBagConstraints();
         g.gridx = 0;
         g.gridy = 4;

@@ -182,7 +182,8 @@ public final class ProfileDialog extends JDialog {
         browseKey.setEnabled(key);
         boolean prod = environment.getSelectedItem() == EnvironmentTag.PROD;
         autoSudo.setToolTipText(prod
-                ? I18n.t("profile.autoSudo.tooltip.prod")
+                ? I18n.t("profile.autoSudo.tooltip.prod",
+                        Shortcuts.text(Shortcuts.menuShift(java.awt.event.KeyEvent.VK_P)))
                 : I18n.t("profile.autoSudo.tooltip"));
     }
 

@@ -4,6 +4,7 @@ import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.app.sftp.SftpPanel;
 import dev.egateza.termul.app.ui.AppIcon;
 import dev.egateza.termul.app.ui.Dialogs;
+import dev.egateza.termul.app.ui.Shortcuts;
 import dev.egateza.termul.app.ui.UiAsync;
 import dev.egateza.termul.app.vault.VaultGate;
 import dev.egateza.termul.core.profile.HostProfile;
@@ -564,11 +565,11 @@ public final class TerminalTab extends JPanel {
 
     /**
      * Arah zoom dari shortcut: Ctrl + (+, =, numpad +) → 1, Ctrl + (-, numpad -) → -1, Ctrl+0 → 0 (reset).
-     * Shift boleh (di keyboard US, '+' = Shift+'='); Alt tidak.
+     * Di Mac memakai Cmd ({@link Shortcuts#MENU}). Shift boleh (di keyboard US, '+' = Shift+'='); Alt tidak.
      */
     static Integer zoomDirection(KeyEvent e) {
         int mods = e.getModifiersEx() & ~InputEvent.SHIFT_DOWN_MASK;
-        if (mods != InputEvent.CTRL_DOWN_MASK) {
+        if (mods != Shortcuts.MENU) {
             return null;
         }
         return switch (e.getKeyCode()) {

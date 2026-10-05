@@ -39,7 +39,6 @@ import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.KeyEventDispatcher;
 import java.awt.KeyboardFocusManager;
-import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
@@ -162,7 +161,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                 SwingUtilities.invokeLater(tab::focusTerminal);
             }
         });
-        // Ctrl+klik tab = pilih/batal pilih untuk digabung (Ctrl+G); klik biasa membatalkan semua pilihan
+        // Ctrl+klik tab (Cmd+klik di Mac) = pilih/batal pilih untuk digabung (Ctrl+G); klik biasa membatalkan semua pilihan
         tabs.addMouseListener(new java.awt.event.MouseAdapter() {
             @Override
             public void mousePressed(java.awt.event.MouseEvent e) {
@@ -173,7 +172,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                 if (index < 0) {
                     return;
                 }
-                if (e.isControlDown()) {
+                if (Shortcuts.isMenuDown(e)) {
                     var c = tabs.getComponentAt(index);
                     if (!marked.remove(c)) {
                         marked.add(c);
@@ -237,9 +236,9 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     }
 
     /**
-     * Shortcut aplikasi (Ctrl+Shift+…, Ctrl+F5) ditangkap sebelum JediTerm, supaya tetap jalan saat
-     * fokus di terminal dan tidak ikut terkirim ke remote. Shortcut shell biasa (Ctrl+F, Ctrl+N, ...)
-     * tidak disentuh.
+     * Shortcut aplikasi (Ctrl+Shift+…, Ctrl+F5; di Mac Cmd+Shift+…, Cmd+R, Cmd+W) ditangkap sebelum JediTerm, supaya
+     * tetap jalan saat fokus di terminal dan tidak ikut terkirim ke remote. Shortcut shell biasa (Ctrl+F, Ctrl+N, ...)
+     * tidak disentuh. Lihat {@link Shortcuts#isAppCombo}.
      */
     private boolean dispatchHotkey(KeyEvent e) {
         var tab = currentGroup().flatMap(g -> g.paneOf(e.getComponent())); // panel split tempat key diketik
@@ -247,7 +246,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             e.consume();
             return true;
         }
-        if (e.getID() != KeyEvent.KEY_PRESSED || !e.isControlDown() || e.isAltDown()) {
+        if (e.getID() != KeyEvent.KEY_PRESSED || !Shortcuts.isMenuDown(e) || e.isAltDown()) {
             return false;
         }
         // Ctrl+G hanya diambil kalau ada tab yang dipilih untuk digabung; selain itu tetap ^G ke shell
@@ -257,8 +256,8 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             e.consume();
             return true;
         }
-        boolean appCombo = e.isShiftDown() || e.getKeyCode() == KeyEvent.VK_F5;
-        if (!appCombo || e.getComponent() == null || SwingUtilities.getWindowAncestor(e.getComponent()) != this) {
+        if (!Shortcuts.isAppCombo(KeyStroke.getKeyStrokeForEvent(e)) || e.getComponent() == null
+                || SwingUtilities.getWindowAncestor(e.getComponent()) != this) {
             return false;
         }
         updateTerminalMenu(); // status bisa berubah sejak menu terakhir dibuka
@@ -331,54 +330,53 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private JMenuBar buildMenu() {
         var bar = new JMenuBar();
         var file = new JMenu(I18n.t("main.menu.file"));
-        file.add(menuItem(AppIcon.SERVER, I18n.t("main.menu.file.newHost"), KeyStroke.getKeyStroke(KeyEvent.VK_N, InputEvent.CTRL_DOWN_MASK),
+        file.add(menuItem(AppIcon.SERVER, I18n.t("main.menu.file.newHost"), Shortcuts.menu(KeyEvent.VK_N),
                 () -> newHost(hostTree.selectedGroup())));
         file.add(menuItem(AppIcon.FOLDER_PLUS, I18n.t("main.menu.file.newGroup"), null, () -> newGroup(hostTree.selectedGroup())));
         file.add(menuItem(null, I18n.t("main.menu.file.importSshConfig"), null, this::importSshConfig));
-        file.add(menuItem(null, I18n.t("main.menu.file.findHost"), KeyStroke.getKeyStroke(KeyEvent.VK_F, InputEvent.CTRL_DOWN_MASK),
+        file.add(menuItem(null, I18n.t("main.menu.file.findHost"), Shortcuts.menu(KeyEvent.VK_F),
                 () -> {
                     showHostList();
                     SwingUtilities.invokeLater(hostTree::focusSearch);
                 }));
         file.addSeparator();
-        file.add(menuItem(AppIcon.EXIT, I18n.t("main.menu.file.exit"), KeyStroke.getKeyStroke(KeyEvent.VK_F4, InputEvent.ALT_DOWN_MASK), this::exit));
+        file.add(menuItem(AppIcon.EXIT, I18n.t("main.menu.file.exit"), Shortcuts.exit(), this::exit));
         bar.add(file);
 
         var terminal = new JMenu(I18n.t("main.menu.terminal"));
-        int ctrlShift = InputEvent.CTRL_DOWN_MASK | InputEvent.SHIFT_DOWN_MASK;
-        terminal.add(miDuplicate = menuItem(null, I18n.t("main.menu.terminal.duplicate"), KeyStroke.getKeyStroke(KeyEvent.VK_T, ctrlShift),
+        terminal.add(miDuplicate = menuItem(null, I18n.t("main.menu.terminal.duplicate"), Shortcuts.menuShift(KeyEvent.VK_T),
                 () -> currentTab().ifPresent(t -> openTab(t.profile(), t.isSftpOnly()))));
-        terminal.add(miReconnect = menuItem(null, I18n.t("main.menu.terminal.reconnect"), KeyStroke.getKeyStroke(KeyEvent.VK_F5, InputEvent.CTRL_DOWN_MASK),
+        terminal.add(miReconnect = menuItem(null, I18n.t("main.menu.terminal.reconnect"), Shortcuts.reconnect(),
                 () -> currentTab().ifPresent(TerminalTab::reconnect)));
-        terminal.add(miCloseTab = menuItem(null, I18n.t("main.tab.close"), KeyStroke.getKeyStroke(KeyEvent.VK_W, ctrlShift),
+        terminal.add(miCloseTab = menuItem(null, I18n.t("main.tab.close"), Shortcuts.closeTab(),
                 () -> closeTab(tabs.getSelectedIndex())));
-        terminal.add(miSftp = menuItem(null, I18n.t("main.menu.terminal.sftp"), KeyStroke.getKeyStroke(KeyEvent.VK_F, ctrlShift),
+        terminal.add(miSftp = menuItem(null, I18n.t("main.menu.terminal.sftp"), Shortcuts.menuShift(KeyEvent.VK_F),
                 () -> currentTab().ifPresent(TerminalTab::toggleSftp)));
         terminal.addSeparator();
-        terminal.add(miGroup = menuItem(null, I18n.t("main.menu.terminal.group"), KeyStroke.getKeyStroke(KeyEvent.VK_G, InputEvent.CTRL_DOWN_MASK),
+        terminal.add(miGroup = menuItem(null, I18n.t("main.menu.terminal.group"), Shortcuts.menu(KeyEvent.VK_G),
                 this::groupMarkedTabs));
-        miGroup.setToolTipText(I18n.t("main.splitGroup.hint", String.valueOf(SplitPanes.MAX_PANES)));
-        terminal.add(miUngroup = menuItem(null, I18n.t("main.menu.terminal.ungroup"), KeyStroke.getKeyStroke(KeyEvent.VK_G, ctrlShift),
+        miGroup.setToolTipText(splitGroupHint());
+        terminal.add(miUngroup = menuItem(null, I18n.t("main.menu.terminal.ungroup"), Shortcuts.menuShift(KeyEvent.VK_G),
                 this::ungroupCurrent));
         terminal.add(buildSplitModeMenu());
-        terminal.add(miNextPane = menuItem(null, I18n.t("main.menu.terminal.nextPane"), KeyStroke.getKeyStroke(KeyEvent.VK_N, ctrlShift),
+        terminal.add(miNextPane = menuItem(null, I18n.t("main.menu.terminal.nextPane"), Shortcuts.menuShift(KeyEvent.VK_N),
                 () -> currentGroup().map(SplitPanes::next).ifPresent(TerminalTab::focusTerminal)));
-        terminal.add(miClosePane = menuItem(null, I18n.t("main.menu.terminal.closePane"), KeyStroke.getKeyStroke(KeyEvent.VK_X, ctrlShift),
+        terminal.add(miClosePane = menuItem(null, I18n.t("main.menu.terminal.closePane"), Shortcuts.menuShift(KeyEvent.VK_X),
                 this::closePane));
         terminal.addSeparator();
-        terminal.add(miZoomIn = menuItem(null, I18n.t("main.menu.terminal.zoomIn"), KeyStroke.getKeyStroke(KeyEvent.VK_EQUALS, InputEvent.CTRL_DOWN_MASK),
+        terminal.add(miZoomIn = menuItem(null, I18n.t("main.menu.terminal.zoomIn"), Shortcuts.menu(KeyEvent.VK_EQUALS),
                 () -> currentTab().ifPresent(t -> t.zoom(1))));
-        terminal.add(miZoomOut = menuItem(null, I18n.t("main.menu.terminal.zoomOut"), KeyStroke.getKeyStroke(KeyEvent.VK_MINUS, InputEvent.CTRL_DOWN_MASK),
+        terminal.add(miZoomOut = menuItem(null, I18n.t("main.menu.terminal.zoomOut"), Shortcuts.menu(KeyEvent.VK_MINUS),
                 () -> currentTab().ifPresent(t -> t.zoom(-1))));
-        terminal.add(miZoomReset = menuItem(null, I18n.t("main.menu.terminal.zoomReset"), KeyStroke.getKeyStroke(KeyEvent.VK_0, InputEvent.CTRL_DOWN_MASK),
+        terminal.add(miZoomReset = menuItem(null, I18n.t("main.menu.terminal.zoomReset"), Shortcuts.menu(KeyEvent.VK_0),
                 () -> currentTab().ifPresent(t -> t.zoom(0))));
         terminal.addSeparator();
-        terminal.add(menuItem(null, I18n.t("main.menu.terminal.editTracker"), KeyStroke.getKeyStroke(KeyEvent.VK_E, ctrlShift),
+        terminal.add(menuItem(null, I18n.t("main.menu.terminal.editTracker"), Shortcuts.menuShift(KeyEvent.VK_E),
                 this::showEditTracker));
         terminal.addSeparator();
-        terminal.add(miInjectSudo = menuItem(null, I18n.t("main.menu.terminal.injectSudo"), KeyStroke.getKeyStroke(KeyEvent.VK_P, ctrlShift),
+        terminal.add(miInjectSudo = menuItem(null, I18n.t("main.menu.terminal.injectSudo"), Shortcuts.menuShift(KeyEvent.VK_P),
                 () -> currentTab().ifPresent(t -> t.injectSecret(SecretType.SUDO_PASSWORD, ctx.vault()))));
-        terminal.add(miInjectRoot = menuItem(null, I18n.t("main.menu.terminal.injectRoot"), KeyStroke.getKeyStroke(KeyEvent.VK_R, ctrlShift),
+        terminal.add(miInjectRoot = menuItem(null, I18n.t("main.menu.terminal.injectRoot"), Shortcuts.menuShift(KeyEvent.VK_R),
                 () -> currentTab().ifPresent(t -> t.injectSecret(SecretType.ROOT_PASSWORD, ctx.vault()))));
         terminal.addMenuListener(new javax.swing.event.MenuListener() {
             @Override
@@ -424,7 +422,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         updateModeToggle();
 
         var help = new JMenu(I18n.t("main.menu.help"));
-        showLog.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_L, ctrlShift));
+        showLog.setAccelerator(Shortcuts.menuShift(KeyEvent.VK_L));
         showLog.setToolTipText(I18n.t("main.menu.help.showLog.tooltip"));
         showLog.addActionListener(e -> setLogVisible(showLog.isSelected()));
         help.add(showLog);
@@ -458,6 +456,11 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         EditorSettingsDialog.show(this, ctx.config().current().editors()).ifPresent(editors ->
                 mutate(I18n.t("error.saveSettings"), () ->
                         ctx.config().save(ctx.config().current().withEditors(editors))));
+    }
+
+    private static String splitGroupHint() {
+        return I18n.t("main.splitGroup.hint", String.valueOf(SplitPanes.MAX_PANES), Shortcuts.menuKeyName(),
+                Shortcuts.text(Shortcuts.menu(KeyEvent.VK_G)));
     }
 
     /** Ikon aplikasi (dibuat dengan {@code tools/MakeAppIcon.java}); ukuran yang tidak ada dilewati. */
@@ -529,7 +532,8 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             updateHostToggle();
         }
         welcome.setText("<html><center><b>TermUL</b><br><br>" + I18n.t("main.welcome.open") + "<br>"
-                + I18n.t("main.welcome.shortcuts")
+                + I18n.t("main.welcome.shortcuts", Shortcuts.text(Shortcuts.menu(KeyEvent.VK_N)),
+                        Shortcuts.text(Shortcuts.menu(KeyEvent.VK_F)))
                 + (floatingMode() ? "<br><br>" + I18n.t("main.welcome.floatingHint") : "")
                 + "</center></html>");
         body.revalidate();
@@ -1124,7 +1128,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private void groupMarkedTabs() {
         marked.removeIf(c -> tabs.indexOfComponent(c) < 0);
         if (marked.size() < 2) {
-            Dialogs.info(this, I18n.t("main.splitGroup.title"), I18n.t("main.splitGroup.hint", String.valueOf(SplitPanes.MAX_PANES)));
+            Dialogs.info(this, I18n.t("main.splitGroup.title"), splitGroupHint());
             return;
         }
         var indexes = marked.stream().mapToInt(tabs::indexOfComponent).sorted().toArray();
