@@ -18,16 +18,16 @@ class ClearBufferTest {
                 terminal.carriageReturn();
                 terminal.newLine();
             }
-            terminal.writeCharacters("ega@host:~$ ");
+            terminal.writeCharacters("user@host:~$ ");
             var coords = (TerminalCoordinates) terminal;
             assertThat(coords.getY()).isEqualTo(6);
 
             widget.getTerminalPanel().clearBuffer();
 
             assertThat(coords.getY()).isEqualTo(1); // JediTerm 3.76 tanpa perbaikan: 0 → getLine(-1)
-            assertThat(widget.getTerminalTextBuffer().getLine(0).getText()).startsWith("ega@host:~$");
+            assertThat(widget.getTerminalTextBuffer().getLine(0).getText()).startsWith("user@host:~$");
             terminal.writeCharacters("ls");
-            assertThat(widget.getTerminalTextBuffer().getLine(0).getText()).startsWith("ega@host:~$ ls");
+            assertThat(widget.getTerminalTextBuffer().getLine(0).getText()).startsWith("user@host:~$ ls");
         });
     }
 }

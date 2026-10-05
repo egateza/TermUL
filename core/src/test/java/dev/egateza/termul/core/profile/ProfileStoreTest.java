@@ -26,7 +26,7 @@ class ProfileStoreTest {
     void roundTripKeDisk() {
         Path file = dir.resolve("sub/profiles.json");
         var store = new ProfileStore(file);
-        var p = new HostProfile(UUID.randomUUID(), "db", "Produksi/Backend", "10.1.1.1", 2222, "ega",
+        var p = new HostProfile(UUID.randomUUID(), "db", "Produksi/Backend", "10.1.1.1", 2222, "dev",
                 AuthMethod.KEY, "C:\\keys\\id_ed25519", null, EnvironmentTag.PROD, "/srv", "catatan", false);
         store.save(p);
         store.addGroup("Staging");

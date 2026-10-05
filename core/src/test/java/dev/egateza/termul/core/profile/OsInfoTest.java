@@ -49,7 +49,7 @@ class OsInfoTest {
     void osTersimpanDiProfilDanJsonLamaTetapTerbaca() throws Exception {
         Path file = dir.resolve("profiles.json");
         var store = new ProfileStore(file);
-        var p = HostProfile.create("web", "10.0.0.1", "ega").withOs(new OsInfo("ubuntu", "22.04", "Ubuntu 22.04 LTS"));
+        var p = HostProfile.create("web", "10.0.0.1", "dev").withOs(new OsInfo("ubuntu", "22.04", "Ubuntu 22.04 LTS"));
         store.save(p);
         assertThat(new ProfileStore(file).load().find(p.id())).get()
                 .extracting(HostProfile::os).isEqualTo(p.os());

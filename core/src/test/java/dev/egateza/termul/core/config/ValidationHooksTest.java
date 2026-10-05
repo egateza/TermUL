@@ -49,7 +49,7 @@ class ValidationHooksTest {
 
         assertThat(hooks.find("/etc/nginx/sites-available/special")).map(Hook::command).contains("echo khusus");
         assertThat(hooks.find("/etc/nginx/nginx.conf")).map(Hook::command).contains("nginx -t");
-        assertThat(hooks.find("/home/ega/x.conf")).isEmpty();
+        assertThat(hooks.find("/home/user/x.conf")).isEmpty();
     }
 
     @Test

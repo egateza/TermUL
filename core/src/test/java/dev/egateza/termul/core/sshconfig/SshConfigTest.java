@@ -41,7 +41,7 @@ class SshConfigTest {
                     Port 2201
                     User diabaikan
                 Host *
-                    User ega
+                    User dev
                     Port 22
                 """));
 
@@ -103,7 +103,7 @@ class SshConfigTest {
                   ProxyCommand nc -X 5 -x proxy:1080 %%h %%p
                 """.formatted(key.toString().replace('\\', '/')));
 
-        var plan = SshConfigImport.plan(hosts, ProfileSnapshot.empty(), "ega", "Impor");
+        var plan = SshConfigImport.plan(hosts, ProfileSnapshot.empty(), "dev", "Impor");
         var byName = plan.stream().collect(Collectors.toMap(c -> c.profile().name(), Function.identity()));
 
         assertThat(byName).containsOnlyKeys("bastion", "app", "legacy", "edge@edge.example.com");
@@ -111,7 +111,7 @@ class SshConfigTest {
         var bastion = byName.get("bastion").profile();
         var edge = byName.get("edge@edge.example.com");
         assertThat(app.authMethod()).isEqualTo(AuthMethod.KEY);
-        assertThat(app.username()).isEqualTo("ega");
+        assertThat(app.username()).isEqualTo("dev");
         assertThat(app.group()).isEqualTo("Impor");
         assertThat(app.jumpHostId()).isEqualTo(bastion.id());
         assertThat(bastion.jumpHostId()).isEqualTo(edge.profile().id());
@@ -136,7 +136,7 @@ class SshConfigTest {
                   ProxyJump web
                 """);
 
-        var plan = SshConfigImport.plan(hosts, snapshot, "ega", "Impor");
+        var plan = SshConfigImport.plan(hosts, snapshot, "dev", "Impor");
 
         var web = plan.stream().filter(c -> c.profile().id().equals(old.id())).findFirst().orElseThrow();
         assertThat(web.existing()).isTrue();
@@ -150,7 +150,7 @@ class SshConfigTest {
     @Test
     void identityFileYangTidakAdaJatuhKeDefault() {
         var plan = SshConfigImport.plan(parse("Host x\n  IdentityFile ~/.ssh/tidak-ada\n"),
-                ProfileSnapshot.empty(), "ega", "Impor");
+                ProfileSnapshot.empty(), "dev", "Impor");
 
         assertThat(plan.getFirst().profile().authMethod()).isEqualTo(AuthMethod.AGENT);
         assertThat(plan.getFirst().note()).contains("tidak ditemukan");

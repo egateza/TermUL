@@ -6,7 +6,7 @@ import java.util.regex.Pattern;
 
 /**
  * Heuristik untuk konfirmasi keluar dari shell: mengenali prompt shell di baris kursor
- * (mis. {@code ega@host:~$ }, {@code [root@host ~]# }, {@code $ }) dan perintah setelahnya.
+ * (mis. {@code user@host:~$ }, {@code [root@host ~]# }, {@code $ }) dan perintah setelahnya.
  * Tidak sempurna (prompt bisa dikustom), jadi hanya dipakai untuk konfirmasi, bukan keamanan.
  */
 public final class ExitGuard {

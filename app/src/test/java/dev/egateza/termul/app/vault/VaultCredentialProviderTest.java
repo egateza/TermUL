@@ -26,7 +26,7 @@ class VaultCredentialProviderTest {
     private VaultGate gate;
     private final List<String> fallbackCalls = new ArrayList<>();
     private VaultCredentialProvider provider;
-    private final HostProfile profile = HostProfile.create("web", "10.0.0.1", "ega");
+    private final HostProfile profile = HostProfile.create("web", "10.0.0.1", "dev");
 
     @BeforeEach
     void setUp() {

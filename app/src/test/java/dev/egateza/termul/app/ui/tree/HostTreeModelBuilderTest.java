@@ -14,8 +14,8 @@ import org.junit.jupiter.api.Test;
 
 class HostTreeModelBuilderTest {
 
-    private final HostProfile web = HostProfile.create("web-1", "10.0.0.1", "ega").withGroup("Produksi/Backend");
-    private final HostProfile db = HostProfile.create("db-1", "10.0.0.2", "ega").withGroup("Produksi");
+    private final HostProfile web = HostProfile.create("web-1", "10.0.0.1", "dev").withGroup("Produksi/Backend");
+    private final HostProfile db = HostProfile.create("db-1", "10.0.0.2", "dev").withGroup("Produksi");
     private final HostProfile lab = HostProfile.create("lab", "192.168.1.5", "root");
     private final ProfileSnapshot snapshot =
             new ProfileSnapshot(1, List.of("Staging"), List.of(web, db, lab));

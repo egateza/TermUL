@@ -11,11 +11,11 @@ import org.junit.jupiter.api.Test;
 
 class PromptResponderTest {
 
-    private static final String PROMPT = "ega@server01:~$ ";
+    private static final String PROMPT = "user@server01:~$ ";
 
     private final AtomicLong clock = new AtomicLong();
     private final List<String> events = new CopyOnWriteArrayList<>();
-    private final PromptResponder responder = new PromptResponder("ega", new PromptResponder.Listener() {
+    private final PromptResponder responder = new PromptResponder("user", new PromptResponder.Listener() {
         @Override
         public void respond(Kind kind) {
             events.add("respond " + kind);
@@ -39,14 +39,14 @@ class PromptResponderTest {
     @Test
     void sudoSetelahEnterMengirimPasswordSekali() {
         responder.onEnter(PROMPT + "sudo systemctl restart nginx");
-        output("\r\n[sudo] password for ega: ");
+        output("\r\n[sudo] password for user: ");
 
         assertThat(events).containsExactly("respond SUDO");
     }
 
     @Test
     void suMemakaiPasswordRoot() {
-        responder.onEnter("[ega@host ~]$ su -");
+        responder.onEnter("[user@host ~]$ su -");
         output("\r\nPassword: ");
 
         assertThat(events).containsExactly("respond SU");
@@ -55,7 +55,7 @@ class PromptResponderTest {
     @Test
     void promptBahasaIndonesiaDikenali() {
         responder.onEnter(PROMPT + "sudo -i");
-        output("\r\n[sudo] kata sandi untuk ega: ");
+        output("\r\n[sudo] kata sandi untuk user: ");
 
         assertThat(events).containsExactly("respond SUDO");
     }
@@ -64,8 +64,8 @@ class PromptResponderTest {
     void promptBerwarnaDanTerpotongDiBeberapaChunkTetapDikenali() {
         responder.onEnter(PROMPT + "sudo ls");
         output("\r\n\u001b[1;31m[sudo] pass");
-        output("word for \u001b[0m\u001b]0;judul\u0007e");
-        output("ga: ");
+        output("word for \u001b[0m\u001b]0;judul\u0007u");
+        output("ser: ");
 
         assertThat(events).containsExactly("respond SUDO");
     }
@@ -74,8 +74,8 @@ class PromptResponderTest {
 
     @Test
     void promptPalsuTanpaArmTidakMemicu() {
-        output("isi log: [sudo] password for ega: ");
-        output("\r\n[sudo] password for ega: ");
+        output("isi log: [sudo] password for user: ");
+        output("\r\n[sudo] password for user: ");
 
         assertThat(events).isEmpty();
     }
@@ -83,9 +83,9 @@ class PromptResponderTest {
     @Test
     void perintahSelainSudoAtauSuTidakMeng_arm() {
         responder.onEnter(PROMPT + "cat /var/log/auth.log");
-        output("\r\n[sudo] password for ega: ");
+        output("\r\n[sudo] password for user: ");
         responder.onEnter(PROMPT + "echo sudo ls");
-        output("\r\n[sudo] password for ega: ");
+        output("\r\n[sudo] password for user: ");
         responder.onEnter(PROMPT + "sudoku");
         output("\r\nPassword: ");
         responder.onEnter(PROMPT + "super");
@@ -96,7 +96,7 @@ class PromptResponderTest {
 
     @Test
     void outputSebelumEnterTidakIkutDicocokkan() {
-        output("[sudo] password for ega: ");
+        output("[sudo] password for user: ");
         responder.onEnter(PROMPT + "sudo ls");
         output("\r\n");
 
@@ -107,7 +107,7 @@ class PromptResponderTest {
     void promptSetelahWindowLewatTidakMemicu() {
         responder.onEnter(PROMPT + "sudo apt update");
         advance(PromptResponder.ARM_WINDOW.plusMillis(1));
-        output("\r\n[sudo] password for ega: ");
+        output("\r\n[sudo] password for user: ");
 
         assertThat(events).isEmpty();
         assertThat(responder.isArmed()).isFalse();
@@ -124,8 +124,8 @@ class PromptResponderTest {
     @Test
     void promptYangBukanBarisTerakhirTidakMemicu() {
         responder.onEnter(PROMPT + "sudo ./script.sh");
-        output("\r\n[sudo] password for ega: lalu output lain");
-        output("\r\n[sudo] password for ega: \r\nbaris berikutnya");
+        output("\r\n[sudo] password for user: lalu output lain");
+        output("\r\n[sudo] password for user: \r\nbaris berikutnya");
 
         assertThat(events).isEmpty();
     }
@@ -141,7 +141,7 @@ class PromptResponderTest {
     @Test
     void polaSudoTidakDipakaiUntukSu() {
         responder.onEnter(PROMPT + "su -");
-        output("\r\n[sudo] password for ega: ");
+        output("\r\n[sudo] password for user: ");
 
         assertThat(events).isEmpty();
     }
@@ -149,7 +149,7 @@ class PromptResponderTest {
     @Test
     void barisBukanPromptShellTidakMeng_arm() {
         responder.onEnter("sudo ls"); // tidak ada prompt shell di depan (mis. di dalam editor/REPL)
-        output("\r\n[sudo] password for ega: ");
+        output("\r\n[sudo] password for user: ");
 
         assertThat(events).isEmpty();
     }
@@ -159,9 +159,9 @@ class PromptResponderTest {
     @Test
     void passwordDitolakTidakDikirimUlang() {
         responder.onEnter(PROMPT + "sudo ls");
-        output("\r\n[sudo] password for ega: ");
-        output("\r\nSorry, try again.\r\n[sudo] password for ega: ");
-        output("[sudo] password for ega: ");
+        output("\r\n[sudo] password for user: ");
+        output("\r\nSorry, try again.\r\n[sudo] password for user: ");
+        output("[sudo] password for user: ");
 
         assertThat(events).containsExactly("respond SUDO", "rejected SUDO");
         assertThat(responder.isArmed()).isFalse();
@@ -179,8 +179,8 @@ class PromptResponderTest {
     @Test
     void promptKeduaTanpaPesanGagalTetapTidakDikirim() {
         responder.onEnter(PROMPT + "sudo ls");
-        output("\r\n[sudo] password for ega: ");
-        output("\r\n[sudo] password for ega: ");
+        output("\r\n[sudo] password for user: ");
+        output("\r\n[sudo] password for user: ");
 
         assertThat(events).containsExactly("respond SUDO");
     }
@@ -188,11 +188,11 @@ class PromptResponderTest {
     @Test
     void enterBerikutnyaMeng_armUlangUntukPerintahBaru() {
         responder.onEnter(PROMPT + "sudo ls");
-        output("\r\n[sudo] password for ega: ");
+        output("\r\n[sudo] password for user: ");
         output("\r\nfile.txt\r\n" + PROMPT);
         responder.onEnter(PROMPT + "sudo -k");
         responder.onEnter(PROMPT + "sudo ls");
-        output("\r\n[sudo] password for ega: ");
+        output("\r\n[sudo] password for user: ");
 
         assertThat(events).containsExactly("respond SUDO", "respond SUDO");
     }
@@ -200,8 +200,8 @@ class PromptResponderTest {
     @Test
     void enterManualSaatPromptMen_disarm() {
         responder.onEnter(PROMPT + "sudo ls");
-        responder.onEnter("[sudo] password for ega: "); // user mengetik password sendiri lalu Enter
-        output("\r\n[sudo] password for ega: ");
+        responder.onEnter("[sudo] password for user: "); // user mengetik password sendiri lalu Enter
+        output("\r\n[sudo] password for user: ");
 
         assertThat(events).isEmpty();
     }
@@ -209,7 +209,7 @@ class PromptResponderTest {
     @Test
     void pengamatanGagalBerakhirSetelahWindow() {
         responder.onEnter(PROMPT + "sudo ls");
-        output("\r\n[sudo] password for ega: ");
+        output("\r\n[sudo] password for user: ");
         advance(PromptResponder.FAILURE_WINDOW.plusSeconds(1));
         output("\r\nSorry, try again.");
 

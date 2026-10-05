@@ -10,14 +10,14 @@ class HostProfileTest {
 
     @Test
     void createMemberiDefaultYangAman() {
-        var p = HostProfile.create("web-1", "10.0.0.1", "ega");
+        var p = HostProfile.create("web-1", "10.0.0.1", "dev");
 
         assertThat(p.port()).isEqualTo(22);
         assertThat(p.authMethod()).isEqualTo(AuthMethod.AGENT);
         assertThat(p.environment()).isEqualTo(EnvironmentTag.NONE);
         assertThat(p.autoSudo()).isFalse();
         assertThat(p.group()).isEmpty();
-        assertThat(p.address()).isEqualTo("ega@10.0.0.1");
+        assertThat(p.address()).isEqualTo("dev@10.0.0.1");
     }
 
     @Test

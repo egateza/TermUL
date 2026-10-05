@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 class SftpTableModelTest {
 
     private static RemoteEntry file(String name, long size, long mtime) {
-        return new RemoteEntry(name, "/x/" + name, RemoteEntry.Type.FILE, size, Instant.ofEpochSecond(mtime), 0644, "ega", "ega");
+        return new RemoteEntry(name, "/x/" + name, RemoteEntry.Type.FILE, size, Instant.ofEpochSecond(mtime), 0644, "dev", "dev");
     }
 
     private static RemoteEntry dir(String name) {

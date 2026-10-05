@@ -91,7 +91,7 @@ class AppServerKeyVerifierTest {
         var tmp = new KnownHostsStore(dir.resolve("tmp"));
         tmp.add("a", 22, key);
         String keyPart = Files.readString(tmp.file()).strip().substring(2);
-        Files.writeString(store.file(), "# komentar\n\nweb1,10.0.0.5 " + keyPart + " ega@laptop\n");
+        Files.writeString(store.file(), "# komentar\n\nweb1,10.0.0.5 " + keyPart + " user@laptop\n");
 
         assertThat(store.lookup("10.0.0.5", 22)).hasSize(1);
         assertThat(store.lookup("web1", 22)).hasSize(1);
