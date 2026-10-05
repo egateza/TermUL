@@ -104,7 +104,8 @@ public final class UpdateDialog extends JDialog {
         setButtons();
         runInBackground("update-check", () -> {
             Updater.Check result = updater.check();
-            log.info("Periksa update: {} (versi berjalan {})", result, updater.environment().running());
+            log.info("Periksa update: {} versi terbaru {} (versi berjalan {})", result.getClass().getSimpleName(),
+                    result.latest().version(), updater.environment().running());
             return result;
         }, this::showResult, err -> {
             showStatus(I18n.t("update.error", err.getMessage()), false);

@@ -107,7 +107,8 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] `ReleaseTool` (keygen, publish) + `tools/release.ps1` (gh release create); key dibuat di `~/.termul-release/`
 - [x] Uji end-to-end lokal di app-image: update 0.1.999 bertanda tangan dimuat + `.healthy`; jar diubah → ditolak, kembali ke bawaan
 - [x] Repo GitHub dibuat ulang dengan riwayat bersih (tanpa nama server/konteks internal), rilis pertama v0.1.127 (2026-10-05)
-- [ ] Uji update dari instalasi v0.1.127 ke v0.1.128 lewat GitHub sungguhan
+- [x] Uji update dari instalasi v0.1.127 (zip dari GitHub) ke v0.1.128 lewat GitHub sungguhan: klik menu via harness Swing, unduhan hanya termul-app (489 KB), setelah buka ulang Bootstrap menjalankan 0.1.128 + `.healthy`
+- [ ] Uji tombol "Restart sekarang" dari TermUL.exe asli (butuh `jpackage.app-path`, tidak tersedia di harness)
 
 ### Tambahan dari uji manual user (setelah Fase 4)
 - [x] Auth "Default": coba key `~/.ssh`, lalu jatuh ke password (sebelumnya error kalau tidak ada key)
