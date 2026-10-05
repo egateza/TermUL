@@ -123,6 +123,11 @@ Untuk perubahan seperti itu, **naikkan `UpdateProtocol.GENERATION`**
 menampilkan *"butuh installer baru"* beserta tombol ke halaman rilis, bukan memasang update yang tidak cocok. Tulis juga
 di catatan rilis bahwa installer baru diperlukan.
 
+Mengubah opsi JVM di `jpackage.javaOptions` (`app/pom.xml`, misalnya batas heap atau GC) juga hanya sampai lewat
+installer baru, karena opsi itu tertulis di `TermUL.cfg` folder instalasi. Ini **tidak** butuh kenaikan `GENERATION`:
+instalasi lama tetap menjalankan jar baru dengan opsi lamanya. Tulis di catatan rilis kalau pengguna disarankan memasang
+ulang untuk mendapatkan opsi baru.
+
 Menambah atau menaikkan versi library biasa **tidak** butuh installer baru, selama modul JDK yang dipakai tetap sama.
 Cek dengan perintah `jdeps` di [`SETUP.md`](SETUP.md#distribusi-profile-package-win).
 
