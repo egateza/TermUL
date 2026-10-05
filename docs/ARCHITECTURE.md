@@ -82,7 +82,10 @@ File watching:
 
 Aturan: callback ke UI selalu lewat `invokeLater`. `CompletableFuture` dari operasi SSH tidak boleh di-`join()` di EDT.
 
-## Layout storage (Windows)
+## Layout storage
+
+Lokasi per OS (`AppPaths`): Windows `%APPDATA%` / `%LOCALAPPDATA%`; macOS `~/Library/Application Support` /
+`~/Library/Caches`; OS lain `$XDG_CONFIG_HOME` / `$XDG_CACHE_HOME` (fallback `~/.config` / `~/.cache`). Isinya sama:
 
 ```
 %APPDATA%\TermUL\

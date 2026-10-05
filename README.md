@@ -1,6 +1,6 @@
 # TermUL (Terminal Utility)
 
-SSH client desktop pribadi untuk Windows, ala MobaXterm:
+SSH client desktop pribadi untuk Windows dan macOS, ala MobaXterm:
 
 - Host tree + profil SSH per server
 - Terminal SSH multi-tab (JediTerm)

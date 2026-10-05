@@ -4,7 +4,7 @@
 
 ## Ringkasan
 
-**TermUL** (Terminal Utility; sebelumnya bernama MyTerm) adalah SSH client desktop pribadi ala MobaXterm untuk Windows:
+**TermUL** (Terminal Utility; sebelumnya bernama MyTerm) adalah SSH client desktop pribadi ala MobaXterm untuk Windows (utama) dan macOS:
 
 - Daftar host (tree/grup) dan profil SSH per server
 - Terminal SSH dengan tab
@@ -16,7 +16,7 @@ Ini **bukan** terminal emulator lokal. PTY berada di server remote, sedangkan ap
 ## Pemilik & konteks pemakaian
 
 - Dipakai sendiri untuk mengelola server Linux (Ubuntu) produksi dan staging, termasuk platform Backend. **Keamanan credential adalah requirement utama, bukan fitur tambahan.**
-- OS host utama: Windows. Project berada di `D:\IdeaProjects\my-personal-terminal`, IDE IntelliJ IDEA.
+- OS host utama: Windows; macOS juga didukung (lokasi data, shortcut Cmd, editor, JAR portable — lihat `docs/SETUP.md`). Project berada di `D:\IdeaProjects\my-personal-terminal`, IDE IntelliJ IDEA.
 - Bahasa komunikasi: Bahasa Indonesia, istilah teknis tetap dalam bahasa Inggris.
 
 ## Tech stack (lihat `docs/adr/0001-tech-stack.md`)
@@ -29,7 +29,7 @@ Ini **bukan** terminal emulator lokal. PTY berada di server remote, sedangkan ap
 | Terminal widget | JediTerm (`jediterm-core`, `jediterm-ui`) dengan custom `TtyConnector` di atas `ChannelShell` |
 | UI | Swing + FlatLaf (JediTerm berbasis Swing, jadi jangan pakai JavaFX) |
 | Credential | Windows DPAPI via JNA, atau vault AES-256-GCM + Argon2id (keputusan terbuka, lihat `docs/SECURITY.md`) |
-| Storage profil | JSON (Jackson) di `%APPDATA%\TermUL\`; profil tidak boleh berisi secret |
+| Storage profil | JSON (Jackson) di `%APPDATA%\TermUL\` (macOS: `~/Library/Application Support/TermUL/`); profil tidak boleh berisi secret |
 | Logging | SLF4J + Logback |
 | Test | JUnit 5, AssertJ, Testcontainers (container `openssh-server` untuk integration test) |
 | Packaging | `jpackage` (.msi/.exe dengan runtime bawaan) |
@@ -68,6 +68,11 @@ Arah dependensi: `app → terminal, sftp → ssh → core`, dan `vault → core`
 3. Host key wajib diverifikasi terhadap `known_hosts` milik aplikasi. Host baru memakai TOFU dengan dialog fingerprint (SHA256). Kalau host key berubah, **tolak** koneksi dan tampilkan peringatan keras. Tidak boleh ada `AcceptAllServerKeyVerifier`, termasuk di kode dev.
 4. Auto-sudo trigger hanya boleh aktif dengan guard lengkap (armed window, match di baris terakhir, one-shot, berhenti saat "Sorry, try again"). Lihat `docs/SECURITY.md`.
 5. Upload remote edit wajib atomic (temp file lalu rename), memeriksa konflik (stat remote sebelum upload), dan mempertahankan mode file.
+
+### Lintas OS (Windows & macOS)
+- Cek OS lewat `dev.egateza.termul.core.Os`, jangan parsing `os.name` sendiri.
+- Shortcut aplikasi lewat `app.ui.Shortcuts` (Ctrl di Windows, Cmd di Mac), jangan hardcode `CTRL_DOWN_MASK`. Teks shortcut di pesan i18n memakai placeholder + `Shortcuts.text(...)`. Di Mac, Ctrl selalu milik terminal.
+- Fitur khusus Windows (DPAPI, wallpaper, ikon association, suara) wajib punya guard OS dan fallback yang aman.
 
 ### Gaya
 - Java 25: gunakan `record`, `sealed`, pattern matching (termasuk record patterns & `switch`), `var` secukupnya, dan flexible constructor bodies (validasi sebelum `super(...)`). Tidak memakai Lombok.

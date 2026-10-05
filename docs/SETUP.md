@@ -90,7 +90,46 @@ mvnw.cmd install -DskipTests                # install modul ke local repo
 mvnw.cmd -pl app exec:java                  # jalankan aplikasi (setelah install)
 mvnw.cmd install -DskipTests && mvnw.cmd -pl app -Ppackage-win -DskipTests package   # app-image portable → app/target/dist/TermUL/TermUL.exe
 mvnw.cmd -pl app -Ppackage-win -DskipTests package -Djpackage.type=msi        # installer .msi (butuh WiX di PATH)
+mvnw.cmd install -DskipTests && mvnw.cmd -pl app -Ppackage-jar -DskipTests package   # JAR portable lintas OS → app/target/dist/TermUL-<versi>-jar.zip
 ```
+
+## Distribusi JAR portable (profile `package-jar`, untuk macOS)
+
+- Bisa di-build dari Windows (JAR tidak terikat OS). Hasil:
+  - `app/target/dist/TermUL.jar`: **fat jar** (maven-shade-plugin) berisi semua library, langsung
+    `java --enable-native-access=ALL-UNNAMED -jar TermUL.jar`. Signature JAR (bcprov) dan `module-info` dibuang,
+    `META-INF/services` digabung, manifest `Multi-Release: true`.
+  - `Main-Class` fat jar = `dev.egateza.termul.launcher.Launcher` (`app/src/launcher/java`, di-compile `--release 8`
+    lewat execution `launcher-java8`). Double-click `.jar` memakai file association OS, bukan `JAVA_HOME`, dan sering
+    menunjuk JDK lama: di Java < 25 launcher mencari JDK 25+ (`JAVA_HOME`, `PATH`, `~/.jdks`, registry vendor JDK,
+    `Program Files` di semua drive; macOS `java_home -v 25+` dan `JavaVirtualMachines`) lalu menjalankan ulang JAR
+    (meneruskan `termul.home`), atau menampilkan dialog kalau tidak ada. Di Java 25+ langsung memanggil `TermULApp`.
+    IDE perlu menandai `src/launcher/java` sebagai source root secara manual (execution tambahan tidak ikut diimpor).
+  - `app/target/dist/TermUL-<versi>-jar.zip`: fat jar + launcher `TermUL.command` (macOS, double-click),
+    `termul.sh` (Linux), `TermUL.cmd` (Windows), `termul.png` (ikon Dock), dan `BACA-SAYA.txt`. Launcher macOS/Linux
+    ditulis LF dengan mode `0755` di dalam zip.
+- JAR biasa `app/target/termul-app-*.jar` (tanpa profile) tidak bisa dijalankan sendiri: ia mencari library di `libs/`
+  (dipakai jpackage).
+- Komputer tujuan butuh **JDK 25+** (mis. `brew install --cask temurin@25`). `TermUL.command` mencari Java lewat
+  `$JAVA_HOME`, `/usr/libexec/java_home -v 25+`, lalu `PATH`, dan menampilkan dialog kalau tidak ada.
+- Zip yang diunduh/dikirim lewat chat kena Gatekeeper: klik kanan `TermUL.command` → Open, atau
+  `xattr -dr com.apple.quarantine <folder>`.
+- `.app`/`.dmg` dengan runtime bawaan butuh `jpackage` di Mac (tidak bisa cross-build dari Windows) — belum ada profile-nya.
+
+## Perbedaan perilaku di macOS
+
+- Shortcut aplikasi memakai **Cmd** (`Shortcuts`): Cmd+Shift+… menggantikan Ctrl+Shift+…, Cmd+R sambung ulang,
+  Cmd+W tutup tab, Cmd+Q keluar (lewat menu aplikasi macOS), Cmd+klik tab untuk digabung. Ctrl tetap dikirim ke
+  terminal. Copy/paste/find terminal Cmd+C/V/F (bawaan JediTerm).
+- Menu bar tetap di dalam window (berisi tombol mode terang/gelap yang tidak didukung menu bar layar macOS);
+  About/Quit juga ada di menu aplikasi, ikon Dock dipasang saat start.
+- Editor: aplikasi dari Finder hanya mendapat PATH minimal, jadi command editor dicari juga di `/opt/homebrew/bin`,
+  `/usr/local/bin`, `~/.local/bin`, `~/bin`; `code` jatuh ke CLI di bundle VS Code. Tombol "Pakai TextEdit" =
+  `open -e {file}`; memilih bundle `.app` di dialog editor = `open -a "<app>" {file}` (tanpa menunggu, sesi edit tetap
+  dipantau). "Buka" (aplikasi default) memakai LaunchServices, file yang dijalankan macOS (`.command`, `.app`,
+  `.sh`, `.pkg`, ...) tetap dibuka dengan editor.
+- Tidak tersedia di macOS: "Ingat di PC ini" (menu disembunyikan, vault hanya dengan master password), wallpaper
+  desktop sebagai latar terminal, ikon file sesuai association, suara dialog sistem.
 
 ## Distribusi (profile `package-win`)
 

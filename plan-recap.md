@@ -90,6 +90,16 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] Pengaturan font/tema
 - [x] Profile Maven `package-win` (jlink + jpackage → app-image; `.msi` dengan `-Djpackage.type=msi`, butuh WiX)
 
+### Dukungan macOS (permintaan user 2026-10-01, branch `feat/macos-support`)
+- [x] `core.Os` + lokasi data per OS (`~/Library/Application Support|Caches/TermUL` di Mac, XDG di Linux)
+- [x] Shortcut per OS (`app.ui.Shortcuts`): Cmd di Mac, Cmd+R/Cmd+W/Cmd+Q, Cmd+klik tab; teks shortcut di i18n ikut OS
+- [x] Editor di Mac: cari CLI di folder umum + bundle VS Code, TextEdit, `open -a` untuk `.app`, "Buka" lewat LaunchServices
+- [x] Integrasi macOS: nama app, About/Quit di menu aplikasi, ikon Dock; font Menlo/Monaco/SF Mono
+- [x] Menu "Ingat di PC ini" disembunyikan kalau proteksi key OS tidak ada (`CredentialVault.isRememberSupported`)
+- [x] Profile `package-jar`: fat jar `TermUL.jar` (shade, launcher Java 8 yang mencari JDK 25 kalau di-double-click dengan Java lama) + zip dengan launcher `TermUL.command`/`termul.sh`/`TermUL.cmd` (build dari Windows)
+- [ ] Uji manual di MacBook (keyboard, editor, Gatekeeper, SFTP drag & drop dari Finder)
+- [ ] Opsional: Keychain macOS untuk "ingat di Mac ini", SSH agent via `SSH_AUTH_SOCK`, `.app`/`.dmg` via jpackage (CI macOS)
+
 ### Tambahan dari uji manual user (setelah Fase 4)
 - [x] Auth "Default": coba key `~/.ssh`, lalu jatuh ke password (sebelumnya error kalau tidak ada key)
 - [x] Terminal tidak lagi terlihat hang setelah logout: banner Reconnect + Enter untuk reconnect
@@ -146,6 +156,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 | Tanggal | Commit | Task |
 |---|---|---|
+| 2026-10-01 | `feat: dukungan macOS (lokasi data, shortcut Cmd, editor, integrasi app) dan JAR portable` | Dukungan macOS (permintaan user) |
 | 2026-10-01 | `feat(app): split terminal dengan menggabungkan tab (Ctrl+klik, Ctrl+G) dan ungroup` | Split via group tab, maks 3, mode split (permintaan user) |
 | 2026-10-01 | `feat(app): split terminal kanan/bawah di dalam satu tab` | Split terminal (diganti model group tab) |
 | 2026-10-01 | `docs: acceptance manual Fase 1–5 lulus` | Centang acceptance Fase 1–5 (uji manual user) |

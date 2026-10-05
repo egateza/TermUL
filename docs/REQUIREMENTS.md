@@ -60,11 +60,13 @@ Pekerjaan harian melibatkan banyak server Linux (produksi & staging). Masalah ya
 | N4 | Koneksi putus tidak membuat UI freeze, dan edit yang pending tidak hilang (file lokal tetap ada, upload bisa di-retry) |
 | N5 | Satu koneksi SSH per host dipakai bersama oleh shell, SFTP, dan exec |
 | N6 | Distribusi berupa installer Windows dengan runtime bawaan (tanpa perlu install JDK) |
-| N7 | Konfigurasi & data di `%APPDATA%\TermUL`, cache edit di `%LOCALAPPDATA%\TermUL` |
+| N7 | Konfigurasi & data di `%APPDATA%\TermUL`, cache edit di `%LOCALAPPDATA%\TermUL` (macOS: `~/Library/Application Support/TermUL` dan `~/Library/Caches/TermUL`) |
+| N8 | Bisa dipakai di macOS: shortcut memakai Cmd, editor/aplikasi default macOS, distribusi JAR portable (butuh JDK 25) |
 
 ## Out of scope (untuk sekarang)
 
 - Terminal lokal (cmd/PowerShell/WSL). Bisa ditambah nanti via pty4j.
 - RDP, VNC, X11 server, protokol serial/telnet.
 - Sinkronisasi profil ke cloud / multi-user.
-- Linux/macOS sebagai target utama. Kode tetap dijaga portable, tapi fitur DPAPI khusus Windows.
+- Linux sebagai target. macOS didukung (N8), tapi "ingat di PC ini" (DPAPI) masih khusus Windows; padanan Keychain
+  macOS dan `.app`/`.dmg` (jpackage, harus di-build di Mac) belum dikerjakan.
