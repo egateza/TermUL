@@ -4,7 +4,11 @@ package dev.egateza.termul.app.ui;
 public enum IconSet {
     FONT_AWESOME("fontawesome", "fa", "Font Awesome", "Font Awesome Free 7.3.1 (CC BY 4.0), fontawesome.com"),
     MATERIAL("material", "material", "Material Symbols (Google)",
-            "Material Symbols Rounded (Apache 2.0), fonts.google.com/icons");
+            "Material Symbols Rounded (Apache 2.0), fonts.google.com/icons"),
+    // set orisinal TermUL: digambar manual (tidak diunduh tools/AddIcon.java)
+    GARIS("garis", "garis", "Garis", "Garis: ikon orisinal TermUL"),
+    DUOTON("duoton", "duoton", "Duoton", "Duoton: ikon orisinal TermUL"),
+    PIKSEL("piksel", "piksel", "Piksel", "Piksel: ikon orisinal TermUL");
 
     private final String id;
     private final String dir;

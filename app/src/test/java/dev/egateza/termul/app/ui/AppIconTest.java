@@ -83,6 +83,25 @@ class AppIconTest {
     }
 
     @Test
+    void duotonKeepsTranslucentFillAfterRecolor() {
+        // bidang 30% harus tetap transparan setelah ColorFilter mengganti warnanya
+        AppIcon.use(IconSet.DUOTON);
+        var img = new BufferedImage(32, 32, BufferedImage.TYPE_INT_ARGB);
+        var g = img.createGraphics();
+        AppIcon.FOLDER.icon(32, () -> Color.RED).paintIcon(null, g, 0, 0);
+        g.dispose();
+        int center = img.getRGB(16, 18) >>> 24;
+        assertThat(center).as("alpha di tengah folder").isBetween(40, 140);
+    }
+
+    @Test
+    void newSetsAreSelectable() {
+        assertThat(IconSet.fromId("garis")).isEqualTo(IconSet.GARIS);
+        assertThat(IconSet.fromId("duoton")).isEqualTo(IconSet.DUOTON);
+        assertThat(IconSet.fromId("piksel")).isEqualTo(IconSet.PIKSEL);
+    }
+
+    @Test
     void unknownSetIdFallsBackToFontAwesome() {
         assertThat(IconSet.fromId("material")).isEqualTo(IconSet.MATERIAL);
         assertThat(IconSet.fromId(null)).isEqualTo(IconSet.FONT_AWESOME);

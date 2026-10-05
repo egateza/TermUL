@@ -14,7 +14,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Menambah/mengganti/menghapus ikon aplikasi untuk kedua set (Font Awesome Free + Material Symbols Rounded).
+ * Menambah/mengganti/menghapus ikon aplikasi untuk kedua set unduhan (Font Awesome Free + Material Symbols Rounded).
+ * Set orisinal TermUL (Garis, Duoton, Piksel) tidak diunduh: setelah menambah ikon, gambar SVG-nya secara manual di
+ * folder set masing-masing (tool ini menampilkan file yang perlu dibuat); {@code --remove} ikut menghapusnya.
  * Jalankan dari root project (JDK 25, tanpa compile):
  *
  * <pre>
@@ -38,6 +40,10 @@ public class AddIcon {
     static final Path ENUM = Path.of("app/src/main/java/dev/egateza/termul/app/ui/AppIcon.java");
     static final String BEGIN = "    // <icons> (dikelola oleh tools/AddIcon.java)";
     static final String END = "    // </icons>";
+
+    static final List<String> SETS = List.of("fa", "material");
+    /** Set orisinal TermUL (IconSet.GARIS/DUOTON/PIKSEL): tidak diunduh, SVG digambar manual. */
+    static final List<String> ORIGINAL_SETS = List.of("garis", "duoton", "piksel");
 
     static final Pattern NAME = Pattern.compile("[A-Z][A-Z0-9_]*");
     static final Pattern FA_NAME = Pattern.compile("((solid|regular|brands)/)?[a-z0-9-]+");
@@ -93,8 +99,12 @@ public class AddIcon {
                 if (icons.remove(name) == null) {
                     fail("Ikon " + name + " tidak ada.");
                 }
-                Files.deleteIfExists(file("fa", name));
-                Files.deleteIfExists(file("material", name));
+                for (String set : SETS) {
+                    Files.deleteIfExists(file(set, name));
+                }
+                for (String set : ORIGINAL_SETS) {
+                    Files.deleteIfExists(file(set, name));
+                }
                 System.out.println("Dihapus: " + name + " (pastikan tidak dipakai lagi di kode)");
             }
             default -> {
@@ -108,6 +118,12 @@ public class AddIcon {
                 check(MATERIAL_NAME, source.material(), "nama Material tidak valid, mis. folder_open");
                 download(name, source);
                 icons.put(name, source);
+                for (String set : ORIGINAL_SETS) {
+                    if (!Files.isRegularFile(file(set, name))) {
+                        System.out.println("Perlu digambar manual: " + file(set, name)
+                                + " (set orisinal TermUL; AppIconTest gagal sampai file ini ada)");
+                    }
+                }
             }
         }
         writeManifest(icons);
