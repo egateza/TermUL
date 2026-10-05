@@ -32,6 +32,28 @@ class AppConfigHostStatusTest {
     }
 
     @Test
+    void modeDefaultSemuaDanNilaiTidakDikenalJadiSemua(@TempDir Path dir) throws Exception {
+        assertThat(AppConfig.defaults().hostStatusMode()).isEqualTo(AppConfig.HOST_STATUS_ALL);
+        assertThat(AppConfig.defaults().withHostStatusMode("aneh").hostStatusMode()).isEqualTo(AppConfig.HOST_STATUS_ALL);
+        var file = dir.resolve("config.json");
+        Files.writeString(file, "{\"terminalFontSize\": 16.0, \"hostStatusBar\": true}");
+        assertThat(new ConfigStore(file).load().hostStatusMode()).isEqualTo(AppConfig.HOST_STATUS_ALL);
+    }
+
+    @Test
+    void modeDisimpanDanDipertahankanWitherLain(@TempDir Path dir) {
+        var store = new ConfigStore(dir.resolve("config.json"));
+        store.save(AppConfig.defaults().withHostStatusMode(AppConfig.HOST_STATUS_TEXT).withHostStatusBar(false)
+                .withStatusAnimation("ekg"));
+
+        var loaded = new ConfigStore(dir.resolve("config.json")).load();
+
+        assertThat(loaded.hostStatusMode()).isEqualTo(AppConfig.HOST_STATUS_TEXT);
+        assertThat(loaded.hostStatusBar()).isFalse();
+        assertThat(loaded.withTheme("x").hostStatusMode()).isEqualTo(AppConfig.HOST_STATUS_TEXT);
+    }
+
+    @Test
     void roundTripLewatConfigStore(@TempDir Path dir) {
         var store = new ConfigStore(dir.resolve("config.json"));
         store.save(AppConfig.defaults().withHostStatusBar(false));
