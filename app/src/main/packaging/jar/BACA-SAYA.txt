@@ -1,0 +1,26 @@
+TermUL - versi JAR portable
+===========================
+
+Butuh Java (JDK) 25 atau lebih baru di komputer ini, mis. Temurin 25 dari https://adoptium.net
+(macOS: "brew install --cask temurin@25").
+
+Menjalankan
+-----------
+macOS   : double-click TermUL.command.
+          Pertama kali, kalau macOS menolak ("unidentified developer"): klik kanan TermUL.command > Open > Open.
+          Atau sekali di Terminal:  xattr -dr com.apple.quarantine <folder TermUL ini>
+Linux   : ./termul.sh
+Windows : double-click TermUL.cmd
+
+Folder ini boleh dipindah ke mana saja. TermUL.jar sudah berisi semua library, jadi bisa juga langsung
+di-double-click, atau: java --enable-native-access=ALL-UNNAMED -jar TermUL.jar
+Kalau .jar terbuka dengan Java lama, TermUL mencari JDK 25 yang terpasang dan memakainya otomatis.
+
+Lokasi data (profil, vault, known_hosts, log) - tidak ikut di folder ini
+---------------------------------------------------------------------
+macOS   : ~/Library/Application Support/TermUL   (cache edit: ~/Library/Caches/TermUL)
+Windows : %APPDATA%\TermUL                      (cache edit: %LOCALAPPDATA%\TermUL)
+Linux   : ~/.config/TermUL                      (cache edit: ~/.cache/TermUL)
+
+Shortcut di macOS memakai Cmd sebagai pengganti Ctrl (mis. Cmd+Shift+P inject sudo, Cmd+R sambung ulang,
+Cmd+W tutup tab, Cmd+Q keluar). Ctrl tetap dikirim ke terminal (Ctrl+C, Ctrl+D, Ctrl+R, ...).

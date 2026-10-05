@@ -104,6 +104,29 @@
                 </configuration>
             </plugin>
             <plugin>
+                <!-- launcher fat jar (src/launcher/java) di-compile untuk Java 8: jalan walau .jar dibuka dengan Java lama -->
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>launcher-java8</id>
+                        <phase>compile</phase>
+                        <goals>
+                            <goal>compile</goal>
+                        </goals>
+                        <configuration>
+                            <release>8</release>
+                            <compileSourceRoots>
+                                <compileSourceRoot>${project.basedir}/src/launcher/java</compileSourceRoot>
+                            </compileSourceRoots>
+                            <compilerArgs combine.self="override">
+                                <arg>-Xlint:all,-options,-processing,-serial</arg>
+                            </compilerArgs>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
                 <configuration>
@@ -214,6 +237,89 @@
                                 <configuration>
                                     <executable>${java.home}/bin/jpackage</executable>
                                     <commandlineArgs>--type ${jpackage.type} --name TermUL --app-version ${jpackage.appVersion} --vendor egateza --description "SSH client pribadi" --input "${jpackage.input}" --main-jar ${project.build.finalName}.jar --main-class ${termul.mainClass} --dest "${jpackage.dest}" --icon "${project.basedir}/src/main/packaging/termul.ico" --add-modules ${jpackage.modules} --jlink-options "--strip-debug --no-man-pages --no-header-files --include-locales=en,id" --java-options --enable-native-access=ALL-UNNAMED ${jpackage.installerArgs}</commandlineArgs>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <!--
+            Distribusi JAR portable lintas OS (macOS/Linux/Windows); bisa di-build dari OS mana pun.
+            Butuh JDK 25 terpasang di komputer tujuan.
+              mvnw.cmd -Ppackage-jar -DskipTests package
+                → app/target/dist/TermUL.jar              (fat jar: java -jar TermUL.jar)
+                → app/target/dist/TermUL-<versi>-jar.zip  (fat jar + launcher per OS)
+        -->
+        <profile>
+            <id>package-jar</id>
+            <build>
+                <plugins>
+                    <!-- dideklarasikan sebelum assembly: keduanya di fase package, assembly butuh fat jar ini -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-shade-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>fat-jar</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>shade</goal>
+                                </goals>
+                                <configuration>
+                                    <!-- file terpisah: artifact utama (dipakai jpackage) tidak diganti -->
+                                    <outputFile>${project.build.directory}/dist/TermUL.jar</outputFile>
+                                    <createDependencyReducedPom>false</createDependencyReducedPom>
+                                    <filters>
+                                        <filter>
+                                            <artifact>*:*</artifact>
+                                            <excludes>
+                                                <!-- signature bcprov dkk. tidak valid lagi setelah digabung -->
+                                                <exclude>META-INF/*.SF</exclude>
+                                                <exclude>META-INF/*.DSA</exclude>
+                                                <exclude>META-INF/*.RSA</exclude>
+                                                <exclude>META-INF/*.EC</exclude>
+                                                <exclude>META-INF/INDEX.LIST</exclude>
+                                                <exclude>module-info.class</exclude>
+                                                <exclude>META-INF/versions/*/module-info.class</exclude>
+                                            </excludes>
+                                        </filter>
+                                    </filters>
+                                    <transformers>
+                                        <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                                        <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                            <!-- launcher Java 8: cari JDK 25 kalau di-double-click dengan Java lama -->
+                                            <mainClass>dev.egateza.termul.launcher.Launcher</mainClass>
+                                            <manifestEntries>
+                                                <!-- semua library ada di dalam jar; jangan cari libs/ -->
+                                                <Class-Path/>
+                                                <Enable-Native-Access>ALL-UNNAMED</Enable-Native-Access>
+                                                <!-- bcprov, jackson, dll. multi-release -->
+                                                <Multi-Release>true</Multi-Release>
+                                            </manifestEntries>
+                                        </transformer>
+                                    </transformers>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-assembly-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>portable-jar</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>single</goal>
+                                </goals>
+                                <configuration>
+                                    <descriptors>
+                                        <descriptor>src/main/assembly/portable-jar.xml</descriptor>
+                                    </descriptors>
+                                    <finalName>TermUL-${termul.versionBase}.${git.total.commit.count}</finalName>
+                                    <outputDirectory>${project.build.directory}/dist</outputDirectory>
+                                    <attach>false</attach>
                                 </configuration>
                             </execution>
                         </executions>

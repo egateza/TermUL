@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Zip JAR portable: fat jar TermUL.jar (hasil maven-shade-plugin) + launcher per OS. -->
+<assembly xmlns="http://maven.apache.org/ASSEMBLY/2.2.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/ASSEMBLY/2.2.0 https://maven.apache.org/xsd/assembly-2.2.0.xsd">
+    <id>jar</id>
+    <formats>
+        <format>zip</format>
+    </formats>
+    <baseDirectory>TermUL</baseDirectory>
+    <files>
+        <file>
+            <source>${project.build.directory}/dist/TermUL.jar</source>
+            <destName>TermUL.jar</destName>
+        </file>
+        <file>
+            <!-- ikon Dock untuk -Xdock:icon -->
+            <source>src/main/resources/dev/egateza/termul/app/icons/app-256.png</source>
+            <destName>termul.png</destName>
+        </file>
+    </files>
+    <fileSets>
+        <fileSet>
+            <!-- launcher macOS/Linux: wajib LF dan executable (mode ikut tersimpan di zip) -->
+            <directory>src/main/packaging/jar</directory>
+            <outputDirectory/>
+            <includes>
+                <include>TermUL.command</include>
+                <include>termul.sh</include>
+            </includes>
+            <lineEnding>unix</lineEnding>
+            <fileMode>0755</fileMode>
+        </fileSet>
+        <fileSet>
+            <directory>src/main/packaging/jar</directory>
+            <outputDirectory/>
+            <includes>
+                <include>TermUL.cmd</include>
+            </includes>
+            <lineEnding>dos</lineEnding>
+        </fileSet>
+        <fileSet>
+            <directory>src/main/packaging/jar</directory>
+            <outputDirectory/>
+            <includes>
+                <include>BACA-SAYA.txt</include>
+            </includes>
+        </fileSet>
+    </fileSets>
+</assembly>
