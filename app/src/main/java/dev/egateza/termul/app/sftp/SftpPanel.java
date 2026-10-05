@@ -166,6 +166,14 @@ public class SftpPanel extends JPanel {
                 }
             }
         });
+        table.addKeyListener(new java.awt.event.KeyAdapter() {
+            @Override
+            public void keyTyped(KeyEvent e) {
+                if (!e.isControlDown() && !e.isAltDown() && !e.isMetaDown() && jumpTo(e.getKeyChar(), e.getWhen())) {
+                    e.consume();
+                }
+            }
+        });
         bind(KeyEvent.VK_ENTER, 0, "open", () -> selectedEntries().stream().findFirst().ifPresent(this::activate));
         bind(KeyEvent.VK_BACK_SPACE, 0, "up", this::goUp);
         bind(KeyEvent.VK_F5, 0, "refresh", this::refresh);
@@ -251,6 +259,26 @@ public class SftpPanel extends JPanel {
             }
             table.requestFocusInWindow();
         }));
+    }
+
+    private final TypeAhead typeAhead = new TypeAhead();
+
+    /** Type-ahead: pilih baris pertama (urutan tampilan, sesudah filter) yang namanya berawalan teks yang diketik. */
+    private boolean jumpTo(char c, long when) {
+        String text = typeAhead.type(c, when);
+        if (text == null) {
+            return false;
+        }
+        var names = new ArrayList<String>(table.getRowCount());
+        for (int row = 0; row < table.getRowCount(); row++) {
+            names.add(model.entryAt(table.convertRowIndexToModel(row)).name());
+        }
+        int row = TypeAhead.find(names, table.getSelectionModel().getLeadSelectionIndex(), text);
+        if (row >= 0) {
+            table.setRowSelectionInterval(row, row);
+            table.scrollRectToVisible(table.getCellRect(row, 0, true));
+        }
+        return true;
     }
 
     private void applyFilter() {
