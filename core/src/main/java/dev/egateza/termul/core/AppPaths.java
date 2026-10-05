@@ -6,13 +6,16 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Function;
 
 /**
  * Lokasi data aplikasi.
  *
  * <ul>
- *   <li>{@code configDir} = {@code %APPDATA%\TermUL}: profil, known_hosts, vault, log</li>
- *   <li>{@code cacheDir} = {@code %LOCALAPPDATA%\TermUL}: cache file remote edit</li>
+ *   <li>{@code configDir}: profil, known_hosts, vault, log. Windows {@code %APPDATA%\TermUL}, macOS
+ *       {@code ~/Library/Application Support/TermUL}, lainnya {@code $XDG_CONFIG_HOME/TermUL} ({@code ~/.config})</li>
+ *   <li>{@code cacheDir}: cache file remote edit. Windows {@code %LOCALAPPDATA%\TermUL}, macOS
+ *       {@code ~/Library/Caches/TermUL}, lainnya {@code $XDG_CACHE_HOME/TermUL} ({@code ~/.cache})</li>
  * </ul>
  * System property {@code termul.home} meng-override keduanya (dev/test), supaya data asli tidak tersentuh.
  * Folder dari nama lama aplikasi ({@value #LEGACY_APP_DIR}) dipindah otomatis sekali ke nama baru.
@@ -46,12 +49,26 @@ public record AppPaths(Path configDir, Path cacheDir) {
         if (override != null && !override.isBlank()) {
             return new Detected(underRoot(Path.of(override)), List.of());
         }
-        Path userHome = Path.of(System.getProperty("user.home"));
-        Path appData = envPath("APPDATA", userHome.resolve(".config"));
-        Path localAppData = envPath("LOCALAPPDATA", userHome.resolve(".cache"));
+        var bases = bases(Os.current(), System::getenv, Path.of(System.getProperty("user.home")));
         var notes = new ArrayList<String>();
-        var paths = new AppPaths(appDir(appData, notes), appDir(localAppData, notes));
+        var paths = new AppPaths(appDir(bases.configDir(), notes), appDir(bases.cacheDir(), notes));
         return new Detected(paths, notes);
+    }
+
+    /**
+     * Folder induk (sebelum {@value #APP_DIR}) untuk config dan cache sesuai konvensi OS.
+     *
+     * @param env pembaca environment variable (null kalau tidak ada)
+     */
+    static AppPaths bases(Os os, Function<String, String> env, Path userHome) {
+        return switch (os) {
+            case WINDOWS -> new AppPaths(envPath(env, "APPDATA", userHome.resolve(".config")),
+                    envPath(env, "LOCALAPPDATA", userHome.resolve(".cache")));
+            case MAC -> new AppPaths(userHome.resolve("Library").resolve("Application Support"),
+                    userHome.resolve("Library").resolve("Caches"));
+            case OTHER -> new AppPaths(envPath(env, "XDG_CONFIG_HOME", userHome.resolve(".config")),
+                    envPath(env, "XDG_CACHE_HOME", userHome.resolve(".cache")));
+        };
     }
 
     /**
@@ -108,8 +125,8 @@ public record AppPaths(Path configDir, Path cacheDir) {
         return cacheDir.resolve("edit");
     }
 
-    private static Path envPath(String name, Path fallback) {
-        String value = System.getenv(name);
+    private static Path envPath(Function<String, String> env, String name, Path fallback) {
+        String value = env.apply(name);
         return value == null || value.isBlank() ? fallback : Path.of(value);
     }
 }

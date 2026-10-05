@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -44,5 +45,33 @@ class AppPathsTest {
 
         assertThat(AppPaths.appDir(base, notes)).isEqualTo(base.resolve(AppPaths.APP_DIR));
         assertThat(notes).isEmpty();
+    }
+
+    @Test
+    void windowsMemakaiAppDataDanLocalAppData() {
+        Path roaming = base.resolve("AppData").resolve("Roaming");
+        Path local = base.resolve("AppData").resolve("Local");
+        var env = Map.of("APPDATA", roaming.toString(), "LOCALAPPDATA", local.toString());
+        var b = AppPaths.bases(Os.WINDOWS, env::get, base);
+
+        assertThat(b.configDir()).isEqualTo(roaming);
+        assertThat(b.cacheDir()).isEqualTo(local);
+    }
+
+    @Test
+    void macMemakaiFolderLibrary() {
+        var b = AppPaths.bases(Os.MAC, Map.of("APPDATA", "abaikan")::get, base);
+
+        assertThat(b.configDir()).isEqualTo(base.resolve("Library").resolve("Application Support"));
+        assertThat(b.cacheDir()).isEqualTo(base.resolve("Library").resolve("Caches"));
+    }
+
+    @Test
+    void osLainMengikutiXdgDenganFallbackDotConfig() {
+        assertThat(AppPaths.bases(Os.OTHER, Map.<String, String>of()::get, base))
+                .isEqualTo(new AppPaths(base.resolve(".config"), base.resolve(".cache")));
+        var xdg = Map.of("XDG_CONFIG_HOME", base.resolve("cfg").toString(), "XDG_CACHE_HOME", " ");
+        assertThat(AppPaths.bases(Os.OTHER, xdg::get, base))
+                .isEqualTo(new AppPaths(base.resolve("cfg"), base.resolve(".cache")));
     }
 }
