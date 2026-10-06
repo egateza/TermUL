@@ -54,6 +54,11 @@ public final class ZoomableTermWidget extends JediTermWidget {
         ((ZoomPanel) getTerminalPanel()).pasteFilter = filter;
     }
 
+    /** Ganti clipboard sistem (untuk test, yang bisa berjalan headless). */
+    void useClipboard(TerminalCopyPasteHandler clipboard) {
+        ((ZoomPanel) getTerminalPanel()).clipboard = clipboard;
+    }
+
     /** Ukuran satu sel karakter, px (untuk test koordinat mouse). */
     java.awt.Dimension charSize() {
         return ((ZoomPanel) getTerminalPanel()).charSize();
@@ -62,21 +67,27 @@ public final class ZoomableTermWidget extends JediTermWidget {
     private static final class ZoomPanel extends TerminalPanel {
         // tanpa initializer: createCopyPasteHandler() dipanggil dari constructor TerminalPanel
         private volatile UnaryOperator<String> pasteFilter;
+        private volatile TerminalCopyPasteHandler clipboard; // null = clipboard sistem
 
         @Override
         protected TerminalCopyPasteHandler createCopyPasteHandler() {
-            var delegate = super.createCopyPasteHandler();
+            var system = super.createCopyPasteHandler();
             return new TerminalCopyPasteHandler() {
                 @Override
                 public void setContents(String text, boolean useSystemSelectionClipboardIfAvailable) {
-                    delegate.setContents(text, useSystemSelectionClipboardIfAvailable);
+                    delegate().setContents(text, useSystemSelectionClipboardIfAvailable);
                 }
 
                 @Override
                 public String getContents(boolean useSystemSelectionClipboardIfAvailable) {
-                    String text = delegate.getContents(useSystemSelectionClipboardIfAvailable);
+                    String text = delegate().getContents(useSystemSelectionClipboardIfAvailable);
                     var filter = pasteFilter;
                     return text == null || filter == null ? text : filter.apply(text);
+                }
+
+                private TerminalCopyPasteHandler delegate() {
+                    var c = clipboard;
+                    return c == null ? system : c;
                 }
             };
         }
@@ -183,6 +194,14 @@ public final class ZoomableTermWidget extends JediTermWidget {
          */
         @Override
         protected void processMouseEvent(MouseEvent e) {
+            if (copyPasteClick(e)) {
+                if (e.getID() == MouseEvent.MOUSE_PRESSED) {
+                    requestFocusInWindow();
+                    copyOrPaste();
+                }
+                e.consume(); // press, release, dan click: JediTerm membuka menunya di mouseClicked
+                return;
+            }
             if (e.getID() == MouseEvent.MOUSE_PRESSED && e.getClickCount() == 1 && extendsSelection(e)) {
                 requestFocusInWindow();
                 super.processMouseMotionEvent(asPlainDrag(e));
@@ -190,6 +209,34 @@ public final class ZoomableTermWidget extends JediTermWidget {
                 return;
             }
             super.processMouseEvent(e);
+        }
+
+        /**
+         * Klik kanan gaya Windows (kalau aktif di pengaturan). Shift+klik kanan tetap membuka menu bawaan JediTerm.
+         * Saat aplikasi remote memakai mouse reporting (htop, mc), klik kanan tetap diteruskan ke aplikasi itu.
+         */
+        private boolean copyPasteClick(MouseEvent e) {
+            return e.getButton() == MouseEvent.BUTTON3 && !e.isShiftDown()
+                    && settings instanceof TerminalSettings ts && ts.rightClickCopyPaste() && !isRemoteMouseAction(e);
+        }
+
+        /**
+         * Ada selection: copy lalu selection dihapus. Tidak ada: paste, tetap lewat {@link #pasteFilter}. Copy/paste
+         * JediTerm private, jadi dijalankan lewat action-nya (yang juga dipakai menu klik kanan).
+         */
+        private void copyOrPaste() {
+            boolean copy = getSelection() != null;
+            String name = (copy ? settings.getCopyActionPresentation() : settings.getPasteActionPresentation()).getName();
+            for (var action : getActions()) {
+                if (action.getName().equals(name)) {
+                    action.actionPerformed(null); // bukan isEnabled(): paste-nya membaca clipboard lewat pasteFilter
+                    break;
+                }
+            }
+            if (copy) {
+                scrollArea(0, 0, 0); // satu-satunya jalur publik ke updateSelection(null); dy=0 tidak menggeser apa pun
+                repaint();
+            }
         }
 
         /** Shift+drag melanjutkan selection; JediTerm 3.76 mengabaikan drag dengan Shift saat mouse reporting mati. */

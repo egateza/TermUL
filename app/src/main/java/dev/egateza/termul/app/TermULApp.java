@@ -25,6 +25,7 @@ import dev.egateza.termul.app.vault.VaultCredentialProvider;
 import dev.egateza.termul.app.vault.VaultGate;
 import dev.egateza.termul.app.vault.VaultSudoPassword;
 import dev.egateza.termul.core.AppPaths;
+import dev.egateza.termul.core.config.AppConfig;
 import dev.egateza.termul.core.config.ConfigStore;
 import dev.egateza.termul.core.theme.BundledThemes;
 import dev.egateza.termul.core.theme.ThemeStore;
@@ -124,6 +125,8 @@ public final class TermULApp {
             terminalSettings.setBackgroundImage(startupBackdrop, startupPalette.imageVisibility());
             terminalSettings.bell().setSound(config.current().bellSound());
             terminalSettings.bell().setShake(config.current().bellShake());
+            terminalSettings.setRightClickCopyPaste(
+                    AppConfig.RIGHT_CLICK_COPY_PASTE.equals(config.current().rightClick()));
             var ctx = new AppContext(paths, config, store, io, sshOps, sessions, new SshTerminalFactory(sessions),
                     terminalSettings, vault, edits, sftpLinks, themes, knownHosts);
             var frame = new MainFrame(ctx, customThemes, () -> shutdown(io, sshOps, sessions, vault, edits, log));

@@ -11,6 +11,7 @@ import java.awt.GraphicsEnvironment;
 import java.awt.image.BufferedImage;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -34,6 +35,7 @@ public final class TerminalSettings extends DefaultSettingsProvider {
     private final BellSettings bell;
     private final AtomicReference<Colors> colors; // null = warna bawaan JediTerm; dipakai bersama semua tab
     private final AtomicReference<Backdrop> backdrop; // null = tanpa gambar latar; dipakai bersama semua tab
+    private final AtomicBoolean rightClickCopyPaste; // true = klik kanan copy/paste gaya Windows; dipakai bersama semua tab
     private volatile Colors override; // null = ikut warna bersama; hanya untuk tab ini (warna khusus host)
     /**
      * Warna default yang dibaca saat digambar ({@link TerminalColor} berbasis supplier), bukan disalin ke sel. JediTerm
@@ -65,12 +67,14 @@ public final class TerminalSettings extends DefaultSettingsProvider {
     /** @param family nama font pilihan user; null atau tidak terpasang = pilihan otomatis */
     public TerminalSettings(String family, float fontSize) {
         this(new AtomicReference<>(family), fontSize, new BellSettings(), new AtomicReference<>(),
-                new AtomicReference<>());
+                new AtomicReference<>(), new AtomicBoolean());
     }
 
     private TerminalSettings(AtomicReference<String> chosenFamily, float fontSize, BellSettings bell,
-                             AtomicReference<Colors> colors, AtomicReference<Backdrop> backdrop) {
+                             AtomicReference<Colors> colors, AtomicReference<Backdrop> backdrop,
+                             AtomicBoolean rightClickCopyPaste) {
         this.chosenFamily = chosenFamily;
+        this.rightClickCopyPaste = rightClickCopyPaste;
         this.bell = bell;
         this.colors = colors;
         this.backdrop = backdrop;
@@ -89,7 +93,7 @@ public final class TerminalSettings extends DefaultSettingsProvider {
 
     /** Salinan dengan ukuran default yang sama (untuk tab baru); family font, warna, dan pengaturan bell dipakai bersama. */
     public TerminalSettings copy() {
-        return new TerminalSettings(chosenFamily, defaultSize, bell, colors, backdrop);
+        return new TerminalSettings(chosenFamily, defaultSize, bell, colors, backdrop, rightClickCopyPaste);
     }
 
     /**
@@ -139,6 +143,19 @@ public final class TerminalSettings extends DefaultSettingsProvider {
 
     public BellSettings bell() {
         return bell;
+    }
+
+    /**
+     * @return true = klik kanan di terminal gaya Windows (copy selection, atau paste kalau tidak ada selection);
+     *         false = menu konteks bawaan JediTerm
+     */
+    public boolean rightClickCopyPaste() {
+        return rightClickCopyPaste.get();
+    }
+
+    /** Berlaku langsung untuk semua tab (instance ini dan semua salinannya). */
+    public void setRightClickCopyPaste(boolean on) {
+        rightClickCopyPaste.set(on);
     }
 
     /** @return family yang dipilih user (null = otomatis); berlaku untuk semua tab */

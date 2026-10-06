@@ -578,6 +578,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         settings.add(display);
         settings.add(buildLanguageMenu());
         settings.add(buildBellMenu());
+        settings.add(buildRightClickMenu());
         settings.addSeparator();
         settings.add(buildMemoryMenu());
         autoUpdate.setSelected(ctx.config().current().autoUpdateCheck());
@@ -1017,6 +1018,25 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             opacity.add(item);
         }
         menu.add(opacity);
+        return menu;
+    }
+
+    /** Submenu perilaku klik kanan di terminal; berlaku langsung di semua tab dan disimpan di config.json. */
+    private JMenu buildRightClickMenu() {
+        var menu = new JMenu(I18n.t("menu.settings.rightClick"));
+        var group = new ButtonGroup();
+        String current = ctx.config().current().rightClick();
+        for (String mode : new String[] {AppConfig.RIGHT_CLICK_COPY_PASTE, AppConfig.RIGHT_CLICK_MENU}) {
+            var item = new JRadioButtonMenuItem(I18n.t("menu.settings.rightClick." + mode), mode.equals(current));
+            item.setToolTipText(I18n.t("menu.settings.rightClick." + mode + ".tooltip"));
+            item.addActionListener(e -> {
+                ctx.terminalSettings().setRightClickCopyPaste(AppConfig.RIGHT_CLICK_COPY_PASTE.equals(mode));
+                mutate(I18n.t("error.saveSettings"), () ->
+                        ctx.config().save(ctx.config().current().withRightClick(mode)));
+            });
+            group.add(item);
+            menu.add(item);
+        }
         return menu;
     }
 
