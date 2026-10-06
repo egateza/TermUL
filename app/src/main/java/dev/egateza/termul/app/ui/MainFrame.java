@@ -829,7 +829,8 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
     /**
      * Pasang bentuk sudut ke panel host, area terminal, dan panel log. Sisi yang berbatasan dengan divider memakai
-     * jarak setengah, supaya celah di kiri-kanan divider sama dan tombol panel host tetap di tengah celah. EDT.
+     * jarak setengah, supaya celah di kiri-kanan divider sama dan tombol panel host tetap di tengah celah. Search
+     * field host ikut membulat/kotak. EDT.
      */
     private void applyPanelCorners() {
         boolean docked = !floatingMode();
@@ -841,6 +842,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         for (var panel : new RoundedPanel[] {hostSide, center, logSide}) {
             panel.setRounded(roundedPanels);
         }
+        hostTree.setSearchArc(roundedPanels ? RoundedPanel.ARC : 0);
         SwingUtilities.invokeLater(() -> {
             drawer.layout();
             layoutDockToggle();

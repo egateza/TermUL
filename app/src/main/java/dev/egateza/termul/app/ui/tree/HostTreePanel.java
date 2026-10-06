@@ -143,9 +143,13 @@ public final class HostTreePanel extends JPanel {
             }
         });
 
-        search.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createEmptyBorder(4, 4, 4, 4), search.getBorder()));
-        add(search, BorderLayout.NORTH);
+        // Jarak di pembungkus, bukan CompoundBorder di field: border FlatLaf harus tetap border langsung field
+        // supaya style "arc" (sudut panel) bisa diterapkan.
+        var searchBox = new JPanel(new BorderLayout());
+        searchBox.setOpaque(false);
+        searchBox.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
+        searchBox.add(search, BorderLayout.CENTER);
+        add(searchBox, BorderLayout.NORTH);
         var scroll = new JScrollPane(tree);
         scroll.setBorder(BorderFactory.createEmptyBorder());
         add(scroll, BorderLayout.CENTER);
@@ -172,6 +176,11 @@ public final class HostTreePanel extends JPanel {
     public void focusSearch() {
         search.requestFocusInWindow();
         search.selectAll();
+    }
+
+    /** Diameter lengkungan sudut search field, px (0 = kotak); mengikuti pengaturan sudut panel. */
+    public void setSearchArc(int arc) {
+        search.putClientProperty("FlatLaf.style", "arc: " + arc);
     }
 
     private void rebuild() {
