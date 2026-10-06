@@ -25,8 +25,8 @@ public final class BadgeDotIcon implements Icon {
     public static final int FRAME_MS = 50;
 
     private static final int CORE = 8;
-    private static final int SIZE = 14;
-    private static final long PERIOD_NANOS = 1_600_000_000L;
+    private static final int SIZE = 18;
+    private static final long PERIOD_NANOS = 1_400_000_000L;
     private static final Color FALLBACK = new Color(0xE5, 0x53, 0x53);
 
     private final boolean pulsing;
@@ -52,19 +52,22 @@ public final class BadgeDotIcon implements Icon {
             float cx = x + SIZE / 2f;
             float cy = y + SIZE / 2f;
 
-            // Halo: radial dari warna dasar (semi transparan) ke transparan.
+            // Halo: radial dari warna dasar (semi transparan) ke transparan; jari-jari dan opasitas ikut denyut.
             float glow = intensity();
-            g2.setPaint(new RadialGradientPaint(new Point2D.Float(cx, cy), SIZE / 2f,
-                    new float[] {0f, 0.55f, 1f},
-                    new Color[] {withAlpha(base, 0.55f * glow), withAlpha(base, 0.25f * glow), withAlpha(base, 0f)}));
-            g2.fill(new Ellipse2D.Float(x, y, SIZE, SIZE));
-
-            // Inti: fokus gradasi di kiri atas supaya tampak seperti lampu yang menyala.
             float r = CORE / 2f;
+            float halo = r + (SIZE / 2f - r) * (0.4f + 0.6f * glow);
+            g2.setPaint(new RadialGradientPaint(new Point2D.Float(cx, cy), halo,
+                    new float[] {0f, 0.5f, 1f},
+                    new Color[] {withAlpha(base, 0.35f + 0.55f * glow), withAlpha(base, 0.15f + 0.35f * glow),
+                            withAlpha(base, 0f)}));
+            g2.fill(new Ellipse2D.Float(cx - halo, cy - halo, halo * 2, halo * 2));
+
+            // Inti: fokus gradasi di kiri atas supaya tampak seperti lampu yang menyala; lebih terang di puncak denyut.
             g2.setPaint(new RadialGradientPaint(new Point2D.Float(cx, cy), r,
                     new Point2D.Float(cx - r * 0.35f, cy - r * 0.35f),
                     new float[] {0f, 0.6f, 1f},
-                    new Color[] {mix(base, Color.WHITE, 0.55f), base, mix(base, Color.BLACK, 0.25f)},
+                    new Color[] {mix(base, Color.WHITE, 0.3f + 0.45f * glow), mix(base, Color.WHITE, 0.15f * glow),
+                            mix(base, Color.BLACK, 0.25f)},
                     CycleMethod.NO_CYCLE));
             g2.fill(new Ellipse2D.Float(cx - r, cy - r, CORE, CORE));
         } finally {
@@ -72,13 +75,13 @@ public final class BadgeDotIcon implements Icon {
         }
     }
 
-    /** 0.45..1.0 mengikuti gelombang sinus untuk badge yang berdenyut; 0.8 untuk badge statis. */
+    /** 0..1 mengikuti gelombang cosinus (halus di puncak dan lembah) untuk badge berdenyut; 0.6 untuk badge statis. */
     private float intensity() {
         if (!pulsing) {
-            return 0.8f;
+            return 0.6f;
         }
         double phase = (System.nanoTime() % PERIOD_NANOS) / (double) PERIOD_NANOS;
-        return (float) (0.725 + 0.275 * Math.sin(phase * 2 * Math.PI));
+        return (float) ((1 - Math.cos(phase * 2 * Math.PI)) / 2);
     }
 
     private static Color withAlpha(Color c, float alpha) {

@@ -17,7 +17,7 @@ class BadgeDotIconTest {
         assertThat(core >>> 24).isEqualTo(0xFF);
         assertThat((core >> 16) & 0xFF).isGreaterThan(core & 0xFF);
 
-        int halo = img.getRGB(1, mid) >>> 24;
+        int halo = img.getRGB(mid - 6, mid) >>> 24;
         assertThat(halo).isBetween(1, 0xFE);
         assertThat(img.getRGB(0, 0) >>> 24).isZero();
     }
@@ -27,7 +27,7 @@ class BadgeDotIconTest {
         var icon = new BadgeDotIcon(true);
         var img = paint(icon);
 
-        assertThat(img.getRGB(1, icon.getIconHeight() / 2) >>> 24).isPositive();
+        assertThat(img.getRGB(icon.getIconWidth() / 2 - 6, icon.getIconHeight() / 2) >>> 24).isPositive();
     }
 
     private static BufferedImage paint(BadgeDotIcon icon) {
