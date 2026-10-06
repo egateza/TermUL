@@ -29,6 +29,8 @@ class ConfigStoreTest {
         assertThat(config.bellSound()).isTrue();
         assertThat(config.bellShake()).isTrue();
         assertThat(config.hostToggleStyle()).isEqualTo(AppConfig.DEFAULT_HOST_TOGGLE);
+        assertThat(config.panelCorners()).isEqualTo(AppConfig.PANEL_ROUNDED);
+        assertThat(config.tabStyle()).isEqualTo(AppConfig.TAB_CARD);
     }
 
     @Test
@@ -37,7 +39,8 @@ class ConfigStoreTest {
         new ConfigStore(file).save(AppConfig.defaults().withIconSet("material").withHostButtonOpacity(40)
                 .withHostPanelMode(AppConfig.HOST_FLOATING).withTheme("default")
                 .withThemeMode(AppConfig.MODE_LIGHT).withLanguage("en").withBellSound(false)
-                .withBellShake(false).withHostToggleStyle("grabber"));
+                .withBellShake(false).withHostToggleStyle("grabber").withPanelCorners(AppConfig.PANEL_SQUARE)
+                .withTabStyle(AppConfig.TAB_UNDERLINED));
 
         var loaded = new ConfigStore(file).load();
 
@@ -49,6 +52,8 @@ class ConfigStoreTest {
         assertThat(loaded.bellSound()).isFalse();
         assertThat(loaded.bellShake()).isFalse();
         assertThat(loaded.hostToggleStyle()).isEqualTo("grabber");
+        assertThat(loaded.panelCorners()).isEqualTo(AppConfig.PANEL_SQUARE);
+        assertThat(loaded.tabStyle()).isEqualTo(AppConfig.TAB_UNDERLINED);
     }
 
     @Test
@@ -57,6 +62,8 @@ class ConfigStoreTest {
 
         assertThat(config.hostButtonOpacity()).isEqualTo(AppConfig.DEFAULT_OPACITY);
         assertThat(config.hostPanelMode()).isEqualTo(AppConfig.HOST_DOCKED);
+        assertThat(config.withPanelCorners("aneh").panelCorners()).isEqualTo(AppConfig.PANEL_ROUNDED);
+        assertThat(config.withTabStyle("aneh").tabStyle()).isEqualTo(AppConfig.TAB_CARD);
         assertThat(config.withHostButtonOpacity(500).hostButtonOpacity()).isEqualTo(AppConfig.DEFAULT_OPACITY);
     }
 }

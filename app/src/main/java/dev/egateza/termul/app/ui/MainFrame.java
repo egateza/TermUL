@@ -89,7 +89,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private final JTabbedPane tabs = new JTabbedPane(JTabbedPane.TOP, JTabbedPane.SCROLL_TAB_LAYOUT);
     /** Tab yang dipilih dengan Ctrl+klik untuk digabung (Ctrl+G), urutan pilih. EDT. */
     private final java.util.Set<java.awt.Component> marked = new java.util.LinkedHashSet<>();
-    private final JPanel center = new JPanel(new BorderLayout());
+    private final RoundedPanel center = new RoundedPanel();
     /** Isi area terminal selama belum ada tab: jam, host terakhir/favorit, animasi. */
     private final HomeScreen home = new HomeScreen(this::open);
     /** Layar idle (glass pane): menutupi window setelah sekian menit tanpa input atau lewat shortcut. */
@@ -101,6 +101,8 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private final Runnable onExit;
     private final KeyEventDispatcher hotkeys = this::dispatchHotkey;
     private final LogPanel logPanel;
+    /** Pembungkus panel log (kartu bersudut membulat); yang disembunyikan/ditampilkan adalah pembungkus ini. */
+    private final RoundedPanel logSide = new RoundedPanel();
     private final JSplitPane logSplit;
     private final JCheckBoxMenuItem showLog = new JCheckBoxMenuItem(I18n.t("main.menu.help.showLog"));
     private int logHeight = 220; // EDT
@@ -127,7 +129,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private JMenuItem miNextPane;
     /** Isi area utama: split (mode panel) atau area terminal saja (mode tombol melayang). */
     private final JPanel body = new JPanel(new BorderLayout());
-    private final JPanel hostSide = new JPanel(new BorderLayout());
+    private final RoundedPanel hostSide = new RoundedPanel();
     /** Mode panel: tombol buka/tutup panel host, melayang di tepi kiri area terminal (bukan bagian panel). */
     private final HostDrawer.Toggle dockToggle = new HostDrawer.Toggle();
     /** Gaya {@link HostToggleStyle#TAB_BAR}: ikon panel host di ujung kiri baris tab. */
@@ -150,6 +152,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private String hostMode = AppConfig.HOST_DOCKED; // EDT
     private int hostWidth = 260; // EDT
     private int hostDividerSize; // EDT; ukuran divider bawaan LaF, dipakai lagi saat panel host dibuka
+    private boolean roundedPanels; // EDT; panel host, area terminal, dan panel log tampil sebagai kartu membulat
 
     public MainFrame(AppContext ctx, List<CustomTheme> customThemes, Runnable onExit) {
         super("TermUL");
@@ -188,6 +191,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         });
 
         tabs.putClientProperty("JTabbedPane.tabClosable", true);
+        applyTabStyle(ctx.config().current().tabStyle());
         tabs.putClientProperty("JTabbedPane.tabCloseToolTipText", I18n.t("main.tab.close"));
         tabs.putClientProperty("JTabbedPane.tabCloseCallback",
                 (BiConsumer<JTabbedPane, Integer>) (t, index) -> closeTab(index));
@@ -262,9 +266,10 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         drawer.setStyle(hostToggleStyle, false);
         // panel log di bawah; disembunyikan dengan setVisible supaya tab terminal tidak di-reparent
         logPanel = new LogPanel(LogBuffer.global(), ctx.paths().logDir(), io, () -> setLogVisible(false));
-        logPanel.setVisible(false);
-        logPanel.setMinimumSize(new Dimension(100, 60));
-        logSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, body, logPanel);
+        logSide.add(logPanel, BorderLayout.CENTER);
+        logSide.setVisible(false);
+        logSide.setMinimumSize(new Dimension(100, 60));
+        logSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, body, logSide);
         logSplit.setResizeWeight(1.0);
         logSplit.setContinuousLayout(true);
         logDividerSize = logSplit.getDividerSize();
@@ -279,6 +284,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         // panel bawah selalu tampil: animasi + jam
         bottomBar.setAnimation(AnimationChoice.fromId(ctx.config().current().statusAnimation()));
         getContentPane().add(bottomBar, BorderLayout.SOUTH);
+        roundedPanels = AppConfig.PANEL_ROUNDED.equals(ctx.config().current().panelCorners());
         applyHostMode(ctx.config().current().hostPanelMode());
         setJMenuBar(buildMenu());
 
@@ -550,6 +556,8 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         display.add(menuItem(null, I18n.t("menu.settings.fonts"), null, this::configureFonts));
         display.add(buildIconSetMenu());
         display.add(menuItem(null, I18n.t("menu.settings.windowOpacity"), null, this::configureWindowOpacity));
+        display.add(buildPanelCornersMenu());
+        display.add(buildTabStyleMenu());
         display.addSeparator();
         display.add(buildHostPanelMenu());
         display.add(buildHostStatusMenu());
@@ -802,12 +810,81 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                 + (floatingMode() ? "<br><br>" + I18n.t("main.welcome.floatingHint") : "")
                 + "</center></html>");
         syncHostToggles();
+        applyPanelCorners();
         body.revalidate();
         body.repaint();
         SwingUtilities.invokeLater(() -> {
             drawer.layout();
             layoutDockToggle();
         });
+    }
+
+    /** Jarak di tepi luar window dan di tiap sisi divider saat panel membulat, px. */
+    private static final int OUTER_GAP = 6;
+    private static final int INNER_GAP = 3;
+
+    /**
+     * Pasang bentuk sudut ke panel host, area terminal, dan panel log. Sisi yang berbatasan dengan divider memakai
+     * jarak setengah, supaya celah di kiri-kanan divider sama dan tombol panel host tetap di tengah celah. EDT.
+     */
+    private void applyPanelCorners() {
+        boolean docked = !floatingMode();
+        boolean logShown = logSide.isVisible();
+        hostSide.setGaps(new java.awt.Insets(OUTER_GAP, OUTER_GAP, OUTER_GAP, INNER_GAP));
+        center.setGaps(new java.awt.Insets(OUTER_GAP, docked ? INNER_GAP : OUTER_GAP,
+                logShown ? INNER_GAP : OUTER_GAP, OUTER_GAP));
+        logSide.setGaps(new java.awt.Insets(INNER_GAP, OUTER_GAP, OUTER_GAP, OUTER_GAP));
+        for (var panel : new RoundedPanel[] {hostSide, center, logSide}) {
+            panel.setRounded(roundedPanels);
+        }
+        SwingUtilities.invokeLater(() -> {
+            drawer.layout();
+            layoutDockToggle();
+        });
+    }
+
+    /** Gaya tab terminal: {@link AppConfig#TAB_CARD} (kotak per tab, ala VS Code) atau garis bawah. EDT. */
+    private void applyTabStyle(String style) {
+        tabs.putClientProperty("JTabbedPane.tabType",
+                AppConfig.TAB_UNDERLINED.equals(style) ? "underlined" : "card");
+    }
+
+    private JMenu buildTabStyleMenu() {
+        var menu = new JMenu(I18n.t("main.menu.settings.tabStyle"));
+        var group = new ButtonGroup();
+        String current = ctx.config().current().tabStyle();
+        for (var style : new String[] {AppConfig.TAB_CARD, AppConfig.TAB_UNDERLINED}) {
+            var item = new JRadioButtonMenuItem(I18n.t("main.menu.settings.tabStyle." + style), style.equals(current));
+            item.addActionListener(e -> {
+                applyTabStyle(style);
+                mutate(I18n.t("error.saveSettings"), () ->
+                        ctx.config().save(ctx.config().current().withTabStyle(style)));
+            });
+            group.add(item);
+            menu.add(item);
+        }
+        return menu;
+    }
+
+    private JMenu buildPanelCornersMenu() {
+        var menu = new JMenu(I18n.t("main.menu.settings.panelCorners"));
+        var group = new ButtonGroup();
+        for (var rounded : new boolean[] {true, false}) {
+            var item = new JRadioButtonMenuItem(I18n.t(rounded ? "main.menu.settings.panelCorners.rounded"
+                    : "main.menu.settings.panelCorners.square"), rounded == roundedPanels);
+            item.addActionListener(e -> {
+                if (rounded == roundedPanels) {
+                    return;
+                }
+                roundedPanels = rounded;
+                applyPanelCorners();
+                mutate(I18n.t("error.saveSettings"), () -> ctx.config().save(ctx.config().current()
+                        .withPanelCorners(rounded ? AppConfig.PANEL_ROUNDED : AppConfig.PANEL_SQUARE)));
+            });
+            group.add(item);
+            menu.add(item);
+        }
+        return menu;
     }
 
     /**
@@ -1179,7 +1256,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         com.formdev.flatlaf.FlatLaf.updateUI();
         // FlatLaf.updateUI hanya menjangkau komponen yang sedang ada di window; yang terlepas dari hierarki
         // (tabs saat belum ada tab, host tree di mode melayang, dst.) harus diperbarui sendiri
-        for (var detached : new java.awt.Component[] {tabs, home, hostTree, hostSide, logPanel, editTracker}) {
+        for (var detached : new java.awt.Component[] {tabs, home, hostTree, hostSide, logSide, editTracker}) {
             if (detached != null) {
                 SwingUtilities.updateComponentTreeUI(detached);
             }
@@ -1304,13 +1381,14 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     /** Tampilkan/sembunyikan panel log di bawah, dengan tinggi terakhir yang dipakai. EDT. */
     private void setLogVisible(boolean visible) {
         showLog.setSelected(visible);
-        if (visible == logPanel.isVisible()) {
+        if (visible == logSide.isVisible()) {
             return;
         }
         if (!visible) {
             logHeight = Math.max(80, logSplit.getHeight() - logSplit.getDividerLocation());
         }
-        logPanel.setVisible(visible);
+        logSide.setVisible(visible);
+        applyPanelCorners(); // jarak bawah area terminal mengikuti ada/tidaknya panel log
         logSplit.setDividerSize(visible ? logDividerSize : 0);
         if (visible) {
             logSplit.setDividerLocation(Math.max(100, logSplit.getHeight() - logHeight));
