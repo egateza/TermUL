@@ -50,6 +50,12 @@ public final class ZoomableTermWidget extends JediTermWidget {
         }, () -> getTerminalPanel().getBackground());
     }
 
+    /** Kotak cari membulat bergaya aplikasi, pengganti komponen bawaan JediTerm. */
+    @Override
+    protected com.jediterm.terminal.ui.JediTermSearchComponent createSearchComponent() {
+        return new TerminalSearchBar();
+    }
+
     /** Membaca ulang font dari settings dan menyesuaikan ukuran grid (PTY ikut di-resize). Panggil di EDT. */
     public void refreshFont() {
         ((ZoomPanel) getTerminalPanel()).refreshFont();

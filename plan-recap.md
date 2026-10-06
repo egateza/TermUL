@@ -190,6 +190,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 | Tanggal | Commit | Task |
 |---|---|---|
+| 2026-10-06 | `feat(terminal): kotak cari terminal membulat dan minimalis` | Search box terminal ala VS Code tanpa replace (permintaan user) |
 | 2026-10-06 | `feat(terminal): scroll wheel halus dan scrollbar bergaya FlatLaf` | Scroll terminal disamakan dengan panel (permintaan user) |
 | 2026-10-06 | `feat(wsl): WSL Manager opsional, grup WSL di panel host, profil SSH ke distro` | WSL Manager (permintaan user, ADR 0004) |
 | 2026-10-01 | `feat: dukungan macOS (lokasi data, shortcut Cmd, editor, integrasi app) dan JAR portable` | Dukungan macOS (permintaan user) |
