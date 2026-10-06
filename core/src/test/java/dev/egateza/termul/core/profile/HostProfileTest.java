@@ -56,4 +56,28 @@ class HostProfileTest {
         assertThat(copy.name()).isEqualTo("web-1 (salinan)");
         assertThat(copy.host()).isEqualTo(p.host());
     }
+
+    @Test
+    void distroWslOpsionalDanDipertahankanSaatProfilDiubah() {
+        var p = HostProfile.create("Ubuntu", "localhost", "ega");
+        assertThat(p.wslDistro()).isNull();
+
+        var wsl = p.withWslDistro(" Ubuntu-24.04 ");
+
+        assertThat(wsl.wslDistro()).isEqualTo("Ubuntu-24.04");
+        assertThat(wsl.withGroup("WSL").withOs(null).withTerminalTheme("x").withJumpHostId(null).wslDistro())
+                .isEqualTo("Ubuntu-24.04");
+        assertThat(wsl.duplicate().wslDistro()).isEqualTo("Ubuntu-24.04");
+        assertThat(wsl.withPort(2211).port()).isEqualTo(2211);
+        assertThat(wsl.withPort(2211).wslDistro()).isEqualTo("Ubuntu-24.04");
+        assertThat(wsl.withWslDistro(" ").wslDistro()).isNull();
+    }
+
+    @Test
+    void distroWslTidakValidDitolak() {
+        var p = HostProfile.create("x", "localhost", "u");
+
+        assertThatThrownBy(() -> p.withWslDistro("Ubuntu & calc")).hasMessageContaining("distro WSL");
+        assertThatThrownBy(() -> p.withWslDistro("-d")).hasMessageContaining("distro WSL");
+    }
 }

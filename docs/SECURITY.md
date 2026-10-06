@@ -94,6 +94,16 @@ Detail di `docs/adr/0003-self-update.md`.
 - Paste multi-baris ke host `PROD` selalu dikonfirmasi (preview + jumlah baris); host non-prod tidak.
 - **Password login & passphrase key di MINA berupa `String`.** API Apache MINA SSHD (`UserInteraction`, `FilePasswordProvider`) hanya menerima `String`. Konversi `char[] → String` dibatasi di satu tempat (`ssh/.../auth/AuthSetup.java`), dilakukan tepat saat MINA memintanya, dan `char[]` asal langsung di-zero. String itu tidak disimpan di field, tidak di-log, dan menjadi garbage setelah paket auth terkirim. Password sudo/su (inject ke terminal) tetap `char[]`/`byte[]` penuh.
 
+## WSL (opsional)
+
+- Hanya aktif kalau dinyalakan di Pengaturan. Profil WSL adalah koneksi SSH biasa, jadi verifikasi host key (TOFU) dan
+  vault tetap berlaku. Host key sshd distro ikut tercatat di `known_hosts` sebagai `[localhost]:<port>`.
+- TermUL menjalankan `wsl.exe` dengan daftar argumen (tanpa shell Windows). Nama distro divalidasi
+  (`[A-Za-z0-9][A-Za-z0-9._-]*`) sebelum dipakai sebagai argumen. Script untuk menjalankan sshd sebagai root berupa
+  konstanta, tidak ada input user di dalamnya.
+- TermUL tidak mengubah konfigurasi sshd. Panduan menyarankan port selain 22, dan `ListenAddress 127.0.0.1` untuk mode
+  networking `mirrored`, karena di mode itu port distro bisa terjangkau dari LAN.
+
 ## Logging
 
 - Level default INFO. Konten terminal tidak di-log.

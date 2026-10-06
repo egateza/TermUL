@@ -112,6 +112,16 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [ ] Badge muncul di instalasi v0.1.131 untuk rilis v0.1.132
 - [x] Badge update di menu bar (pemeriksaan otomatis 20 detik setelah start + setiap 12 jam, bisa dimatikan di Pengaturan), badge berubah menjadi "Restart untuk update" setelah dipasang; diuji terhadap rilis v0.1.128 di GitHub
 
+### WSL Manager (permintaan user 2026-10-06, ADR 0004)
+- [x] `core.wsl.WslManager` (list/start keep-alive/stop/shutdown/sshd/defaultUser) + `ProcessWslRunner`; diuji ke `wsl.exe` asli (deteksi distro, start → tetap hidup melewati idle timeout → stop)
+- [x] `HostProfile.wslDistro`, `AppConfig.wslManager` (opt-in, default mati)
+- [x] Grup bawaan WSL di panel host (hanya distro yang berjalan), node "belum ada profil SSH" → buat profil (user dari `whoami`, port mulai 2222)
+- [x] WSL Manager (File → WSL Manager): Start/Stop/Shutdown semua/Buat profil/Panduan SSH; field "Distro WSL" di dialog profil
+- [x] Pre-connect: distro + sshd dijalankan sebelum connect; auto-reconnect tidak menyalakan distro yang berhenti
+- [x] Periksa SSH (`SshCheck`): cek sshd terpasang/config/port/`ssh.socket`/listen/terjangkau + perintah perbaikan; dipakai juga untuk pesan error saat connect (kasus nyata user: `ssh.socket` di Ubuntu 22.04 mengabaikan `Port`)
+- [x] Kolom "Port SSH" di WSL Manager: terdeteksi dari `sshd -T` (selain 22 diutamakan), bisa diisi user; mengubahnya di distro berprofil ikut mengubah port profil
+- [ ] Uji manual user: nyalakan Pengaturan → Manajemen WSL, siapkan sshd lewat Panduan SSH, connect dari grup WSL
+
 ### Tambahan dari uji manual user (setelah Fase 4)
 - [x] Auth "Default": coba key `~/.ssh`, lalu jatuh ke password (sebelumnya error kalau tidak ada key)
 - [x] Terminal tidak lagi terlihat hang setelah logout: banner Reconnect + Enter untuk reconnect
@@ -180,6 +190,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 | Tanggal | Commit | Task |
 |---|---|---|
+| 2026-10-06 | `feat(wsl): WSL Manager opsional, grup WSL di panel host, profil SSH ke distro` | WSL Manager (permintaan user, ADR 0004) |
 | 2026-10-01 | `feat: dukungan macOS (lokasi data, shortcut Cmd, editor, integrasi app) dan JAR portable` | Dukungan macOS (permintaan user) |
 | 2026-10-01 | `feat(app): split terminal dengan menggabungkan tab (Ctrl+klik, Ctrl+G) dan ungroup` | Split via group tab, maks 3, mode split (permintaan user) |
 | 2026-10-01 | `feat(app): split terminal kanan/bawah di dalam satu tab` | Split terminal (diganti model group tab) |

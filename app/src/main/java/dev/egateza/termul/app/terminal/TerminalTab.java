@@ -103,6 +103,7 @@ public final class TerminalTab extends JPanel {
 
     private java.util.function.Consumer<SshTtyConnector> connectedListener; // EDT
     private Runnable stateListener = () -> { }; // EDT
+    private volatile BeforeConnect beforeConnect = (p, automatic) -> { };
 
     /** Dipanggil (di EDT) setiap status sesi/panel SFTP berubah: connect, gagal, berakhir, toggle SFTP. */
     public void setStateListener(Runnable listener) {
@@ -170,6 +171,22 @@ public final class TerminalTab extends JPanel {
             return null;
         }
         return text;
+    }
+
+    /** Persiapan sebelum connect, mis. menjalankan distro WSL dan sshd-nya. */
+    @FunctionalInterface
+    public interface BeforeConnect {
+        /**
+         * Blocking, dipanggil di thread {@code sshOps}; exception = percobaan connect gagal.
+         *
+         * @param automatic true = sambung ulang otomatis setelah koneksi putus (bukan permintaan user)
+         */
+        void prepare(HostProfile profile, boolean automatic) throws SshConnectException;
+    }
+
+    /** Dijalankan sebelum setiap percobaan connect terminal, termasuk reconnect. */
+    public void setBeforeConnect(BeforeConnect beforeConnect) {
+        this.beforeConnect = beforeConnect;
     }
 
     /** Dipanggil (di EDT) setiap kali terminal berhasil connect, termasuk setelah reconnect. */
@@ -248,7 +265,7 @@ public final class TerminalTab extends JPanel {
         pending = UiAsync.run(sshOps,
                 () -> {
                     try {
-                        return openSession(cancel);
+                        return openSession(cancel, false);
                     } catch (SshConnectException e) {
                         throw new java.util.concurrent.CompletionException(e);
                     }
@@ -289,7 +306,8 @@ public final class TerminalTab extends JPanel {
      * gagal, shell yang baru dibuka ditutup dan percobaan dianggap gagal, supaya terminal dan SFTP selalu tersambung
      * bersama. Blocking: jalankan di {@code sshOps}.
      */
-    private SshTtyConnector openSession(ConnectCancel cancel) throws SshConnectException {
+    private SshTtyConnector openSession(ConnectCancel cancel, boolean automatic) throws SshConnectException {
+        beforeConnect.prepare(profile, automatic);
         SshTtyConnector tty = factory.open(profile, SshTerminalFactory.DEFAULT_SIZE, cancel);
         try {
             links.restoreSftp(profile);
@@ -396,7 +414,7 @@ public final class TerminalTab extends JPanel {
     /** Koneksi terminal putus: sambung ulang shell dan SFTP bersama. */
     private void startAutoReconnect() {
         var cancel = newConnectCancel();
-        startReconnect(() -> openSession(cancel), this::onConnected, I18n.t("tab.reconnect.what.both"));
+        startReconnect(() -> openSession(cancel, true), this::onConnected, I18n.t("tab.reconnect.what.both"));
     }
 
     /** Koneksi SFTP putus pada tab "SFTP saja": buka lagi kanalnya. */

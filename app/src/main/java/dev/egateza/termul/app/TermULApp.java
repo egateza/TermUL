@@ -30,6 +30,8 @@ import dev.egateza.termul.core.config.ConfigStore;
 import dev.egateza.termul.core.theme.BundledThemes;
 import dev.egateza.termul.core.theme.ThemeStore;
 import dev.egateza.termul.core.profile.ProfileStore;
+import dev.egateza.termul.core.wsl.ProcessWslRunner;
+import dev.egateza.termul.core.wsl.WslManager;
 import dev.egateza.termul.sftp.SftpLinks;
 import dev.egateza.termul.ssh.SessionManager;
 import dev.egateza.termul.ssh.SshSettings;
@@ -104,6 +106,7 @@ public final class TermULApp {
                 new VaultCredentialProvider(vault, new SwingCredentialProvider(frameRef::get)),
                 SshSettings.defaults(), id -> store.snapshot().find(id));
         var sftpLinks = new SftpLinks(sessions);
+        var wsl = new WslManager(new ProcessWslRunner());
         EditManager edits;
         try {
             edits = new EditManager(sftpLinks, new EditCache(paths.editCacheDir()), () -> config.current().editors(),
@@ -128,8 +131,8 @@ public final class TermULApp {
             terminalSettings.setRightClickCopyPaste(
                     AppConfig.RIGHT_CLICK_COPY_PASTE.equals(config.current().rightClick()));
             var ctx = new AppContext(paths, config, store, io, sshOps, sessions, new SshTerminalFactory(sessions),
-                    terminalSettings, vault, edits, sftpLinks, themes, knownHosts);
-            var frame = new MainFrame(ctx, customThemes, () -> shutdown(io, sshOps, sessions, vault, edits, log));
+                    terminalSettings, vault, edits, sftpLinks, themes, knownHosts, wsl);
+            var frame = new MainFrame(ctx, customThemes, () -> shutdown(io, sshOps, sessions, vault, edits, wsl, log));
             frameRef.set(frame);
             MacIntegration.install(frame);
             frame.setVisible(true);
@@ -141,10 +144,10 @@ public final class TermULApp {
     }
 
     private static void shutdown(ExecutorService io, ExecutorService sshOps, SessionManager sessions, VaultGate vault,
-                                 EditManager edits,
-                                 Logger log) {
+                                 EditManager edits, WslManager wsl, Logger log) {
         log.info("TermUL keluar");
         edits.close();
+        wsl.close(); // lepas keep-alive; distro mati sendiri saat idle kecuali dipakai di luar TermUL
         sshOps.shutdownNow();
         sessions.close();
         vault.close();

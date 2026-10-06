@@ -26,6 +26,7 @@ import dev.egateza.termul.app.update.InstallerInfo;
 import dev.egateza.termul.app.update.RestartCommand;
 import dev.egateza.termul.app.update.UpdateDialog;
 import dev.egateza.termul.app.update.UpdateNotifier;
+import dev.egateza.termul.app.wsl.WslController;
 import java.awt.Color;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -34,6 +35,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.BiConsumer;
+import dev.egateza.termul.core.Os;
 import dev.egateza.termul.core.config.AppConfig;
 import dev.egateza.termul.core.profile.HostProfile;
 import dev.egateza.termul.core.profile.ProfileSnapshot;
@@ -141,6 +143,8 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     /** Repaint berkala supaya halo badge update berdenyut; hanya jalan selama badge tampil. */
     private final javax.swing.Timer badgePulse = new javax.swing.Timer(BadgeDotIcon.FRAME_MS, e -> updateBadge.repaint());
     private final JCheckBoxMenuItem autoUpdate = new JCheckBoxMenuItem(I18n.t("main.menu.settings.autoUpdate"));
+    private final WslController wsl;
+    private JCheckBoxMenuItem miWslToggle; // EDT; Pengaturan → Manajemen WSL (null di luar Windows)
     private JMenuItem checkUpdateItem; // EDT
     private final UpdateNotifier updateNotifier;
     private UiTheme theme; // EDT
@@ -167,6 +171,28 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         this.updateNotifier = UpdateNotifier.forGitHub(ctx.paths(), () -> ctx.config().current().autoUpdateCheck(),
                 this::showUpdateState);
         this.hostTree = new HostTreePanel(this);
+        this.wsl = new WslController(this, ctx.wsl(),
+                () -> Os.current().isWindows() && ctx.config().current().wslManager(), store::snapshot, ctx.sshOps(),
+                new WslController.Host() {
+                    @Override
+                    public void wslRunningChanged(List<String> running) {
+                        hostTree.setWslRunning(running);
+                    }
+
+                    @Override
+                    public Optional<HostProfile> createProfile(java.awt.Component parent, HostProfile template) {
+                        return ProfileDialog.createFrom(parent, template, store.snapshot(),
+                                HostTerminalColors.choices(customThemes), wsl.installedNames()).map(result -> {
+                                    MainFrame.this.saveProfile(result);
+                                    return result.profile();
+                                });
+                    }
+
+                    @Override
+                    public void saveProfile(HostProfile profile) {
+                        mutate(I18n.t("main.error.saveProfile"), () -> store.save(profile));
+                    }
+                });
         this.customThemes = List.copyOf(customThemes);
         this.theme = UiThemes.resolve(ctx.config().current().theme(), this.customThemes);
         this.wantedMode = ThemeMode.fromId(ctx.config().current().themeMode());
@@ -289,6 +315,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         roundedPanels = AppConfig.PANEL_ROUNDED.equals(ctx.config().current().panelCorners());
         applyHostMode(ctx.config().current().hostPanelMode());
         setJMenuBar(buildMenu());
+        wsl.apply();
 
         setSize(1280, 800);
         setLocationRelativeTo(null);
@@ -296,6 +323,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         store.addListener(s -> SwingUtilities.invokeLater(() -> {
             hostTree.setSnapshot(s);
             home.setSnapshot(s);
+            wsl.profilesChanged();
             reloadTerminalColors(); // warna khusus host / environment yang diubah di Edit host
         }));
         // belum ada tab: langsung tampilkan daftar host (mode tombol melayang), menutup otomatis saat host dibuka
@@ -470,6 +498,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         badgePulse.stop();
         drawer.dispose();
         resourceMonitor.close();
+        wsl.close();
         super.dispose();
     }
 
@@ -488,6 +517,10 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                 () -> newHost(hostTree.selectedGroup())));
         file.add(menuItem(AppIcon.FOLDER_PLUS, I18n.t("main.menu.file.newGroup"), null, () -> newGroup(hostTree.selectedGroup())));
         file.add(menuItem(null, I18n.t("main.menu.file.importSshConfig"), null, this::importSshConfig));
+        if (Os.current().isWindows()) {
+            // selalu terlihat di Windows; kalau manajemen WSL mati, user ditawari untuk menyalakannya
+            file.add(menuItem(AppIcon.TERMINAL, I18n.t("main.menu.file.wslManager"), null, this::openWslManager));
+        }
         file.add(menuItem(null, I18n.t("main.menu.file.findHost"), Shortcuts.menu(KeyEvent.VK_F),
                 () -> {
                     showHostList();
@@ -588,6 +621,12 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         autoUpdate.setToolTipText(I18n.t("main.menu.settings.autoUpdate.tooltip"));
         autoUpdate.addActionListener(e -> setAutoUpdate(autoUpdate.isSelected()));
         settings.add(autoUpdate);
+        if (Os.current().isWindows()) {
+            miWslToggle = new JCheckBoxMenuItem(I18n.t("main.menu.settings.wsl"), ctx.config().current().wslManager());
+            miWslToggle.setToolTipText(I18n.t("main.menu.settings.wsl.tooltip"));
+            miWslToggle.addActionListener(e -> setWslManager(miWslToggle.isSelected()));
+            settings.add(miWslToggle);
+        }
         settings.addSeparator();
         settings.add(menuItem(null, I18n.t("main.menu.settings.knownHosts"), null,
                 () -> new KnownHostsDialog(this, ctx.knownHosts(), io).setVisible(true)));
@@ -1933,6 +1972,22 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         });
     }
 
+    /** Nyalakan/matikan manajemen WSL; saat dinyalakan, WSL Manager langsung dibuka. */
+    private void setWslManager(boolean on) {
+        UiAsync.run(io, () -> {
+            ctx.config().save(ctx.config().current().withWslManager(on));
+            return on;
+        }, saved -> {
+            if (miWslToggle != null) {
+                miWslToggle.setSelected(on);
+            }
+            wsl.apply();
+            if (on) {
+                wsl.openManager();
+            }
+        }, err -> Dialogs.error(this, I18n.t("error.saveSettings"), err));
+    }
+
     /** Menjalankan mutasi store di thread I/O; error ditampilkan di EDT. */
     private void mutate(String errorTitle, Runnable change) {
         UiAsync.run(io, change, err -> Dialogs.error(this, errorTitle, err));
@@ -1955,7 +2010,22 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         mutate(I18n.t("main.error.recent"), () -> store.markUsed(profile.id()));
         var tab = createPane(profile, sftpOnly);
         insertGroupTab(new SplitPanes<>(TerminalTab.class, tab), tabs.getTabCount());
-        tab.connect();
+        if (sftpOnly && profile.wslDistro() != null && wsl.enabled()) {
+            // tab "SFTP saja" tidak lewat hook connect terminal: siapkan distro WSL dulu
+            UiAsync.run(ctx.sshOps(), () -> {
+                try {
+                    wsl.prepare(profile, false);
+                    return null;
+                } catch (dev.egateza.termul.ssh.SshConnectException e) {
+                    throw new java.util.concurrent.CompletionException(e);
+                }
+            }, ignored -> tab.connect(), err -> {
+                Dialogs.error(this, I18n.t("wsl.error.title"), err);
+                tab.connect();
+            });
+        } else {
+            tab.connect();
+        }
     }
 
     /** Panel terminal baru (belum connect) untuk tab baru atau split. */
@@ -1989,6 +2059,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                     }
                 }, fileIcons));
         tab.setConnectedListener(tty -> detectOs(profile.id(), tty));
+        tab.setBeforeConnect(wsl::prepare);
         tab.setStateListener(this::updateTerminalMenu);
         tab.setCurrentProfile(() -> store.snapshot().find(profile.id()).orElse(null));
         tab.setAutoSudoVault(ctx.vault());
@@ -1998,14 +2069,16 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
     @Override
     public void newHost(String group) {
-        ProfileDialog.create(this, group, store.snapshot(), HostTerminalColors.choices(customThemes)).ifPresent(this::saveProfile);
+        ProfileDialog.create(this, group, store.snapshot(), HostTerminalColors.choices(customThemes), wsl.installedNames())
+                .ifPresent(this::saveProfile);
     }
 
     @Override
     public void edit(HostProfile profile) {
         // baca metadata vault (disk I/O) di luar EDT, lalu buka dialog
         UiAsync.run(io, () -> storedSecrets(profile), stored ->
-                        ProfileDialog.edit(this, profile, store.snapshot(), stored, HostTerminalColors.choices(customThemes)).ifPresent(this::saveProfile),
+                        ProfileDialog.edit(this, profile, store.snapshot(), stored, HostTerminalColors.choices(customThemes),
+                                wsl.installedNames()).ifPresent(this::saveProfile),
                 err -> Dialogs.error(this, I18n.t("main.error.readVault"), err));
     }
 
@@ -2109,5 +2182,26 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     @Override
     public void clearRecent() {
         mutate(I18n.t("main.error.recent"), store::clearRecent);
+    }
+
+    @Override
+    public void newWslProfile(String distro) {
+        wsl.newProfile(distro);
+    }
+
+    /** Buka WSL Manager; kalau manajemen WSL masih mati, tawarkan untuk menyalakannya dulu. */
+    @Override
+    public void openWslManager() {
+        if (wsl.enabled()) {
+            wsl.openManager();
+        } else if (Os.current().isWindows()
+                && Dialogs.confirm(this, I18n.t("wsl.manager.title"), I18n.t("wsl.enable.confirm"))) {
+            setWslManager(true); // membuka WSL Manager setelah pengaturan tersimpan
+        }
+    }
+
+    @Override
+    public void checkWslSsh(HostProfile profile) {
+        wsl.checkProfile(profile);
     }
 }

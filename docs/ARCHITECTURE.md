@@ -122,6 +122,19 @@ thread scheduler sendiri) lewat `Updater.newerVersion()` (tanpa hash jar lokal) 
 Badge tidak pernah memasang apa pun; setelah pemasangan lewat dialog, badge menjadi tombol "Restart untuk update".
 Bisa dimatikan lewat `AppConfig.autoUpdateCheck`.
 
+## WSL (opsional, ADR 0004)
+
+Aktif hanya kalau `AppConfig.wslManager` dinyalakan dan OS-nya Windows. Distro WSL dimasuki lewat SSH biasa ke sshd di
+distro (`localhost:<port>`). Profilnya `HostProfile` dengan field `wslDistro`, jadi tidak ada PTY lokal.
+
+- `core.wsl.WslManager` menjalankan `wsl.exe` (lewat `WslRunner`, yang di-fake di test): `--list --quiet [--running]`,
+  start dengan keep-alive (`--exec sleep infinity`, karena WSL mematikan distro tanpa sesi `wsl.exe`), `--terminate`,
+  `--shutdown`, dan sshd sebagai root. Semua method blocking.
+- `app.wsl.WslController` (EDT) membaca ulang daftar distro setiap 15 detik di `ssh-ops`, mengisi grup bawaan WSL di
+  `HostTreePanel`, dan mengelola `WslManagerDialog`. `prepare()` dipasang sebagai `TerminalTab.BeforeConnect`: sebelum
+  connect ke profil WSL, distro dan sshd dijalankan dulu. Auto-reconnect tidak menyalakan distro yang berhenti.
+- Keep-alive dilepas saat aplikasi ditutup (`TermULApp.shutdown`); distro tidak dihentikan paksa.
+
 ## Alur utama
 
 1. **Connect**: double-click host, lalu `ssh-ops` menjalankan `acquire()`: TCP connect, verifikasi host key (dialog TOFU di EDT kalau host baru), dan auth (agent, key, lalu password dari vault/prompt). Setelah itu buka `ChannelShell` + PTY, pasang connector ke JediTerm, dan tab aktif.

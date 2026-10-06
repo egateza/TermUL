@@ -39,6 +39,16 @@ class ProfileStoreTest {
     }
 
     @Test
+    void distroWslIkutTersimpan() {
+        Path file = dir.resolve("profiles.json");
+        var p = HostProfile.create("Ubuntu", "localhost", "ega").withWslDistro("Ubuntu-24.04");
+        new ProfileStore(file).save(p);
+
+        assertThat(new ProfileStore(file).load().profiles()).singleElement()
+                .extracting(HostProfile::wslDistro).isEqualTo("Ubuntu-24.04");
+    }
+
+    @Test
     void saveMenggantiProfilDenganIdSama() {
         var store = new ProfileStore(dir.resolve("profiles.json"));
         var p = HostProfile.create("a", "h", "u");

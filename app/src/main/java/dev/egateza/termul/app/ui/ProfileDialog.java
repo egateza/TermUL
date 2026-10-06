@@ -69,6 +69,8 @@ public final class ProfileDialog extends JDialog {
     private final JTextArea notes = new JTextArea(3, 24);
     private final JCheckBox autoSudo = new JCheckBox(I18n.t("profile.field.autoSudo"));
     private final JComboBox<HostTerminalColors.Choice> terminalColors = new JComboBox<>();
+    /** Distro WSL tempat sshd host ini berjalan; "" = bukan WSL. Hanya tampil kalau ada pilihan distro. */
+    private final JComboBox<String> wslDistro = new JComboBox<>();
     private final Map<SecretType, JPasswordField> secretFields = new EnumMap<>(SecretType.class);
     private final Map<SecretType, JCheckBox> clearBoxes = new EnumMap<>(SecretType.class);
     private final Set<SecretType> storedSecrets;
@@ -78,12 +80,23 @@ public final class ProfileDialog extends JDialog {
     public record Result(HostProfile profile, Map<SecretType, SecretChange> secrets) {
     }
 
-    private ProfileDialog(Window owner, String title, HostProfile initial, String defaultGroup, ProfileSnapshot snapshot,
-                          Set<SecretType> storedSecrets, List<HostTerminalColors.Choice> colorChoices) {
+    /**
+     * @param initial    profil yang diedit, atau template profil baru ({@code isNew}); null = profil kosong
+     * @param wslDistros distro WSL yang terpasang (kosong kalau manajemen WSL mati)
+     */
+    private ProfileDialog(Window owner, String title, HostProfile initial, boolean isNew, String defaultGroup,
+                          ProfileSnapshot snapshot, Set<SecretType> storedSecrets,
+                          List<HostTerminalColors.Choice> colorChoices, List<String> wslDistros) {
         super(owner, title, ModalityType.APPLICATION_MODAL);
         colorChoices.forEach(terminalColors::addItem);
-        this.id = initial == null ? UUID.randomUUID() : initial.id();
-        this.os = initial == null ? null : initial.os();
+        this.id = initial == null || isNew ? UUID.randomUUID() : initial.id();
+        this.os = initial == null || isNew ? null : initial.os();
+        wslDistro.addItem("");
+        wslDistros.forEach(wslDistro::addItem);
+        if (initial != null && initial.wslDistro() != null && !wslDistros.contains(initial.wslDistro())) {
+            wslDistro.addItem(initial.wslDistro()); // distro yang sudah tidak terpasang tetap bisa dilihat/dilepas
+        }
+        wslDistro.setRenderer(labelRenderer(v -> ((String) v).isEmpty() ? I18n.t("profile.wsl.none") : (String) v));
         this.storedSecrets = Set.copyOf(storedSecrets);
         for (SecretType type : SecretType.values()) {
             secretFields.put(type, new JPasswordField(20));
@@ -127,22 +140,31 @@ public final class ProfileDialog extends JDialog {
 
     /** Menampilkan dialog profil baru. */
     public static Optional<Result> create(Component parent, String group, ProfileSnapshot snapshot,
-                                          List<HostTerminalColors.Choice> colorChoices) {
-        return show(parent, I18n.t("profile.title.new"), null, group, snapshot, Set.of(), colorChoices);
+                                          List<HostTerminalColors.Choice> colorChoices, List<String> wslDistros) {
+        return show(parent, I18n.t("profile.title.new"), null, true, group, snapshot, Set.of(), colorChoices, wslDistros);
+    }
+
+    /** Menampilkan dialog profil baru yang sudah terisi dari {@code template} (id template tidak dipakai). */
+    public static Optional<Result> createFrom(Component parent, HostProfile template, ProfileSnapshot snapshot,
+                                              List<HostTerminalColors.Choice> colorChoices, List<String> wslDistros) {
+        return show(parent, I18n.t("profile.title.new"), template, true, template.group(), snapshot, Set.of(),
+                colorChoices, wslDistros);
     }
 
     /** Menampilkan dialog edit profil. {@code storedSecrets} = secret yang sudah ada di vault. */
     public static Optional<Result> edit(Component parent, HostProfile profile, ProfileSnapshot snapshot,
-                                        Set<SecretType> storedSecrets, List<HostTerminalColors.Choice> colorChoices) {
-        return show(parent, I18n.t("profile.title.edit", profile.name()), profile, profile.group(), snapshot, storedSecrets,
-                colorChoices);
+                                        Set<SecretType> storedSecrets, List<HostTerminalColors.Choice> colorChoices,
+                                        List<String> wslDistros) {
+        return show(parent, I18n.t("profile.title.edit", profile.name()), profile, false, profile.group(), snapshot,
+                storedSecrets, colorChoices, wslDistros);
     }
 
-    private static Optional<Result> show(Component parent, String title, HostProfile initial, String group,
+    private static Optional<Result> show(Component parent, String title, HostProfile initial, boolean isNew, String group,
                                          ProfileSnapshot snapshot, Set<SecretType> storedSecrets,
-                                         List<HostTerminalColors.Choice> colorChoices) {
+                                         List<HostTerminalColors.Choice> colorChoices, List<String> wslDistros) {
         Window owner = parent instanceof Window w ? w : javax.swing.SwingUtilities.getWindowAncestor(parent);
-        var dialog = new ProfileDialog(owner, title, initial, group, snapshot, storedSecrets, colorChoices);
+        var dialog = new ProfileDialog(owner, title, initial, isNew, group, snapshot, storedSecrets, colorChoices,
+                wslDistros);
         dialog.setVisible(true);
         return Optional.ofNullable(dialog.result);
     }
@@ -159,6 +181,7 @@ public final class ProfileDialog extends JDialog {
         initialDir.setText(Objects.requireNonNullElse(p.initialDirectory(), ""));
         notes.setText(Objects.requireNonNullElse(p.notes(), ""));
         autoSudo.setSelected(p.autoSudo());
+        wslDistro.setSelectedItem(p.wslDistro() == null ? "" : p.wslDistro());
         for (int i = 0; i < terminalColors.getItemCount(); i++) {
             if (Objects.equals(terminalColors.getItemAt(i).id(), p.terminalTheme())) {
                 terminalColors.setSelectedIndex(i);
@@ -211,7 +234,8 @@ public final class ProfileDialog extends JDialog {
                     (AuthMethod) auth.getSelectedItem(), keyPath.getText(),
                     jump == null || jump.profile() == null ? null : jump.profile().id(),
                     env, initialDir.getText(), notes.getText(), autoSudo.isSelected(), os,
-                    terminalColors.getSelectedItem() instanceof HostTerminalColors.Choice c ? c.id() : null);
+                    terminalColors.getSelectedItem() instanceof HostTerminalColors.Choice c ? c.id() : null,
+                    (String) wslDistro.getSelectedItem());
             result = new Result(profile, collectSecretChanges());
             dispose();
         } catch (IllegalArgumentException e) {
@@ -237,6 +261,10 @@ public final class ProfileDialog extends JDialog {
         keyPanel.add(browseKey, BorderLayout.EAST);
         row = addRow(form, row, I18n.t("profile.field.privateKey"), keyPanel);
         row = addRow(form, row, I18n.t("profile.field.jumpHost"), jumpHost);
+        if (wslDistro.getItemCount() > 1) {
+            wslDistro.setToolTipText(I18n.t("profile.field.wslDistro.tooltip"));
+            row = addRow(form, row, I18n.t("profile.field.wslDistro"), wslDistro);
+        }
         row = addRow(form, row, I18n.t("profile.field.environment"), environment);
         row = addRow(form, row, I18n.t("profile.field.terminalColors"), terminalColors);
         row = addRow(form, row, I18n.t("profile.field.initialDir"), initialDir);

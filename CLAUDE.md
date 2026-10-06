@@ -10,6 +10,7 @@
 - Terminal SSH dengan tab
 - Inject password sudo/su (hotkey, plus auto-trigger opsional dengan guard)
 - Browser remote directory (SFTP) dan edit file remote dengan editor lokal Windows (VS Code, Notepad++, dll.), lalu auto-upload saat file disimpan
+- Opsional (Windows): WSL Manager untuk start/stop distro WSL; distro dimasuki lewat SSH ke sshd di `localhost` (ADR 0004)
 
 Ini **bukan** terminal emulator lokal. PTY berada di server remote, sedangkan aplikasi merender stream dari SSH channel.
 
@@ -38,7 +39,7 @@ Ini **bukan** terminal emulator lokal. PTY berada di server remote, sedangkan ap
 
 ```
 termul/
-├─ core/       domain model (HostProfile, Group), ProfileStore, event bus, utilities
+├─ core/       domain model (HostProfile, Group), ProfileStore, event bus, utilities, WslManager (wsl.exe)
 ├─ vault/      CredentialVault API + implementasi (DPAPI / AES-GCM)
 ├─ ssh/        SessionManager, koneksi MINA, known_hosts, auth (key/agent/password), jump host
 ├─ terminal/   JediTerm TtyConnector, PromptResponder (sudo inject)
@@ -101,4 +102,4 @@ Arah dependensi: `app → terminal, sftp → ssh → core`, `vault → core`, da
 | `docs/PLAN.md` | Roadmap per fase + checklist + acceptance criteria |
 | `docs/SETUP.md` | Tools, dependensi, environment dev & test |
 | `docs/RELEASE.md` | Menerbitkan rilis baru ke GitHub Releases (update lewat menu) |
-| `docs/adr/` | Architecture Decision Records (0003: update via GitHub Releases) |
+| `docs/adr/` | Architecture Decision Records (0003: update via GitHub Releases, 0004: WSL lewat SSH + WSL Manager) |

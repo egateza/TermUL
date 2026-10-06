@@ -65,7 +65,8 @@ Pekerjaan harian melibatkan banyak server Linux (produksi & staging). Masalah ya
 
 ## Out of scope (untuk sekarang)
 
-- Terminal lokal (cmd/PowerShell/WSL). Bisa ditambah nanti via pty4j.
+- Terminal lokal (cmd/PowerShell, atau WSL tanpa sshd). Bisa ditambah nanti via pty4j. Distro WSL bisa dimasuki lewat
+  SSH ke `localhost`, dengan WSL Manager opsional untuk start/stop distro (ADR 0004).
 - RDP, VNC, X11 server, protokol serial/telnet.
 - Sinkronisasi profil ke cloud / multi-user.
 - Linux sebagai target. macOS didukung (N8), tapi "ingat di PC ini" (DPAPI) masih khusus Windows; padanan Keychain
