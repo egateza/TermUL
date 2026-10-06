@@ -137,7 +137,9 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private HostToggleStyle hostToggleStyle; // EDT
     private final JButton modeToggle = new JButton(); // pojok kanan atas menu bar: terang/gelap
     /** Menu bar kanan: "Update x.y.z" atau "Restart untuk update"; tersembunyi kalau tidak ada. */
-    private final JButton updateBadge = new JButton(new BadgeDotIcon());
+    private final JButton updateBadge = new JButton(new BadgeDotIcon(true));
+    /** Repaint berkala supaya halo badge update berdenyut; hanya jalan selama badge tampil. */
+    private final javax.swing.Timer badgePulse = new javax.swing.Timer(BadgeDotIcon.FRAME_MS, e -> updateBadge.repaint());
     private final JCheckBoxMenuItem autoUpdate = new JCheckBoxMenuItem(I18n.t("main.menu.settings.autoUpdate"));
     private JMenuItem checkUpdateItem; // EDT
     private final UpdateNotifier updateNotifier;
@@ -465,6 +467,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(hotkeys);
         java.awt.Toolkit.getDefaultToolkit().removeAWTEventListener(activity);
         idleTimer.stop();
+        badgePulse.stop();
         drawer.dispose();
         resourceMonitor.close();
         super.dispose();
@@ -1894,8 +1897,13 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                 updateBadge.setVisible(true);
             }
         }
+        if (updateBadge.isVisible()) {
+            badgePulse.start();
+        } else {
+            badgePulse.stop();
+        }
         if (checkUpdateItem != null) {
-            checkUpdateItem.setIcon(state instanceof UpdateNotifier.Available ? updateBadge.getIcon() : null);
+            checkUpdateItem.setIcon(state instanceof UpdateNotifier.Available ? new BadgeDotIcon() : null);
         }
         getJMenuBar().revalidate();
         getJMenuBar().repaint();
