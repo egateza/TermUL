@@ -36,6 +36,20 @@ public final class ZoomableTermWidget extends JediTermWidget {
         return new ZoomPanel(settings, buffer, styleState);
     }
 
+    /**
+     * Scrollbar bergaya FlatLaf seperti panel lain (bawaan JediTerm memakai {@code BasicScrollBarUI} polos), tetap
+     * dengan penanda hasil cari. Dipanggil dari constructor JediTermWidget: semua yang dibaca di sini dibaca saat
+     * menggambar, bukan sekarang.
+     */
+    @Override
+    protected javax.swing.JScrollBar createScrollBar() {
+        return new TerminalScrollBar(() -> getTerminalPanel().getFindResult(), () -> {
+            var found = mySettingsProvider.getFoundPatternColor().getBackground();
+            return found == null ? null : com.jediterm.terminal.ui.AwtTransformers.toAwtColor(
+                    mySettingsProvider.getTerminalColorPalette().getBackground(found));
+        }, () -> getTerminalPanel().getBackground());
+    }
+
     /** Membaca ulang font dari settings dan menyesuaikan ukuran grid (PTY ikut di-resize). Panggil di EDT. */
     public void refreshFont() {
         ((ZoomPanel) getTerminalPanel()).refreshFont();
@@ -135,6 +149,28 @@ public final class ZoomableTermWidget extends JediTermWidget {
             g2.drawImage(scaled, 0, 0, null);
             g2.setComposite(previous);
             super.paintComponent(new FillFilterGraphics2D(g2, layer.base()));
+        }
+
+        private SmoothWheel smoothWheel; // EDT; dibuat saat wheel pertama (model scroll baru ada setelah constructor)
+
+        /**
+         * Scroll wheel lokal (bukan yang diteruskan ke aplikasi remote, mis. vim/less dengan mouse reporting)
+         * dianimasikan seperti panel lain, bukan melompat beberapa baris sekaligus.
+         */
+        @Override
+        protected void handleMouseWheelEvent(java.awt.event.MouseWheelEvent e, javax.swing.JScrollBar scrollBar) {
+            if (e.isShiftDown() || Math.abs(e.getPreciseWheelRotation()) < 0.001) {
+                return;
+            }
+            if (smoothWheel == null) {
+                smoothWheel = new SmoothWheel(getVerticalScrollModel());
+            }
+            var model = getVerticalScrollModel();
+            // "satu layar per putaran" di pengaturan Windows → satu halaman terminal per putaran
+            double perNotch = e.getScrollType() == java.awt.event.MouseWheelEvent.WHEEL_BLOCK_SCROLL
+                    ? Math.max(1, model.getExtent()) : e.getScrollAmount();
+            smoothWheel.scroll(e.getPreciseWheelRotation() * perNotch);
+            e.consume();
         }
 
         java.awt.Dimension charSize() {
