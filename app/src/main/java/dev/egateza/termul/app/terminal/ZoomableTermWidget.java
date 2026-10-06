@@ -4,10 +4,14 @@ import com.jediterm.core.TerminalCoordinates;
 import com.jediterm.terminal.TerminalCopyPasteHandler;
 import com.jediterm.terminal.model.StyleState;
 import dev.egateza.termul.app.ui.ShakeEffect;
+import com.jediterm.terminal.TextStyle;
 import java.awt.AlphaComposite;
+import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
+import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.util.function.UnaryOperator;
 import javax.swing.SwingUtilities;
@@ -48,6 +52,11 @@ public final class ZoomableTermWidget extends JediTermWidget {
      */
     public void setPasteFilter(UnaryOperator<String> filter) {
         ((ZoomPanel) getTerminalPanel()).pasteFilter = filter;
+    }
+
+    /** Ukuran satu sel karakter, px (untuk test koordinat mouse). */
+    java.awt.Dimension charSize() {
+        return ((ZoomPanel) getTerminalPanel()).charSize();
     }
 
     private static final class ZoomPanel extends TerminalPanel {
@@ -117,8 +126,18 @@ public final class ZoomableTermWidget extends JediTermWidget {
             super.paintComponent(new FillFilterGraphics2D(g2, layer.base()));
         }
 
+        java.awt.Dimension charSize() {
+            return new java.awt.Dimension(myCharSize);
+        }
+
         void refreshFont() {
             reinitFontAndResize();
+        }
+
+        /** Karakter yang tidak ada di font terminal (✔, spinner Braille docker) digambar dengan font fallback. */
+        @Override
+        protected Font getFontToDisplay(char[] text, int start, int end, TextStyle style) {
+            return GlyphFallback.system().fontFor(super.getFontToDisplay(text, start, end, style), text, start, end);
         }
 
         private volatile TerminalCoordinates coords;
@@ -155,6 +174,46 @@ public final class ZoomableTermWidget extends JediTermWidget {
                 scrollArea(0, 0, 0); // satu-satunya jalur publik ke updateSelection(null); dy=0 tidak menggeser apa pun
                 repaint();
             }
+        }
+
+        /**
+         * Shift+klik kiri memperluas selection sampai titik klik, dengan titik awal tetap: awal selection yang ada,
+         * atau titik klik biasa terakhir kalau belum ada selection. Caranya, klik diteruskan ke JediTerm sebagai drag
+         * tanpa Shift, karena drag JediTerm memang memperpanjang selection dari titik awal itu.
+         */
+        @Override
+        protected void processMouseEvent(MouseEvent e) {
+            if (e.getID() == MouseEvent.MOUSE_PRESSED && e.getClickCount() == 1 && extendsSelection(e)) {
+                requestFocusInWindow();
+                super.processMouseMotionEvent(asPlainDrag(e));
+                e.consume();
+                return;
+            }
+            super.processMouseEvent(e);
+        }
+
+        /** Shift+drag melanjutkan selection; JediTerm 3.76 mengabaikan drag dengan Shift saat mouse reporting mati. */
+        @Override
+        protected void processMouseMotionEvent(MouseEvent e) {
+            if (e.getID() == MouseEvent.MOUSE_DRAGGED && extendsSelection(e)) {
+                super.processMouseMotionEvent(asPlainDrag(e));
+                return;
+            }
+            super.processMouseMotionEvent(e);
+        }
+
+        /**
+         * Hanya saat aplikasi remote tidak memakai mouse reporting. Kalau memakai (htop, vim dengan mouse), Shift tetap
+         * berarti "seleksi lokal" bawaan JediTerm.
+         */
+        private boolean extendsSelection(MouseEvent e) {
+            return e.isShiftDown() && SwingUtilities.isLeftMouseButton(e) && !isRemoteMouseAction(asPlainDrag(e));
+        }
+
+        private MouseEvent asPlainDrag(MouseEvent e) {
+            return new MouseEvent(this, MouseEvent.MOUSE_DRAGGED, e.getWhen(),
+                    e.getModifiersEx() & ~InputEvent.SHIFT_DOWN_MASK, e.getX(), e.getY(),
+                    e.getXOnScreen(), e.getYOnScreen(), 0, false, MouseEvent.NOBUTTON);
         }
 
         /** Dipanggil dari thread emulator saat server mengirim BEL: bunyi sistem dan/atau layar bergetar sesuai {@link BellSettings}. */
