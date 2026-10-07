@@ -238,8 +238,10 @@ final class WslManagerDialog extends JDialog {
      * Hasil "Periksa SSH": daftar cek dan, kalau ada masalah, perintah perbaikan yang bisa di-copy.
      *
      * @param recheck dipanggil kalau user memilih "Periksa lagi"
+     * @param usePort dipanggil dengan {@link SshCheckReport#suggestedPort()} kalau user memilih memakai port itu
      */
-    static void showCheck(Component parent, SshCheckReport report, Runnable recheck) {
+    static void showCheck(Component parent, SshCheckReport report, Runnable recheck,
+                          java.util.function.IntConsumer usePort) {
         var panel = new JPanel(new BorderLayout(0, 8));
         panel.add(new JLabel(I18n.t("wsl.check.header", report.distro(), String.valueOf(report.port()))),
                 BorderLayout.NORTH);
@@ -268,18 +270,34 @@ final class WslManagerDialog extends JDialog {
             fix.add(new JScrollPane(monospace(fixCommands, 9)), BorderLayout.CENTER);
             body.add(fix, BorderLayout.CENTER);
         }
+        Integer suggested = report.suggestedPort();
+        if (suggested != null) {
+            body.add(new JLabel(I18n.t("wsl.check.usePort.hint", String.valueOf(suggested))), BorderLayout.SOUTH);
+        }
         panel.add(body, BorderLayout.CENTER);
+        String use = suggested == null ? null : I18n.t("wsl.check.usePort", String.valueOf(suggested));
         String copy = I18n.t("wsl.check.copy");
         String again = I18n.t("wsl.check.again");
         String close = I18n.t("wsl.check.close");
-        Object[] options = commands.isEmpty() ? new Object[] {again, close} : new Object[] {copy, again, close};
+        var optionList = new ArrayList<Object>();
+        if (use != null) {
+            optionList.add(use);
+        }
+        if (!commands.isEmpty()) {
+            optionList.add(copy);
+        }
+        optionList.add(again);
+        optionList.add(close);
+        Object[] options = optionList.toArray();
         int choice = JOptionPane.showOptionDialog(parent, panel, I18n.t("wsl.check.title", report.distro()),
                 JOptionPane.DEFAULT_OPTION, report.ok() ? JOptionPane.INFORMATION_MESSAGE : JOptionPane.WARNING_MESSAGE,
                 null, options, options[0]);
         if (choice < 0) {
             return;
         }
-        if (options[choice] == copy) {
+        if (options[choice] == use) {
+            usePort.accept(suggested);
+        } else if (options[choice] == copy) {
             // hanya perintah shell, tidak ada secret
             java.awt.Toolkit.getDefaultToolkit().getSystemClipboard()
                     .setContents(new java.awt.datatransfer.StringSelection(commands), null);

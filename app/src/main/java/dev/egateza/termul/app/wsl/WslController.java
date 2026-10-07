@@ -260,7 +260,8 @@ public final class WslController implements WslManagerDialog.Actions {
                         dialog.setIdle(null);
                     }
                     host.createProfile(parent(), template).ifPresent(
-                            saved -> runCheck(distro, saved.port(), I18n.t("wsl.manager.profileReady", saved.name())));
+                            saved -> runCheck(distro, () -> profilePort(saved),
+                                    I18n.t("wsl.manager.profileReady", saved.name())));
                 },
                 err -> {
                     if (dialog != null) {
@@ -278,7 +279,7 @@ public final class WslController implements WslManagerDialog.Actions {
 
     @Override
     public void check(String distro) {
-        runCheck(distro, portFor(distro));
+        runCheck(distro, () -> explicitPort(distro), null);
     }
 
     @Override
@@ -293,12 +294,22 @@ public final class WslController implements WslManagerDialog.Actions {
 
     /** Port sshd distro yang diketahui: profil, isian user, lalu hasil deteksi; null kalau belum ada. EDT. */
     Integer knownPort(String distro) {
+        Integer explicit = explicitPort(distro);
+        return explicit != null ? explicit : portDetected.get(key(distro));
+    }
+
+    /** Port yang ditentukan user: port profil distro, lalu isian di tabel; null kalau belum ada. EDT. */
+    Integer explicitPort(String distro) {
         var linked = linked(distro);
         if (!linked.isEmpty()) {
             return linked.getFirst().port();
         }
-        Integer input = portInput.get(key(distro));
-        return input != null ? input : portDetected.get(key(distro));
+        return portInput.get(key(distro));
+    }
+
+    /** Port terbaru profil (bisa sudah diubah sejak pemeriksaan pertama). EDT. */
+    private int profilePort(HostProfile profile) {
+        return profiles.get().find(profile.id()).orElse(profile).port();
     }
 
     /** Port yang dipakai untuk distro: {@link #knownPort}, atau port cadangan berikutnya. EDT. */
@@ -345,30 +356,52 @@ public final class WslController implements WslManagerDialog.Actions {
     /** "Periksa SSH" untuk profil WSL (klik kanan host). */
     public void checkProfile(HostProfile profile) {
         if (enabled() && profile.wslDistro() != null) {
-            runCheck(profile.wslDistro(), profile.port());
+            runCheck(profile.wslDistro(), () -> profilePort(profile), null);
         }
-    }
-
-    private void runCheck(String distro, int port) {
-        runCheck(distro, port, null);
     }
 
     /**
+     * Port dibaca ulang dari {@code port} setiap kali (juga saat "Periksa lagi"), supaya port yang diubah user atau
+     * terdeteksi sejak pemeriksaan sebelumnya ikut terpakai.
+     *
+     * @param port    port profil/isian user (EDT); null = belum ditentukan, dipakai port dari sshd_config setelah
+     *                distro berjalan, baru port cadangan kalau sshd_config tidak terbaca
      * @param quietOk kalau tidak null dan sshd siap, laporan tidak ditampilkan; pesan ini muncul di status WSL Manager
      */
-    private void runCheck(String distro, int port, String quietOk) {
+    private void runCheck(String distro, Supplier<Integer> port, String quietOk) {
+        // pemeriksaan menjalankan distro + sshd; distro yang berhenti hanya dinyalakan atas persetujuan user
+        if (isStopped(distro) && !Dialogs.confirm(parent(), I18n.t("wsl.check.title", distro),
+                I18n.t("wsl.check.startConfirm", distro))) {
+            return;
+        }
+        Integer explicit = port.get();
+        int fallback = nextPort(profiles.get());
         if (dialog != null) {
             dialog.setBusy(I18n.t("wsl.manager.checking", distro));
         }
-        UiAsync.run(ops, () -> call(() -> report(distro, port)), report -> {
+        UiAsync.run(ops, () -> call(() -> report(distro, explicit, fallback)), report -> {
+            if (explicit == null) {
+                Integer detected = pickPort(report.check().configPorts());
+                if (detected != null) {
+                    portDetected.put(key(distro), detected);
+                } else {
+                    portDetected.remove(key(distro));
+                }
+            }
+            // distro bisa baru dijalankan oleh pemeriksaan ini: status di WSL Manager/panel host dulu, baru laporan
+            refresh();
             boolean quiet = quietOk != null && report.ok();
             if (dialog != null) {
                 dialog.setIdle(quiet ? quietOk : null);
             }
             if (!quiet) {
-                WslManagerDialog.showCheck(parent(), report, () -> runCheck(distro, port));
+                WslManagerDialog.showCheck(parent(), report, () -> runCheck(distro, port, null),
+                        p -> {
+                            setPort(distro, p);
+                            profilesChanged();
+                            runCheck(distro, port, null);
+                        });
             }
-            refresh();
         }, err -> {
             if (dialog != null) {
                 dialog.setIdle(null);
@@ -377,10 +410,22 @@ public final class WslController implements WslManagerDialog.Actions {
         });
     }
 
-    /** Siapkan distro seperti saat connect (distro + sshd), lalu periksa sshd dan jangkauan port dari Windows. */
-    private SshCheckReport report(String distro, int port) throws WslException {
+    /** true kalau daftar distro terakhir mencatat distro ini berhenti; false kalau berjalan atau belum diketahui. EDT. */
+    boolean isStopped(String distro) {
+        return listed && distros.stream().anyMatch(d -> d.name().equalsIgnoreCase(distro) && !d.running());
+    }
+
+    /**
+     * Siapkan distro seperti saat connect (distro + sshd), lalu periksa sshd dan jangkauan port dari Windows.
+     *
+     * @param explicit port profil/isian user; null = port dari sshd_config (distro sudah berjalan), lalu {@code fallback}
+     */
+    SshCheckReport report(String distro, Integer explicit, int fallback) throws WslException {
         wsl.prepareSsh(distro); // gagal di sini tetap diperiksa: hasil cek yang menjelaskan sebabnya
-        return new SshCheckReport(distro, port, wsl.checkSsh(distro), reachable(port));
+        var check = wsl.checkSsh(distro);
+        Integer detected = explicit != null ? explicit : pickPort(check.configPorts());
+        int port = detected != null ? detected : fallback;
+        return new SshCheckReport(distro, port, check, reachable(port));
     }
 
     /** true kalau {@code localhost:port} menerima koneksi TCP dari Windows (tanpa SSH handshake). */

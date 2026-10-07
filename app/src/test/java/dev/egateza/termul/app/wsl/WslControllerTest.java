@@ -230,4 +230,49 @@ class WslControllerTest {
             assertThat(p.wslDistro()).isEqualTo("Ubuntu");
         });
     }
+
+    @Test
+    void periksaTanpaPortMemakaiPortSshdConfigSetelahDistroDijalankan() throws Exception {
+        var report = controller().report("Ubuntu", null, 2222);
+
+        assertThat(runner.spawned()).isTrue();
+        assertThat(report.port()).isEqualTo(2211);
+        assertThat(report.check().problems(2211)).isEmpty();
+        assertThat(report.suggestedPort()).isNull();
+    }
+
+    @Test
+    void periksaDenganPortProfilBerbedaMenawarkanPortSshd() throws Exception {
+        var report = controller().report("Ubuntu", 2222, 2223);
+
+        assertThat(report.port()).isEqualTo(2222);
+        assertThat(report.ok()).isFalse();
+        assertThat(report.suggestedPort()).isEqualTo(2211);
+    }
+
+    @Test
+    void portEksplisitHanyaDariProfilAtauIsianUser() {
+        var c = controller();
+        assertThat(c.explicitPort("Ubuntu")).isEqualTo(2211);
+        assertThat(c.explicitPort("Debian")).isNull();
+
+        c.setPort("Debian", 2299);
+
+        assertThat(c.explicitPort("Debian")).isEqualTo(2299);
+    }
+
+    @Test
+    void distroBerhentiTercatatSetelahDaftarTerbaca() throws Exception {
+        var c = controller();
+        assertThat(c.isStopped("Ubuntu")).isFalse(); // belum diketahui: tidak ditanya
+
+        c.refresh();
+        javax.swing.SwingUtilities.invokeAndWait(() -> { }); // hasil refresh masuk lewat EDT
+
+        assertThat(c.isStopped("ubuntu")).isTrue();
+        runner.running.add("Ubuntu");
+        c.refresh();
+        javax.swing.SwingUtilities.invokeAndWait(() -> { });
+        assertThat(c.isStopped("Ubuntu")).isFalse();
+    }
 }

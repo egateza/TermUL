@@ -110,6 +110,18 @@ record SshCheckReport(String distro, int port, SshCheck check, boolean reachable
         return String.join("\n", lines);
     }
 
+    /**
+     * Port lain yang sudah dipakai sshd (dari sshd_config dan sedang listen), untuk ditawarkan sebagai pengganti port
+     * profil; null kalau port profil sudah benar atau tidak ada pengganti yang jelas.
+     */
+    Integer suggestedPort() {
+        if (!check.problems(port).contains(Problem.PORT_NOT_CONFIGURED)) {
+            return null;
+        }
+        Integer other = WslController.pickPort(check.configPorts());
+        return other != null && other != port && !Boolean.FALSE.equals(check.isListening(other)) ? other : null;
+    }
+
     /** Port listen di distro tapi tidak terjangkau dari Windows. */
     boolean unreachableOnly() {
         return check.problems(port).isEmpty() && !reachable;
