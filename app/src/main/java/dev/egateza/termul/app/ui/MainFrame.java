@@ -2,6 +2,7 @@ package dev.egateza.termul.app.ui;
 
 import dev.egateza.termul.app.AppContext;
 import dev.egateza.termul.app.BuildInfo;
+import dev.egateza.termul.app.bugreport.BugReportDialog;
 import dev.egateza.termul.app.edit.EditTrackerDialog;
 import dev.egateza.termul.app.edit.EditorSettingsDialog;
 import dev.egateza.termul.app.edit.ValidationHooksDialog;
@@ -664,6 +665,8 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         help.addSeparator();
         checkUpdateItem = menuItem(null, I18n.t("main.menu.help.checkUpdate"), null, this::openUpdateDialog);
         help.add(checkUpdateItem);
+        help.add(menuItem(null, I18n.t("main.menu.help.reportBug"), null,
+                () -> BugReportDialog.show(this, ctx.paths().logDir(), io)));
         help.add(menuItem(AppIcon.INFO, I18n.t("main.menu.help.about"), null, this::showAbout));
         bar.add(help);
         return bar;
