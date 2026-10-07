@@ -502,8 +502,10 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         super.dispose();
     }
 
+    /** Hasil load awal: store.load() tidak memanggil listener, jadi beranda juga diisi di sini. EDT. */
     public void showSnapshot(ProfileSnapshot snapshot) {
         hostTree.setSnapshot(snapshot);
+        home.setSnapshot(snapshot);
     }
 
     public JTabbedPane tabs() {
