@@ -333,7 +333,7 @@ public class SftpPanel extends JPanel {
             @Override
             public void popupMenuWillBecomeVisible(javax.swing.event.PopupMenuEvent e) {
                 selectRowUnderPointer();
-                boolean file = selectedEntries().stream().anyMatch(en -> en.type() == RemoteEntry.Type.FILE);
+                boolean file = selectedEntries().stream().anyMatch(SftpPanel::maybeFile);
                 open.setEnabled(file);
                 edit.setEnabled(file);
                 editWith.setEnabled(file);
@@ -460,7 +460,7 @@ public class SftpPanel extends JPanel {
     }
 
     private void downloadSelected() {
-        var selected = selectedEntries().stream().filter(e -> e.type() == RemoteEntry.Type.FILE).toList();
+        var selected = selectedEntries().stream().filter(SftpPanel::maybeFile).toList();
         if (selected.isEmpty()) {
             return;
         }
@@ -720,13 +720,31 @@ public class SftpPanel extends JPanel {
         }
     }
 
-    /** Double-click / Enter: direktori dibuka; file ditangani {@link #openFile}. */
+    /**
+     * Double-click / Enter: direktori dibuka; file ditangani {@link #openFile}. Symlink dicek dulu targetnya
+     * (mis. {@code sites-enabled/*.conf} menunjuk ke file, bukan folder).
+     */
     protected void activate(RemoteEntry entry) {
-        if (entry.isDirectory() || entry.type() == RemoteEntry.Type.SYMLINK) {
+        if (entry.isDirectory()) {
             navigate(entry.path());
+        } else if (entry.type() == RemoteEntry.Type.SYMLINK) {
+            if (link != null) {
+                call(() -> svc().stat(entry.path()), target -> {
+                    if (target.type() == RemoteEntry.Type.FILE) {
+                        openFile(entry);
+                    } else {
+                        navigate(entry.path());
+                    }
+                });
+            }
         } else {
             openFile(entry);
         }
+    }
+
+    /** File biasa, atau symlink yang mungkin menunjuk ke file (targetnya dicek saat dibuka/di-download). */
+    private static boolean maybeFile(RemoteEntry e) {
+        return e.type() == RemoteEntry.Type.FILE || e.type() == RemoteEntry.Type.SYMLINK;
     }
 
     /**
@@ -738,13 +756,13 @@ public class SftpPanel extends JPanel {
     }
 
     private void editSelected(String command) {
-        selectedEntries().stream().filter(e -> e.type() == RemoteEntry.Type.FILE).findFirst().ifPresent(entry -> {
+        selectedEntries().stream().filter(SftpPanel::maybeFile).findFirst().ifPresent(entry -> {
             editActions.edit(profile, entry.path(), command);
         });
     }
 
     private void editSelectedAsRoot() {
-        selectedEntries().stream().filter(e -> e.type() == RemoteEntry.Type.FILE).findFirst()
+        selectedEntries().stream().filter(SftpPanel::maybeFile).findFirst()
                 .ifPresent(entry -> editActions.editAsRoot(profile, entry.path()));
     }
 

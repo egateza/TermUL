@@ -42,6 +42,8 @@ public final class RemoteFileService implements AutoCloseable {
     private static final int BUFFER = 32 * 1024;
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final Duration CHECK_TIMEOUT = Duration.ofSeconds(15);
+    /** Batas rantai symlink (SYMLOOP_MAX Linux). */
+    private static final int MAX_LINK_HOPS = 40;
 
     private final SshLease lease;
     private final SftpClient sftp;
@@ -252,10 +254,14 @@ public final class RemoteFileService implements AutoCloseable {
      * <p>File lama ditolak kalau tidak bisa ditulis user login, atau kalau owner-nya bukan user login
      * (mis. root, walau group-writable). Rename cukup butuh izin tulis di direktori, jadi tanpa pengecekan ini
      * file tersebut tertimpa dan owner-nya berubah menjadi user login. File seperti itu diedit lewat sudo.
+     *
+     * <p>Kalau {@code remote} symlink (mis. {@code /etc/apache2/sites-enabled/*.conf}), yang diganti adalah file
+     * targetnya: rename di path link akan mengganti link itu sendiri dengan file biasa.
      */
-    public void upload(Path local, String remote, Integer newFileMode, TransferListener listener)
+    public void upload(Path local, String remoteOrLink, Integer newFileMode, TransferListener listener)
             throws RemoteFileException {
         Objects.requireNonNull(listener);
+        String remote = resolveLinks(remoteOrLink);
         String tmp = RemotePaths.join(RemotePaths.parent(remote),
                 "." + RemotePaths.name(remote) + ".termul-" + randomSuffix() + ".tmp");
         boolean tmpCreated = false;
@@ -291,6 +297,43 @@ public final class RemoteFileService implements AutoCloseable {
                     log.warn("File temp remote {} tidak bisa dihapus: {}", tmp, e.toString());
                 }
             }
+        }
+    }
+
+    /**
+     * Mengikuti rantai symlink sampai path yang bukan symlink (seperti {@code readlink -f} untuk komponen terakhir).
+     * Path yang belum ada, atau link yang target akhirnya belum ada, dikembalikan apa adanya / sampai link terakhir.
+     */
+    String resolveLinks(String path) throws RemoteFileException {
+        String current = path;
+        try {
+            for (int hop = 0; hop < MAX_LINK_HOPS; hop++) {
+                Attributes attrs;
+                try {
+                    attrs = sftp.lstat(current);
+                } catch (SftpException e) {
+                    if (e.getStatus() == SftpConstants.SSH_FX_NO_SUCH_FILE) {
+                        return hop == 0 ? path : canonicalOrSelf(current);
+                    }
+                    throw e;
+                }
+                if (!attrs.isSymbolicLink()) {
+                    return hop == 0 ? path : canonicalOrSelf(current);
+                }
+                current = RemotePaths.join(RemotePaths.parent(current), sftp.readLink(current));
+            }
+        } catch (IOException e) {
+            throw translate("Gagal membaca symlink", path, e);
+        }
+        throw new RemoteFileException("Terlalu banyak symlink bertingkat: " + path);
+    }
+
+    /** Membersihkan {@code ..} dari target link relatif; path yang belum ada dibiarkan. */
+    private String canonicalOrSelf(String path) {
+        try {
+            return sftp.canonicalPath(path);
+        } catch (IOException e) {
+            return path;
         }
     }
 

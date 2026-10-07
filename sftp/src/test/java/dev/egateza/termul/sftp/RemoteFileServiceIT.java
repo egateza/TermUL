@@ -129,6 +129,37 @@ class RemoteFileServiceIT {
     }
 
     @Test
+    void uploadLewatSymlinkMenggantiTargetDanLinkTetapUtuh() throws Exception {
+        // seperti /etc/apache2/sites-enabled/x.conf -> ../sites-available/x.conf
+        files.mkdir(home + "/sites-available");
+        files.mkdir(home + "/sites-enabled");
+        String target = home + "/sites-available/site.conf";
+        String link = home + "/sites-enabled/site.conf";
+        files.upload(Files.writeString(tmp.resolve("v1"), "v1\n"), target, 0640, TransferListener.NONE);
+        root("ln -s ../sites-available/site.conf " + link);
+
+        files.upload(Files.writeString(tmp.resolve("v2"), "v2\n"), link, null, TransferListener.NONE);
+
+        assertThat(root("readlink " + link)).isEqualTo("../sites-available/site.conf\n");
+        assertThat(root("cat " + target)).isEqualTo("v2\n");
+        assertThat(files.stat(target).mode()).isEqualTo(0640);
+        assertThat(files.list(home + "/sites-available")).extracting(RemoteEntry::name).containsExactly("site.conf");
+        assertThat(files.list(home + "/sites-enabled")).singleElement()
+                .satisfies(e -> assertThat(e.type()).isEqualTo(RemoteEntry.Type.SYMLINK));
+    }
+
+    @Test
+    void resolveLinksMengikutiRantaiDanMembiarkanPathBiasa() throws Exception {
+        String target = home + "/real.conf";
+        files.upload(Files.writeString(tmp.resolve("v1"), "x\n"), target, null, TransferListener.NONE);
+        root("ln -s real.conf " + home + "/a && ln -s a " + home + "/b");
+
+        assertThat(files.resolveLinks(home + "/b")).isEqualTo(target);
+        assertThat(files.resolveLinks(target)).isEqualTo(target);
+        assertThat(files.resolveLinks(home + "/baru.conf")).isEqualTo(home + "/baru.conf");
+    }
+
+    @Test
     void listMenampilkanOwnerDanGroup() throws Exception {
         files.mkdir(home + "/d");
         var entries = files.list(home);
