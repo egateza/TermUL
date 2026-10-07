@@ -761,6 +761,11 @@ public final class TerminalTab extends JPanel {
                     log.info("Auto-inject {} ke {} dilewati: password belum disimpan", type, profile.address());
                     return;
                 }
+                if (vault.isLockedByUser()) { // dikunci manual: jangan buka diam-diam (DPAPI) atau munculkan prompt
+                    log.info("Auto-inject {} ke {} dilewati: vault dikunci", type, profile.address());
+                    SwingUtilities.invokeLater(() -> showNotice(I18n.t("tab.autoInject.locked")));
+                    return;
+                }
                 if (!vault.ensureUnlocked()) {
                     return;
                 }

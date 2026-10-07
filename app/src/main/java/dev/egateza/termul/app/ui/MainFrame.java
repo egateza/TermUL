@@ -1466,8 +1466,28 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private JMenu buildVaultMenu() {
         var gate = ctx.vault();
         var menu = new JMenu(I18n.t("main.menu.vault"));
-        menu.add(menuItem(null, I18n.t("main.menu.vault.unlock"), null, () -> ctx.sshOps().execute(gate::ensureUnlocked)));
-        menu.add(menuItem(null, I18n.t("main.menu.vault.lock"), null, () -> ctx.sshOps().execute(gate::lock)));
+        var unlock = menuItem(null, I18n.t("main.menu.vault.unlock"), null,
+                () -> ctx.sshOps().execute(gate::unlockExplicitly));
+        var lock = menuItem(null, I18n.t("main.menu.vault.lock"), null, () -> ctx.sshOps().execute(gate::lock));
+        menu.add(unlock);
+        menu.add(lock);
+        // status kunci terlihat dari menu: hanya aksi yang berlaku yang aktif
+        menu.addMenuListener(new javax.swing.event.MenuListener() {
+            @Override
+            public void menuSelected(javax.swing.event.MenuEvent e) {
+                boolean unlocked = gate.vault().isUnlocked();
+                unlock.setEnabled(!unlocked);
+                lock.setEnabled(unlocked);
+            }
+
+            @Override
+            public void menuDeselected(javax.swing.event.MenuEvent e) {
+            }
+
+            @Override
+            public void menuCanceled(javax.swing.event.MenuEvent e) {
+            }
+        });
         menu.add(menuItem(null, I18n.t("main.menu.vault.changePassword"), null,
                 () -> ctx.sshOps().execute(gate::changeMasterPasswordInteractive)));
         menu.add(menuItem(null, I18n.t("main.menu.vault.forgetPassword"), null,

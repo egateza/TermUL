@@ -33,6 +33,11 @@ Dua opsi di bawah. **Diputuskan: kombinasi**, lihat `docs/adr/0002-vault-design.
 
 Kombinasi yang disarankan: Opsi 2, dengan opsi menyimpan master key yang dibungkus DPAPI ("remember on this PC").
 
+Kunci manual (menu **Vault → Kunci vault**) berlaku sampai user sendiri membuka vault lagi. Selama itu key DPAPI tidak
+dipakai untuk unlock on-demand: inject dan connect meminta master password, dan auto-inject sudo/su dilewati dengan
+pemberitahuan. Hanya **Vault → Buka vault** yang boleh memakai DPAPI lagi. Auto-lock idle tidak lengket: dengan
+"remember on this PC" vault terbuka lagi lewat DPAPI saat dibutuhkan.
+
 Tipe secret per profil: `LOGIN_PASSWORD`, `KEY_PASSPHRASE`, `SUDO_PASSWORD`, `ROOT_PASSWORD`.
 
 ## Aturan auto-sudo / inject password

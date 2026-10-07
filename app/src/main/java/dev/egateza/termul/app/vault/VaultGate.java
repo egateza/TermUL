@@ -28,6 +28,11 @@ import org.slf4j.LoggerFactory;
  * Pintu akses ke vault untuk UI: unlock on-demand (DPAPI dulu, lalu prompt master password),
  * membuat vault baru kalau belum ada, dan auto-lock setelah idle.
  *
+ * <p>Kunci manual ({@link #lock()}) berlaku sampai user sendiri membuka vault lagi: selama itu key DPAPI ("ingat di
+ * PC ini") tidak dipakai untuk unlock on-demand, jadi inject/connect meminta master password dan auto-inject sudo
+ * dilewati. Hanya {@link #unlockExplicitly()} (menu "Buka vault") yang boleh memakai DPAPI lagi. Auto-lock idle
+ * tidak lengket.
+ *
  * <p>{@link #ensureUnlocked()} <b>tidak boleh</b> dipanggil di EDT (Argon2id ±0,5 detik + dialog blocking).
  */
 public final class VaultGate implements AutoCloseable {
@@ -41,6 +46,7 @@ public final class VaultGate implements AutoCloseable {
     private final ScheduledExecutorService timer;
     private final Object unlockLock = new Object(); // satu prompt unlock pada satu waktu
     private volatile long lastUse = System.nanoTime();
+    private volatile boolean lockedByUser; // true sejak "Kunci vault" sampai vault dibuka lagi
 
     public VaultGate(CredentialVault vault, Supplier<Component> parent, Duration idleLock) {
         this.vault = vault;
@@ -77,11 +83,10 @@ public final class VaultGate implements AutoCloseable {
             if (!vault.exists()) {
                 return createInteractive();
             }
-            if (vault.unlockWithOsKey()) {
-                log.info("Vault dibuka dengan key DPAPI");
+            if (tryOsKey()) {
                 return true;
             }
-            String message = I18n.t("vault.unlock.prompt");
+            String message = I18n.t(lockedByUser ? "vault.unlock.locked" : "vault.unlock.prompt");
             for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
                 char[] pw = askPasswords(I18n.t("vault.unlock.title"), new String[] {message})[0];
                 if (pw == null) {
@@ -89,6 +94,7 @@ public final class VaultGate implements AutoCloseable {
                 }
                 try {
                     vault.unlock(pw);
+                    lockedByUser = false;
                     log.info("Vault dibuka");
                     return true;
                 } catch (VaultException.WrongPassword e) {
@@ -97,6 +103,40 @@ public final class VaultGate implements AutoCloseable {
             }
             showError(I18n.t("vault.title"), I18n.t("vault.unlock.tooMany"));
             return false;
+        }
+    }
+
+    /**
+     * Buka vault atas permintaan user (menu "Buka vault"): key DPAPI boleh dipakai lagi walaupun vault sebelumnya
+     * dikunci manual. Panggil di luar EDT.
+     *
+     * @return false kalau user membatalkan
+     */
+    public boolean unlockExplicitly() {
+        synchronized (unlockLock) {
+            if (lockedByUser && !vault.isUnlocked() && vault.exists() && vault.unlockWithOsKey()) {
+                lockedByUser = false;
+                touch();
+                log.info("Vault dibuka dengan key DPAPI");
+                return true;
+            }
+            return ensureUnlocked();
+        }
+    }
+
+    /** true kalau vault dikunci user lewat menu dan belum dibuka lagi. */
+    public boolean isLockedByUser() {
+        return lockedByUser && !vault.isUnlocked();
+    }
+
+    /** Unlock dengan key DPAPI tanpa dialog, kecuali vault sedang dikunci manual. */
+    boolean tryOsKey() {
+        synchronized (unlockLock) {
+            if (lockedByUser || !vault.unlockWithOsKey()) {
+                return false;
+            }
+            log.info("Vault dibuka dengan key DPAPI");
+            return true;
         }
     }
 
@@ -129,6 +169,7 @@ public final class VaultGate implements AutoCloseable {
             }
             try {
                 vault.create(first);
+                lockedByUser = false;
                 return true;
             } catch (VaultException e) {
                 showError(I18n.t("vault.create.title"), e.getMessage());
@@ -206,12 +247,16 @@ public final class VaultGate implements AutoCloseable {
         }
     }
 
+    /** Kunci manual: berlaku sampai user membuka vault lagi (lihat keterangan class). */
     public void lock() {
-        vault.lock();
+        synchronized (unlockLock) {
+            lockedByUser = true;
+            vault.lock();
+        }
         log.info("Vault dikunci");
     }
 
-    private void autoLockIfIdle() {
+    void autoLockIfIdle() {
         if (vault.isUnlocked() && System.nanoTime() - lastUse > idleLock.toNanos()) {
             vault.lock();
             log.info("Vault dikunci otomatis setelah idle {} menit", idleLock.toMinutes());
