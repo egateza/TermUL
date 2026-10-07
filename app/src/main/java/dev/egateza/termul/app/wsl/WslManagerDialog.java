@@ -1,6 +1,10 @@
 package dev.egateza.termul.app.wsl;
 
 import dev.egateza.termul.app.i18n.I18n;
+import dev.egateza.termul.app.ui.anim.Animation;
+import dev.egateza.termul.app.ui.anim.AnimationKind;
+import dev.egateza.termul.app.ui.anim.AnimationView;
+import dev.egateza.termul.app.ui.anim.LoadingPanel;
 import dev.egateza.termul.core.profile.HostProfile;
 import dev.egateza.termul.core.profile.ProfileSnapshot;
 import dev.egateza.termul.core.wsl.WslDistro;
@@ -61,6 +65,9 @@ final class WslManagerDialog extends JDialog {
     private final Model model;
     private final JTable table;
     private final JLabel status = new JLabel(I18n.t("wsl.manager.loading"));
+    /** Animasi di kiri status selama operasi berjalan; jenisnya mengikuti pengaturan animasi layar connect. */
+    private final AnimationView progress = new AnimationView(Animation.Size.COMPACT,
+            AnimationKind.PACMAN.create(Animation.Size.COMPACT, null));
     private final JButton start = new JButton(I18n.t("wsl.manager.start"));
     private final JButton stop = new JButton(I18n.t("wsl.manager.stop"));
     private final JButton newProfile = new JButton(I18n.t("wsl.manager.newProfile"));
@@ -125,10 +132,14 @@ final class WslManagerDialog extends JDialog {
         var buttons = new JPanel(new BorderLayout());
         buttons.add(rowButtons, BorderLayout.WEST);
         buttons.add(globalButtons, BorderLayout.EAST);
-        status.setBorder(BorderFactory.createEmptyBorder(6, 2, 0, 2));
+        startProgress(status.getText()); // "membaca daftar distro..." sampai daftar pertama masuk
+        var statusRow = new JPanel(new BorderLayout(8, 0));
+        statusRow.setBorder(BorderFactory.createEmptyBorder(6, 2, 0, 2));
+        statusRow.add(progress, BorderLayout.WEST);
+        statusRow.add(status, BorderLayout.CENTER);
         var south = new JPanel(new BorderLayout());
         south.add(buttons, BorderLayout.NORTH);
-        south.add(status, BorderLayout.SOUTH);
+        south.add(statusRow, BorderLayout.SOUTH);
 
         var content = new JPanel(new BorderLayout(0, 8));
         content.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
@@ -163,6 +174,7 @@ final class WslManagerDialog extends JDialog {
         if (!loaded) {
             loaded = true;
             if (!busy) {
+                progress.setVisible(false);
                 status.setText(" ");
             }
         }
@@ -182,15 +194,31 @@ final class WslManagerDialog extends JDialog {
 
     /** Operasi sedang berjalan: tombol dimatikan dan {@code message} tampil di bawah. */
     void setBusy(String message) {
+        if (!busy) { // operasi baru; animasi tidak berganti selama operasi yang sama
+            startProgress(message);
+        }
         busy = true;
         status.setFont(status.getFont().deriveFont(Font.ITALIC));
         status.setText(message);
         updateButtons();
     }
 
+    /** Tampilkan animasi proses (dipilih ulang kalau pengaturannya acak); tersembunyi kalau "tanpa animasi". */
+    private void startProgress(String message) {
+        var kind = LoadingPanel.next();
+        kind.ifPresent(k -> progress.setAnimation(k.create(Animation.Size.COMPACT, null)));
+        progress.setVisible(kind.isPresent());
+        progress.getAccessibleContext().setAccessibleName(message);
+    }
+
+    boolean progressVisible() {
+        return progress.isVisible();
+    }
+
     /** Operasi selesai; {@code message} (boleh null) tampil di bawah. */
     void setIdle(String message) {
         busy = false;
+        progress.setVisible(false);
         status.setFont(status.getFont().deriveFont(Font.PLAIN));
         status.setText(message == null || message.isBlank() ? " " : message);
         updateButtons();

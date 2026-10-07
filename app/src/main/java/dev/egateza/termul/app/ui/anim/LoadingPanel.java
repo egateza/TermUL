@@ -44,7 +44,11 @@ public final class LoadingPanel extends JPanel {
         this(message, next(), who);
     }
 
-    private static Optional<AnimationKind> next() {
+    /**
+     * Animasi berikutnya sesuai pilihan "animasi layar connect" (acak: dipilih ulang, tidak sama dengan sebelumnya);
+     * juga dipakai indikator proses lain, mis. status WSL Manager. Kosong kalau tanpa animasi. EDT.
+     */
+    public static Optional<AnimationKind> next() {
         var kind = current.pick(ThreadLocalRandom.current(), last);
         kind.ifPresent(k -> last = k);
         return kind;
