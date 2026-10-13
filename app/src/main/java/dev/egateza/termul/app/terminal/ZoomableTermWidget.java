@@ -56,6 +56,29 @@ public final class ZoomableTermWidget extends JediTermWidget {
         return new TerminalSearchBar();
     }
 
+    /** true kalau ada teks yang diseleksi. EDT. */
+    public boolean hasSelection() {
+        return getTerminalPanel().getSelection() != null;
+    }
+
+    /** Salin seleksi ke clipboard lalu hapus seleksinya (sama dengan klik kanan → Copy). EDT. */
+    public void copySelection() {
+        if (hasSelection()) {
+            ((ZoomPanel) getTerminalPanel()).copyOrPaste();
+        }
+    }
+
+    /** Buka kotak cari terminal, sama dengan shortcut Find bawaan JediTerm. EDT. */
+    public void openFind() {
+        String name = mySettingsProvider.getFindActionPresentation().getName();
+        for (var action : getActions()) {
+            if (action.getName().equals(name)) {
+                action.actionPerformed(null);
+                return;
+            }
+        }
+    }
+
     /** Membaca ulang font dari settings dan menyesuaikan ukuran grid (PTY ikut di-resize). Panggil di EDT. */
     public void refreshFont() {
         ((ZoomPanel) getTerminalPanel()).refreshFont();
@@ -383,7 +406,7 @@ public final class ZoomableTermWidget extends JediTermWidget {
          * Ada selection: copy lalu selection dihapus. Tidak ada: paste, tetap lewat {@link #pasteFilter}. Copy/paste
          * JediTerm private, jadi dijalankan lewat action-nya (yang juga dipakai menu klik kanan).
          */
-        private void copyOrPaste() {
+        void copyOrPaste() {
             boolean copy = getSelection() != null;
             String name = (copy ? settings.getCopyActionPresentation() : settings.getPasteActionPresentation()).getName();
             for (var action : getActions()) {

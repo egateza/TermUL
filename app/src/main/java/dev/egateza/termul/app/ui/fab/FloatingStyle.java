@@ -14,21 +14,30 @@ import java.util.function.Function;
  * FloatingButton.borderColor / borderWidth                      garis tepi
  * FloatingButton.shadowColor / shadowOffset                     shadowOffset &gt; 0 = bayangan tegas ke kanan-bawah
  * FloatingButton.arc                                            999 = bulat/pil
+ * FloatingButton.warningBackground / dangerBackground           status perlu perhatian / gagal
+ * FloatingButton.badgeBackground / badgeForeground              angka kecil di pojok tombol
  * </pre>
  *
  * @param shadowOffset bayangan tegas (px) ke kanan-bawah; 0 = bayangan lembut di bawah tombol
  */
 public record FloatingStyle(Color background, Color foreground, Color hoverBackground, Color borderColor,
-                            int borderWidth, Color shadowColor, int shadowOffset, int arc) {
+                            int borderWidth, Color shadowColor, int shadowOffset, int arc, Color badgeBackground,
+                            Color badgeForeground) {
 
     public enum Kind {
         /** Aksi utama: warna aksen tema. */
         PRIMARY,
         /** Tombol bantu yang lebih tenang: warna panel. */
-        SECONDARY
+        SECONDARY,
+        /** Status yang perlu perhatian (mis. konflik upload). */
+        WARNING,
+        /** Status gagal. */
+        DANGER
     }
 
     static final Color FALLBACK_ACCENT = new Color(0x2675BF);
+    static final Color FALLBACK_WARNING = new Color(0xF5A524);
+    static final Color FALLBACK_DANGER = new Color(0xE5484D);
     static final int SOFT_SHADOW_ALPHA = 70;
 
     public boolean hardShadow() {
@@ -46,17 +55,31 @@ public record FloatingStyle(Color background, Color foreground, Color hoverBackg
         Color text = color(lookup, "Label.foreground", Color.BLACK);
         Color bg;
         Color fg;
-        if (kind == Kind.PRIMARY) {
-            bg = color(lookup, "FloatingButton.background",
-                    color(lookup, "Component.accentColor", color(lookup, "Button.default.background", FALLBACK_ACCENT)));
-            fg = color(lookup, "FloatingButton.foreground", readableOn(bg));
-        } else {
-            bg = color(lookup, "FloatingButton.secondaryBackground", panel);
-            fg = color(lookup, "FloatingButton.secondaryForeground", text);
+        switch (kind) {
+            case PRIMARY -> {
+                bg = color(lookup, "FloatingButton.background", color(lookup, "Component.accentColor",
+                        color(lookup, "Button.default.background", FALLBACK_ACCENT)));
+                fg = color(lookup, "FloatingButton.foreground", readableOn(bg));
+            }
+            case SECONDARY -> {
+                bg = color(lookup, "FloatingButton.secondaryBackground", panel);
+                fg = color(lookup, "FloatingButton.secondaryForeground", text);
+            }
+            case WARNING -> {
+                bg = color(lookup, "FloatingButton.warningBackground", FALLBACK_WARNING);
+                fg = readableOn(bg);
+            }
+            case DANGER -> {
+                bg = color(lookup, "FloatingButton.dangerBackground", FALLBACK_DANGER);
+                fg = readableOn(bg);
+            }
+            default -> throw new IllegalArgumentException(String.valueOf(kind));
         }
         Color hover = kind == Kind.PRIMARY
                 ? color(lookup, "FloatingButton.hoverBackground", blend(bg, fg, 0.12f))
                 : blend(bg, fg, 0.10f);
+        Color badgeBg = color(lookup, "FloatingButton.badgeBackground", FALLBACK_DANGER);
+        Color badgeFg = color(lookup, "FloatingButton.badgeForeground", readableOn(badgeBg));
         Integer borderWidthKey = integer(lookup, "FloatingButton.borderWidth");
         // tanpa gaya dari tema, tombol bantu tetap diberi garis tipis supaya terlihat di atas terminal
         int borderWidth = borderWidthKey != null ? borderWidthKey : kind == Kind.SECONDARY ? 1 : 0;
@@ -67,7 +90,7 @@ public record FloatingStyle(Color background, Color foreground, Color hoverBackg
                 shadowOffset > 0 ? Color.BLACK : new Color(0, 0, 0, SOFT_SHADOW_ALPHA));
         Integer arc = integer(lookup, "FloatingButton.arc");
         return new FloatingStyle(bg, fg, hover, border, Math.max(0, borderWidth), shadow, shadowOffset,
-                arc == null ? 999 : Math.max(0, arc));
+                arc == null ? 999 : Math.max(0, arc), badgeBg, badgeFg);
     }
 
     /** Hitam atau putih, mana yang lebih terbaca di atas {@code bg}. */

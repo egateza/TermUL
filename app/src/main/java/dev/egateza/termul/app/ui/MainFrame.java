@@ -2152,6 +2152,8 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         tab.setStateListener(this::updateTerminalMenu);
         tab.setCurrentProfile(() -> store.snapshot().find(profile.id()).orElse(null));
         tab.setAutoSudoVault(ctx.vault());
+        tab.setSecretInjector(type -> tab.injectSecret(type, ctx.vault())); // tombol toolbar = hotkey Ctrl+Shift+P
+        tab.setEditActivity(sink -> ctx.edits().addActivityListener(profile.id(), sink), this::showEditTracker);
         tab.setHostPalette(id -> HostTerminalColors.palette(id, customThemes));
         return tab;
     }

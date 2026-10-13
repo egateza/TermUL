@@ -4,6 +4,7 @@ import dev.egateza.termul.app.edit.EditorLauncher;
 import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.app.sftp.ActivityBar.Level;
 import dev.egateza.termul.app.ui.AppIcon;
+import dev.egateza.termul.app.ui.fab.FloatingOverlay;
 import dev.egateza.termul.app.ui.Dialogs;
 import dev.egateza.termul.app.ui.Edt;
 import dev.egateza.termul.app.ui.Shortcuts;
@@ -197,9 +198,13 @@ public class SftpPanel extends JPanel {
         var dnd = new FileDropHandler();
         table.setTransferHandler(dnd);
         scroll.setTransferHandler(dnd);
-        add(scroll, BorderLayout.CENTER);
 
         transfers = new TransferQueue(profile.name());
+        var tableArea = new FloatingOverlay();
+        tableArea.setBase(scroll);
+        tableArea.setMargins(24, 16); // jangan menutupi scrollbar tabel
+        transferBadge = new TransferBadge(transfers, tableArea);
+        add(tableArea, BorderLayout.CENTER);
         var bottom = new JPanel(new BorderLayout());
         bottom.add(transfers, BorderLayout.NORTH);
         bottom.add(activity, BorderLayout.SOUTH);
@@ -207,6 +212,7 @@ public class SftpPanel extends JPanel {
     }
 
     private final TransferQueue transfers;
+    private final TransferBadge transferBadge;
 
     /**
      * Kolom filter di ujung kanan toolbar. Ctrl/Cmd+F dipasang sebagai binding ancestor panel ini, sehingga
@@ -823,6 +829,7 @@ public class SftpPanel extends JPanel {
     /** Menutup SFTP (tab ditutup). Koneksi bersama baru ditutup kalau tidak dipakai lagi (mis. sesi edit). */
     public void dispose() {
         disposed = true;
+        transferBadge.dispose();
         transfers.shutdown();
         unsubscribeLink.run();
         unsubscribeEdits.run();

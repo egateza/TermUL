@@ -4,7 +4,7 @@ Floating button (tombol mengambang) di atas beranda, terminal, dan panel SFTP, d
 Desain awal dan contoh interaktifnya ada di artifact *Floating Button TermUL*. File ini mencatat apa yang sudah dan
 belum selesai.
 
-**Status:** 🟡 berjalan · terakhir diperbarui 2026-10-13
+**Status:** 🟡 Rilis A dan B selesai, Rilis C menunggu keputusan · terakhir diperbarui 2026-10-13
 
 ## Prinsip yang berlaku untuk semua tombol
 
@@ -28,17 +28,17 @@ belum selesai.
 | ✅ | #2 Extended FAB **Sambung ulang** (terminal) | Muncul saat sesi berakhir/putus; label menyusut saat Anda scroll ke atas membaca history |
 | ✅ | #3 Mini FAB **Ke bawah** (terminal) | Muncul saat Anda scroll ke atas; menampilkan jumlah baris baru, klik untuk lompat ke baris terakhir |
 | ✅ | Unit test | `FloatingStyleTest`, `FloatingOverlayTest`, `NewLinesCounterTest`; ikon baru `PLUS` dan `ARROW_DOWN` di kelima set ikon |
-| ⬜ | Rilis | v0.1.168 |
+| ✅ | Rilis | [v0.1.168](https://github.com/egateza/TermUL/releases/tag/v0.1.168) |
 
 ## Rilis B: status pekerjaan + aksi terminal
 
 | | Item | Detail |
 |---|---|---|
-| ⬜ | #5 FAB + badge **Transfer** (SFTP) | Jumlah transfer berjalan; klik menampilkan daftar dan progresnya |
-| ⬜ | #6 Status **Upload remote edit** | Tombol status (mengunggah → berhasil → konflik/gagal) alih-alih cincin progres, karena file config biasanya kecil |
-| ⬜ | #7 Floating toolbar **Cari / Salin / Sudo** (terminal) | Muncul saat ada seleksi teks atau prompt password; Sudo memakai inject manual yang sama dengan Ctrl+Shift+P |
-| ⬜ | Unit test | — |
-| ⬜ | Rilis | — |
+| ✅ | #5 FAB + badge **Transfer** (SFTP) | Jumlah transfer berjalan + antre di atas daftar file; klik menampilkan daftar dan progresnya (diperbarui langsung) |
+| ✅ | #6 Status **Upload remote edit** | Tombol status di kanan bawah terminal. Mengunggah/berhasil hilang sendiri; konflik (kuning) dan gagal (merah) tetap tampil sampai diklik, lalu membuka daftar file yang diedit |
+| ✅ | #7 Floating toolbar **Cari / Salin / Sudo** (terminal) | Cari + Salin saat ada seleksi; Password sudo/root saat baris kursor berupa prompt password. Inject manual yang sama dengan Ctrl+Shift+P |
+| ✅ | Unit test | `TransferListTest`, `EditStatusFloatTest`, `PromptResponderTest.passwordPrompt…`, gaya peringatan/gagal; ikon baru `SEARCH` dan `COPY` |
+| ⬜ | Rilis | v0.1.169 |
 
 ## Rilis C: menunggu keputusan
 
@@ -54,3 +54,5 @@ belum selesai.
 | Tanggal | Rilis | Versi | Catatan |
 |---|---|---|---|
 | 2026-10-13 | — | — | Plan dibuat |
+| 2026-10-13 | A | 0.1.168 | Host baru, Sambung ulang, Ke bawah |
+| 2026-10-13 | B | 0.1.169 | Badge transfer, status remote edit, toolbar Cari/Salin/Sudo |

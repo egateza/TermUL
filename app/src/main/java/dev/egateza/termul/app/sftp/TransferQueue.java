@@ -5,6 +5,7 @@ import dev.egateza.termul.app.ui.AppIcon;
 import dev.egateza.termul.sftp.RemoteFileException;
 import dev.egateza.termul.sftp.TransferListener;
 import java.awt.BorderLayout;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -40,6 +41,9 @@ public final class TransferQueue extends JPanel {
     private final JButton cancel = new JButton(I18n.t("transfer.cancel"), AppIcon.XMARK.icon());
     private final AtomicInteger queued = new AtomicInteger();
     private volatile AtomicBoolean currentCancel = new AtomicBoolean();
+    private final java.util.concurrent.atomic.AtomicLong ids = new java.util.concurrent.atomic.AtomicLong();
+    private final TransferList list = new TransferList(); // EDT
+    private final java.util.List<Runnable> listeners = new java.util.concurrent.CopyOnWriteArrayList<>();
 
     public TransferQueue(String name) {
         super(new BorderLayout(6, 0));
@@ -66,10 +70,17 @@ public final class TransferQueue extends JPanel {
     public void submit(String title, Job job, Runnable onDone, Consumer<Throwable> onError, Runnable onCancelled) {
         queued.incrementAndGet();
         setVisible(true);
+        long id = ids.incrementAndGet();
+        onEdt(() -> {
+            list.add(id, title);
+            fireChanged();
+        });
         worker.execute(() -> {
             var cancelFlag = new AtomicBoolean();
             currentCancel = cancelFlag;
             SwingUtilities.invokeLater(() -> {
+                list.start(id);
+                fireChanged();
                 label.setText(queued.get() > 1 ? I18n.t("transfer.label", title, String.valueOf(queued.get() - 1)) : title);
                 bar.setValue(0);
                 bar.setString("0%");
@@ -86,6 +97,8 @@ public final class TransferQueue extends JPanel {
                     }
                     lastUi = now;
                     SwingUtilities.invokeLater(() -> {
+                        list.progress(id, done, total);
+                        fireChanged();
                         if (total > 0) {
                             bar.setIndeterminate(false);
                             bar.setValue((int) (done * 1000 / total));
@@ -115,6 +128,8 @@ public final class TransferQueue extends JPanel {
             Throwable finalError = error;
             boolean finalCancelled = cancelled || cancelFlag.get();
             SwingUtilities.invokeLater(() -> {
+                list.remove(id);
+                fireChanged();
                 if (queued.decrementAndGet() == 0) {
                     setVisible(false);
                 }
@@ -127,6 +142,33 @@ public final class TransferQueue extends JPanel {
                 }
             });
         });
+    }
+
+    /** Transfer yang berjalan + antre, sesuai urutan antrean. EDT. */
+    List<TransferList.Item> transfers() {
+        return list.items();
+    }
+
+    /**
+     * Dipanggil di EDT setiap daftar transfer atau progresnya berubah (progres paling sering ±10x/detik).
+     *
+     * @return pelepas listener
+     */
+    public Runnable addChangeListener(Runnable listener) {
+        listeners.add(listener);
+        return () -> listeners.remove(listener);
+    }
+
+    private void fireChanged() {
+        listeners.forEach(Runnable::run);
+    }
+
+    private static void onEdt(Runnable r) {
+        if (SwingUtilities.isEventDispatchThread()) {
+            r.run();
+        } else {
+            SwingUtilities.invokeLater(r);
+        }
     }
 
     /** Jumlah transfer yang sedang berjalan + antre. */

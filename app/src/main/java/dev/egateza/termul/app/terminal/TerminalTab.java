@@ -1,6 +1,7 @@
 package dev.egateza.termul.app.terminal;
 
 import dev.egateza.termul.app.i18n.I18n;
+import dev.egateza.termul.app.sftp.ActivityBar;
 import dev.egateza.termul.app.sftp.SftpPanel;
 import dev.egateza.termul.app.ui.AppIcon;
 import dev.egateza.termul.app.ui.fab.FloatingOverlay;
@@ -70,6 +71,9 @@ public final class TerminalTab extends JPanel {
     /** Isi tengah {@code content}: terminal/loading/error/SFTP, dengan tombol mengambang di atasnya. */
     private final FloatingOverlay center = new FloatingOverlay();
     private TerminalFloats floats; // EDT; tombol di atas widget yang sedang tampil, null tanpa widget
+    private EditStatusFloat editStatus; // EDT; status remote edit host ini, null sampai di-set
+    private Runnable unsubscribeEdits = () -> { }; // EDT
+    private java.util.function.Consumer<SecretType> secretInjector; // EDT; null = tanpa tombol password di toolbar
     private final Function<HostProfile, SftpPanel> sftpFactory;
     private final SftpLinks links;
     private final SftpLinks.TerminalHandle gate;   // status sesi ini untuk panel SFTP & sesi edit
@@ -110,6 +114,35 @@ public final class TerminalTab extends JPanel {
     private java.util.function.Consumer<SshTtyConnector> connectedListener; // EDT
     private Runnable stateListener = () -> { }; // EDT
     private volatile BeforeConnect beforeConnect = (p, automatic) -> { };
+
+    /**
+     * Inject password manual dari tombol toolbar terminal; sama dengan hotkey (lihat {@link #injectSecret}). Panggil
+     * sebelum {@link #connect()}.
+     */
+    public void setSecretInjector(java.util.function.Consumer<SecretType> injector) {
+        this.secretInjector = injector;
+    }
+
+    /**
+     * Tampilkan status remote edit host ini di atas terminal.
+     *
+     * @param subscribe   mendaftarkan penerima aktivitas (dipanggil dari thread mana pun), mengembalikan pelepasnya
+     * @param openTracker membuka daftar file yang sedang diedit
+     */
+    public void setEditActivity(java.util.function.Function<java.util.function.BiConsumer<ActivityBar.Level, String>,
+            Runnable> subscribe, Runnable openTracker) {
+        unsubscribeEdits.run();
+        if (editStatus != null) {
+            editStatus.dispose();
+        }
+        editStatus = new EditStatusFloat(center, openTracker);
+        var status = editStatus;
+        unsubscribeEdits = subscribe.apply((level, text) -> SwingUtilities.invokeLater(() -> {
+            if (!disposed && editStatus == status) {
+                status.report(level, text);
+            }
+        }));
+    }
 
     /** Dipanggil (di EDT) setiap status sesi/panel SFTP berubah: connect, gagal, berakhir, toggle SFTP. */
     public void setStateListener(Runnable listener) {
@@ -360,7 +393,7 @@ public final class TerminalTab extends JPanel {
         gate.set(TerminalState.CONNECTED);
         settings.setPaletteOverride(hostPalette.apply(latestProfile().terminalTheme()));
         widget = new ZoomableTermWidget(settings);
-        floats = new TerminalFloats(widget, center, this::reconnect);
+        floats = new TerminalFloats(widget, center, this::reconnect, secretInjector);
         widget.setTtyConnector(tty);
         widget.setPasteFilter(this::confirmPaste);
         applyEnvironmentColor();
@@ -840,6 +873,10 @@ public final class TerminalTab extends JPanel {
             monitor.stop();
         }
         gate.close();
+        unsubscribeEdits.run();
+        if (editStatus != null) {
+            editStatus.dispose();
+        }
         disposeTerminal();
         if (sftp != null) {
             sftp.dispose();

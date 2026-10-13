@@ -101,6 +101,24 @@ public final class PromptResponder implements SshTtyConnector.OutputListener {
         }
     }
 
+    /**
+     * Jenis prompt password yang terlihat di {@code line} (baris kursor, tanpa ANSI), tanpa memeriksa user atau
+     * guard apa pun. Hanya untuk menawarkan inject <b>manual</b> di UI (tombol yang diklik user, sama dengan hotkey);
+     * tidak pernah mengirim apa pun sendiri.
+     *
+     * @return {@link Kind#SUDO}, {@link Kind#SU}, atau null kalau bukan prompt password
+     */
+    public static Kind passwordPrompt(String line) {
+        String trimmed = line.strip();
+        if (SUDO_PROMPT.matcher(trimmed).matches()) {
+            return Kind.SUDO;
+        }
+        if (SU_PROMPT.matcher(trimmed).matches()) {
+            return Kind.SU;
+        }
+        return null;
+    }
+
     public synchronized boolean isArmed() {
         return armed != null;
     }

@@ -13,6 +13,16 @@ class PromptResponderTest {
 
     private static final String PROMPT = "user@server01:~$ ";
 
+    @Test
+    void passwordPromptMengenaliPromptSudoDanSu() {
+        assertThat(PromptResponder.passwordPrompt("[sudo] password for ega: ")).isEqualTo(Kind.SUDO);
+        assertThat(PromptResponder.passwordPrompt("[sudo] kata sandi untuk deploy:")).isEqualTo(Kind.SUDO);
+        assertThat(PromptResponder.passwordPrompt("Password: ")).isEqualTo(Kind.SU);
+        assertThat(PromptResponder.passwordPrompt("user@server01:~$ sudo apt update")).isNull();
+        assertThat(PromptResponder.passwordPrompt("Enter passphrase for key: ")).isNull();
+        assertThat(PromptResponder.passwordPrompt("")).isNull();
+    }
+
     private final AtomicLong clock = new AtomicLong();
     private final List<String> events = new CopyOnWriteArrayList<>();
     private final PromptResponder responder = new PromptResponder("user", new PromptResponder.Listener() {

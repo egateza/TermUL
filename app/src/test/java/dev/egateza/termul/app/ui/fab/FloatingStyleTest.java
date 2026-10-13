@@ -29,6 +29,16 @@ class FloatingStyleTest {
     }
 
     @Test
+    void statusPeringatanDanGagalPunyaWarnaSendiriYangTerbaca() {
+        var warning = FloatingStyle.resolve(FloatingStyle.Kind.WARNING, key -> null);
+        var danger = FloatingStyle.resolve(FloatingStyle.Kind.DANGER, key -> null);
+
+        assertThat(warning.background()).isEqualTo(FloatingStyle.FALLBACK_WARNING);
+        assertThat(danger.background()).isEqualTo(FloatingStyle.FALLBACK_DANGER);
+        assertThat(danger.foreground()).isEqualTo(FloatingStyle.readableOn(FloatingStyle.FALLBACK_DANGER));
+    }
+
+    @Test
     void tanpaWarnaAksenTetapAdaWarna() {
         var style = FloatingStyle.resolve(FloatingStyle.Kind.PRIMARY, key -> null);
 

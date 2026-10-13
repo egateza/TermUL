@@ -44,8 +44,10 @@ public final class FloatingButton extends JButton {
     static final int SOFT_MARGIN = 4;
     private static final int GAP = 8;
     private static final int ANIMATION_MS = 160;
+    static final int BADGE_OVERHANG = 7;
 
-    private final FloatingStyle.Kind kind;
+    private FloatingStyle.Kind kind; // EDT
+    private String badge;            // EDT; null = tanpa badge
     private final Size size;
     /** 0 = label tampil penuh, 1 = hanya ikon. EDT. */
     private float collapse;
@@ -58,7 +60,7 @@ public final class FloatingButton extends JButton {
         super(text);
         this.kind = kind;
         this.size = size;
-        setIcon(icon.icon(size.iconSize, () -> style().foreground()));
+        setAppIcon(icon);
         setFocusable(false);
         setRequestFocusEnabled(false);
         setContentAreaFilled(false);
@@ -71,6 +73,33 @@ public final class FloatingButton extends JButton {
 
     public FloatingStyle style() {
         return FloatingStyle.current(kind);
+    }
+
+    /** Ganti ikon (warnanya tetap mengikuti gaya tombol). */
+    public void setAppIcon(AppIcon icon) {
+        setIcon(icon.icon(size.iconSize, () -> style().foreground()));
+        repaint();
+    }
+
+    /** Ganti warna tombol (mis. status upload berubah jadi gagal). */
+    public void setKind(FloatingStyle.Kind kind) {
+        if (this.kind != kind) {
+            this.kind = kind;
+            repaint();
+        }
+    }
+
+    /** Angka kecil di pojok kanan atas (mis. jumlah transfer); null untuk menyembunyikan. */
+    public void setBadge(String badge) {
+        if (!java.util.Objects.equals(this.badge, badge)) {
+            this.badge = badge;
+            revalidate();
+            repaint();
+        }
+    }
+
+    public String badge() {
+        return badge;
     }
 
     /** Susutkan label (hanya ikon) atau tampilkan lagi, dengan animasi singkat. */
@@ -120,7 +149,12 @@ public final class FloatingButton extends JButton {
             w = Math.max(h, Math.round(full + (h - full) * collapse));
         }
         int pad = shadowPad(s);
-        return new Dimension(w + pad, h + pad);
+        return new Dimension(w + pad + badgePad(), h + pad + badgePad());
+    }
+
+    /** Ruang di kanan atas supaya badge tidak terpotong. */
+    private int badgePad() {
+        return badge == null ? 0 : BADGE_OVERHANG;
     }
 
     @Override
@@ -166,6 +200,7 @@ public final class FloatingButton extends JButton {
                         (float) Math.max(0, body.getArcWidth() - bw), (float) Math.max(0, body.getArcHeight() - bw)));
             }
             paintContent(g2, s, body.getBounds());
+            paintBadge(g2, s, body.getBounds());
         } finally {
             g2.dispose();
         }
@@ -216,15 +251,38 @@ public final class FloatingButton extends JButton {
         g2.setClip(clip);
     }
 
-    /** Badan tombol di dalam komponen; sisanya ruang bayangan. */
+    private void paintBadge(Graphics2D g2, FloatingStyle s, Rectangle body) {
+        if (badge == null) {
+            return;
+        }
+        var font = labelFont().deriveFont(java.awt.Font.BOLD, 11f);
+        g2.setFont(font);
+        FontMetrics fm = g2.getFontMetrics();
+        int h = 18;
+        int w = Math.max(h, fm.stringWidth(badge) + 10);
+        int x = body.x + body.width - w + BADGE_OVERHANG;
+        int y = body.y - BADGE_OVERHANG;
+        g2.setColor(s.badgeBackground());
+        g2.fillRoundRect(x, y, w, h, h, h);
+        if (s.borderWidth() > 0) {
+            g2.setColor(s.borderColor());
+            g2.setStroke(new BasicStroke(Math.min(2f, s.borderWidth())));
+            g2.drawRoundRect(x, y, w - 1, h - 1, h, h);
+        }
+        g2.setColor(s.badgeForeground());
+        g2.drawString(badge, x + (w - fm.stringWidth(badge)) / 2, y + (h - fm.getHeight()) / 2 + fm.getAscent());
+    }
+
+    /** Badan tombol di dalam komponen; sisanya ruang bayangan (dan badge di kanan atas). */
     private RoundRectangle2D body(FloatingStyle s, boolean pressed) {
         int pad = shadowPad(s);
-        double w = getWidth() - pad;
-        double h = getHeight() - pad;
+        int top = badgePad();
+        double w = getWidth() - pad - top;
+        double h = getHeight() - pad - top;
         double x = s.hardShadow() ? (pressed ? s.shadowOffset() : 0) : SOFT_MARGIN / 2.0;
-        double y = s.hardShadow() ? (pressed ? s.shadowOffset() : 0) : SOFT_MARGIN / 2.0 - 1;
+        double y = top + (s.hardShadow() ? (pressed ? s.shadowOffset() : 0) : SOFT_MARGIN / 2.0 - 1);
         double arc = Math.min(s.arc(), Math.min(w, h));
-        return new RoundRectangle2D.Double(x, Math.max(0, y), w, h, arc, arc);
+        return new RoundRectangle2D.Double(x, Math.max(top, y), w, h, arc, arc);
     }
 
     private static int shadowPad(FloatingStyle s) {
