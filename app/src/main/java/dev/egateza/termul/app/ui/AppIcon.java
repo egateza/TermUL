@@ -25,6 +25,7 @@ public enum AppIcon {
     ANGLES_RIGHT,
     ARROW_DOWN,
     ARROW_UP,
+    BOLT,
     BROOM,
     COPY,
     DOWNLOAD,

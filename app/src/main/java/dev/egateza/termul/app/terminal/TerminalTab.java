@@ -2,6 +2,7 @@ package dev.egateza.termul.app.terminal;
 
 import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.app.sftp.ActivityBar;
+import dev.egateza.termul.core.snippet.Snippet;
 import dev.egateza.termul.app.sftp.SftpPanel;
 import dev.egateza.termul.app.ui.AppIcon;
 import dev.egateza.termul.app.ui.fab.FloatingOverlay;
@@ -74,6 +75,8 @@ public final class TerminalTab extends JPanel {
     private EditStatusFloat editStatus; // EDT; status remote edit host ini, null sampai di-set
     private Runnable unsubscribeEdits = () -> { }; // EDT
     private java.util.function.Consumer<SecretType> secretInjector; // EDT; null = tanpa tombol password di toolbar
+    private SnippetHost snippetHost;   // EDT; null = tanpa tombol snippet
+    private SnippetButton snippetButton; // EDT
     private final Function<HostProfile, SftpPanel> sftpFactory;
     private final SftpLinks links;
     private final SftpLinks.TerminalHandle gate;   // status sesi ini untuk panel SFTP & sesi edit
@@ -114,6 +117,58 @@ public final class TerminalTab extends JPanel {
     private java.util.function.Consumer<SshTtyConnector> connectedListener; // EDT
     private Runnable stateListener = () -> { }; // EDT
     private volatile BeforeConnect beforeConnect = (p, automatic) -> { };
+
+    /** Sumber snippet dan pengaturan tombol snippet (dari MainFrame). Semua method dipanggil di EDT. */
+    public interface SnippetHost {
+        /** Snippet untuk host ini (global + grup host). */
+        java.util.List<Snippet> snippetsFor(HostProfile profile);
+
+        boolean buttonVisible();
+
+        /** Sudut tombol, nilai {@code AppConfig.SNIPPET_*}. */
+        String corner();
+
+        /** Tombol diseret ke sudut lain; simpan untuk semua tab. */
+        void cornerChanged(String corner);
+
+        /** Buka dialog kelola snippet. */
+        void manage();
+    }
+
+    /** Pasang tombol snippet di atas terminal tab ini. */
+    public void setSnippetHost(SnippetHost host) {
+        if (sftpOnly) {
+            return; // tanpa shell: tidak ada tempat mengetik snippet
+        }
+        this.snippetHost = host;
+        if (snippetButton != null) {
+            snippetButton.dispose();
+        }
+        snippetButton = new SnippetButton(center, host.corner(), () -> host.snippetsFor(latestProfile()),
+                this::typeText, host::manage, host::cornerChanged);
+        refreshSnippetButton();
+    }
+
+    /** Baca ulang pengaturan tombol snippet (tampil/sembunyi, sudut). EDT. */
+    public void refreshSnippetButton() {
+        if (snippetButton == null) {
+            return;
+        }
+        snippetButton.setCorner(snippetHost.corner());
+        snippetButton.setShown(snippetHost.buttonVisible() && widget != null);
+    }
+
+    /**
+     * Ketik teks ke shell <b>tanpa Enter</b> (snippet). Snippet selalu satu baris tanpa karakter kontrol (dijamin
+     * {@link Snippet}), jadi tidak ada yang berjalan sebelum user menekan Enter sendiri.
+     */
+    public void typeText(String text) {
+        if (connector == null || !connector.isConnected() || text.isEmpty()) {
+            return;
+        }
+        connector.write(text);
+        focusTerminal();
+    }
 
     /**
      * Inject password manual dari tombol toolbar terminal; sama dengan hotkey (lihat {@link #injectSecret}). Panggil
@@ -394,6 +449,9 @@ public final class TerminalTab extends JPanel {
         settings.setPaletteOverride(hostPalette.apply(latestProfile().terminalTheme()));
         widget = new ZoomableTermWidget(settings);
         floats = new TerminalFloats(widget, center, this::reconnect, secretInjector);
+        if (snippetButton != null) {
+            snippetButton.setShown(snippetHost.buttonVisible());
+        }
         widget.setTtyConnector(tty);
         widget.setPasteFilter(this::confirmPaste);
         applyEnvironmentColor();
@@ -895,6 +953,9 @@ public final class TerminalTab extends JPanel {
         if (widget != null) {
             widget.close();
             widget = null;
+        }
+        if (snippetButton != null) {
+            snippetButton.setShown(false);
         }
     }
 

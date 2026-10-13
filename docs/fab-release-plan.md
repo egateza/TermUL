@@ -4,7 +4,7 @@ Floating button (tombol mengambang) di atas beranda, terminal, dan panel SFTP, d
 Desain awal dan contoh interaktifnya ada di artifact *Floating Button TermUL*. File ini mencatat apa yang sudah dan
 belum selesai.
 
-**Status:** 🟡 Rilis A dan B selesai, Rilis C menunggu keputusan · terakhir diperbarui 2026-10-13
+**Status:** ✅ Rilis A, B, dan C selesai · terakhir diperbarui 2026-10-13
 
 ## Prinsip yang berlaku untuk semua tombol
 
@@ -40,14 +40,21 @@ belum selesai.
 | ✅ | Unit test | `TransferListTest`, `EditStatusFloatTest`, `PromptResponderTest.passwordPrompt…`, gaya peringatan/gagal; ikon baru `SEARCH` dan `COPY` |
 | ✅ | Rilis | [v0.1.169](https://github.com/egateza/TermUL/releases/tag/v0.1.169) |
 
-## Rilis C: menunggu keputusan
+## Rilis C: snippet
+
+Keputusan (2026-10-13): snippet berupa teks tetap tanpa variabel, diketik ke prompt **tanpa Enter**, berlaku global
+atau per grup host (termasuk subgrup), dan speed dial tidak dibuat.
 
 | | Item | Detail |
 |---|---|---|
-| ⬜ | #4 Speed dial **Buat baru** | Sesi SSH / tab SFTP / distro WSL. Nilainya kecil di desktop karena sama dengan menu |
-| ⬜ | Fitur **Snippet** | Perlu diputuskan dulu: tempat penyimpanan, boleh berisi variabel atau tidak, kirim dengan atau tanpa Enter |
-| ⬜ | #8 Draggable FAB **Snippet cepat** | Bergantung pada fitur Snippet; posisi sudut disimpan di `config.json` |
-| ⬜ | Rilis | — |
+| ➖ | #4 Speed dial **Buat baru** | Dilewati: isinya sama dengan menu, dan beranda sudah punya tombol **+** Host baru |
+| ✅ | Fitur **Snippet** | `snippets.json` di config. Satu baris tanpa karakter kontrol (Enter/Tab/ESC ditolak), jadi tidak pernah berjalan sendiri. Kelola lewat **Terminal → Snippet…** |
+| ✅ | #8 Draggable FAB **Snippet cepat** | Tombol petir di atas terminal; seret ke sudut mana pun (disimpan di `config.json` untuk semua tab). Bisa disembunyikan lewat **Pengaturan → Tampilkan tombol snippet** |
+| ✅ | Unit test | `SnippetTest`, `SnippetStoreTest`, `AppConfigSnippetTest`, `SnippetButtonTest`, sudut & seret di `FloatingOverlayTest`; ikon baru `BOLT` |
+| ⬜ | Rilis | v0.1.171 |
+
+**Catatan:** snippet yang terikat ke grup tidak ikut berpindah kalau grupnya di-rename; ubah grupnya lewat dialog
+snippet.
 
 ## Riwayat
 
@@ -56,3 +63,4 @@ belum selesai.
 | 2026-10-13 | — | — | Plan dibuat |
 | 2026-10-13 | A | 0.1.168 | Host baru, Sambung ulang, Ke bawah |
 | 2026-10-13 | B | 0.1.169 | Badge transfer, status remote edit, toolbar Cari/Salin/Sudo |
+| 2026-10-13 | C | 0.1.171 | Snippet + tombol snippet yang bisa diseret |

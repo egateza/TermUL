@@ -153,6 +153,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     /** Repaint berkala supaya halo badge update berdenyut; hanya jalan selama badge tampil. */
     private final javax.swing.Timer badgePulse = new javax.swing.Timer(BadgeDotIcon.FRAME_MS, e -> updateBadge.repaint());
     private final JCheckBoxMenuItem autoUpdate = new JCheckBoxMenuItem(I18n.t("main.menu.settings.autoUpdate"));
+    private final JCheckBoxMenuItem snippetToggle = new JCheckBoxMenuItem(I18n.t("main.menu.settings.snippetButton"));
     private final WslController wsl;
     private JCheckBoxMenuItem miWslToggle; // EDT; Pengaturan → Manajemen WSL (null di luar Windows)
     private JMenuItem checkUpdateItem; // EDT
@@ -564,6 +565,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                 () -> closeTab(tabs.getSelectedIndex())));
         terminal.add(miSftp = menuItem(null, I18n.t("main.menu.terminal.sftp"), Shortcuts.menuShift(KeyEvent.VK_F),
                 () -> currentTab().ifPresent(TerminalTab::toggleSftp)));
+        terminal.add(menuItem(AppIcon.BOLT, I18n.t("main.menu.terminal.snippets"), null, this::openSnippets));
         terminal.addSeparator();
         terminal.add(miGroup = menuItem(null, I18n.t("main.menu.terminal.group"), Shortcuts.menu(KeyEvent.VK_G),
                 this::groupMarkedTabs));
@@ -646,6 +648,11 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         autoUpdate.setToolTipText(I18n.t("main.menu.settings.autoUpdate.tooltip"));
         autoUpdate.addActionListener(e -> setAutoUpdate(autoUpdate.isSelected()));
         settings.add(autoUpdate);
+        snippetToggle.setSelected(ctx.config().current().snippetButton());
+        snippetToggle.setToolTipText(I18n.t("main.menu.settings.snippetButton.tooltip"));
+        snippetToggle.addActionListener(e -> saveSnippetSettings(
+                ctx.config().current().withSnippetButton(snippetToggle.isSelected())));
+        settings.add(snippetToggle);
         if (Os.current().isWindows()) {
             miWslToggle = new JCheckBoxMenuItem(I18n.t("main.menu.settings.wsl"), ctx.config().current().wslManager());
             miWslToggle.setToolTipText(I18n.t("main.menu.settings.wsl.tooltip"));
@@ -2049,6 +2056,23 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         }
     }
 
+    /** Terminal → Snippet: kelola snippet; snippet baru default ke grup host tab yang aktif. EDT. */
+    private void openSnippets() {
+        String group = currentTab().map(t -> t.profile().group()).orElse("");
+        new SnippetDialog(this, ctx.snippets(), io, store.snapshot().allGroups(), group).setVisible(true);
+    }
+
+    /** Simpan pengaturan tombol snippet, lalu terapkan ke semua tab. EDT. */
+    private void saveSnippetSettings(dev.egateza.termul.core.config.AppConfig next) {
+        UiAsync.run(io, () -> {
+            ctx.config().save(next);
+            return next;
+        }, saved -> {
+            snippetToggle.setSelected(saved.snippetButton());
+            allPanes().forEach(TerminalTab::refreshSnippetButton);
+        }, err -> Dialogs.error(this, I18n.t("error.saveSettings"), err));
+    }
+
     private void setAutoUpdate(boolean on) {
         if (!on) {
             updateNotifier.disabled();
@@ -2154,6 +2178,32 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         tab.setAutoSudoVault(ctx.vault());
         tab.setSecretInjector(type -> tab.injectSecret(type, ctx.vault())); // tombol toolbar = hotkey Ctrl+Shift+P
         tab.setEditActivity(sink -> ctx.edits().addActivityListener(profile.id(), sink), this::showEditTracker);
+        tab.setSnippetHost(new TerminalTab.SnippetHost() {
+            @Override
+            public List<dev.egateza.termul.core.snippet.Snippet> snippetsFor(HostProfile p) {
+                return ctx.snippets().forGroup(p.group());
+            }
+
+            @Override
+            public boolean buttonVisible() {
+                return ctx.config().current().snippetButton();
+            }
+
+            @Override
+            public String corner() {
+                return ctx.config().current().snippetCorner();
+            }
+
+            @Override
+            public void cornerChanged(String corner) {
+                saveSnippetSettings(ctx.config().current().withSnippetCorner(corner));
+            }
+
+            @Override
+            public void manage() {
+                openSnippets();
+            }
+        });
         tab.setHostPalette(id -> HostTerminalColors.palette(id, customThemes));
         return tab;
     }

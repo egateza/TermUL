@@ -135,6 +135,11 @@ public record AppPaths(Path configDir, Path cacheDir) {
         return configDir.resolve("update-history.json");
     }
 
+    /** Snippet perintah (tombol snippet di terminal); teks biasa, bukan tempat secret. */
+    public Path snippetsFile() {
+        return configDir.resolve("snippets.json");
+    }
+
     private static Path envPath(Function<String, String> env, String name, Path fallback) {
         String value = env.apply(name);
         return value == null || value.isBlank() ? fallback : Path.of(value);

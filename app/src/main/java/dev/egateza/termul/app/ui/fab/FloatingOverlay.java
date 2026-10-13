@@ -17,15 +17,26 @@ public final class FloatingOverlay extends JPanel {
 
     public enum Anchor {
         BOTTOM_RIGHT,
-        BOTTOM_CENTER
+        BOTTOM_CENTER,
+        BOTTOM_LEFT,
+        TOP_LEFT,
+        TOP_RIGHT;
+
+        boolean top() {
+            return this == TOP_LEFT || this == TOP_RIGHT;
+        }
     }
 
     static final int GAP = 10;
 
     private Component base;
     private final Map<JComponent, Anchor> floats = new LinkedHashMap<>();
+    /** Posisi sementara selama tombol diseret (kiri atas, koordinat panel ini). */
+    private final Map<JComponent, java.awt.Point> dragged = new java.util.HashMap<>();
     private int marginRight = 16;
     private int marginBottom = 16;
+    private int marginLeft = 16;
+    private int marginTop = 16;
 
     public FloatingOverlay() {
         super(null);
@@ -58,7 +69,40 @@ public final class FloatingOverlay extends JPanel {
         revalidate();
     }
 
+    /** Pindahkan tombol ke anchor lain (mis. setelah diseret ke sudut lain). */
+    public void setAnchor(JComponent c, Anchor anchor) {
+        if (floats.containsKey(c)) {
+            floats.put(c, anchor);
+            dragged.remove(c);
+            revalidate();
+            repaint();
+        }
+    }
+
+    public Anchor anchorOf(JComponent c) {
+        return floats.get(c);
+    }
+
+    /** Selama diseret: tombol mengikuti pointer (kiri atas); null = kembali ke anchor-nya. */
+    public void setDragPosition(JComponent c, java.awt.Point topLeft) {
+        if (topLeft == null) {
+            dragged.remove(c);
+        } else {
+            dragged.put(c, topLeft);
+        }
+        revalidate();
+        repaint();
+    }
+
+    /** Sudut terdekat dari titik tengah tombol (untuk menempelkan tombol setelah diseret). */
+    public Anchor nearestCorner(java.awt.Point center) {
+        boolean left = center.x < getWidth() / 2;
+        boolean top = center.y < getHeight() / 2;
+        return top ? (left ? Anchor.TOP_LEFT : Anchor.TOP_RIGHT) : (left ? Anchor.BOTTOM_LEFT : Anchor.BOTTOM_RIGHT);
+    }
+
     public void removeFloating(JComponent c) {
+        dragged.remove(c);
         if (floats.remove(c) != null) {
             remove(c);
             revalidate();
@@ -70,6 +114,13 @@ public final class FloatingOverlay extends JPanel {
     public void setMargins(int right, int bottom) {
         marginRight = right;
         marginBottom = bottom;
+        revalidate();
+    }
+
+    /** Jarak tombol dari tepi kiri dan atas. */
+    public void setLeadingMargins(int left, int top) {
+        marginLeft = left;
+        marginTop = top;
         revalidate();
     }
 
@@ -95,17 +146,28 @@ public final class FloatingOverlay extends JPanel {
             return new Rectangle();
         }
         Dimension size = c.getPreferredSize();
-        int bottom = h - marginBottom;
+        var drag = dragged.get(c);
+        if (drag != null) {
+            int x = Math.max(0, Math.min(w - size.width, drag.x));
+            int y = Math.max(0, Math.min(h - size.height, drag.y));
+            return new Rectangle(x, y, size.width, size.height);
+        }
+        int stacked = 0; // tinggi tombol lain di anchor yang sama yang ditambahkan lebih dulu
         for (var e : floats.entrySet()) {
             if (e.getKey() == c) {
                 break;
             }
-            if (e.getValue() == anchor && e.getKey().isVisible()) {
-                bottom -= e.getKey().getPreferredSize().height + GAP;
+            if (e.getValue() == anchor && e.getKey().isVisible() && !dragged.containsKey(e.getKey())) {
+                stacked += e.getKey().getPreferredSize().height + GAP;
             }
         }
-        int x = anchor == Anchor.BOTTOM_RIGHT ? w - marginRight - size.width : (w - size.width) / 2;
-        return new Rectangle(Math.max(0, x), Math.max(0, bottom - size.height), size.width, size.height);
+        int x = switch (anchor) {
+            case BOTTOM_RIGHT, TOP_RIGHT -> w - marginRight - size.width;
+            case BOTTOM_LEFT, TOP_LEFT -> marginLeft;
+            case BOTTOM_CENTER -> (w - size.width) / 2;
+        };
+        int y = anchor.top() ? marginTop + stacked : h - marginBottom - stacked - size.height;
+        return new Rectangle(Math.max(0, x), Math.max(0, y), size.width, size.height);
     }
 
     @Override

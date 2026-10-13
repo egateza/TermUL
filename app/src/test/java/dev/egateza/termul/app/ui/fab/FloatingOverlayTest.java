@@ -54,6 +54,39 @@ class FloatingOverlayTest {
     }
 
     @Test
+    void sudutAtasDanPosisiSaatDiseret() {
+        var overlay = new FloatingOverlay();
+        var fab = box(40, 40);
+        overlay.addFloating(fab, FloatingOverlay.Anchor.TOP_RIGHT);
+        overlay.setMargins(28, 16);
+        overlay.setLeadingMargins(12, 10);
+        overlay.setSize(500, 300);
+
+        overlay.doLayout();
+        assertThat(fab.getLocation()).isEqualTo(new java.awt.Point(500 - 28 - 40, 10));
+
+        overlay.setDragPosition(fab, new java.awt.Point(900, -50)); // di luar area: dijepit ke dalam
+        overlay.doLayout();
+        assertThat(fab.getLocation()).isEqualTo(new java.awt.Point(500 - 40, 0));
+
+        overlay.setAnchor(fab, FloatingOverlay.Anchor.BOTTOM_LEFT);
+        overlay.doLayout();
+        assertThat(fab.getLocation()).as("setAnchor mengakhiri posisi seret")
+                .isEqualTo(new java.awt.Point(12, 300 - 16 - 40));
+    }
+
+    @Test
+    void sudutTerdekatDariTitikTengah() {
+        var overlay = new FloatingOverlay();
+        overlay.setSize(400, 200);
+
+        assertThat(overlay.nearestCorner(new java.awt.Point(20, 20))).isEqualTo(FloatingOverlay.Anchor.TOP_LEFT);
+        assertThat(overlay.nearestCorner(new java.awt.Point(390, 30))).isEqualTo(FloatingOverlay.Anchor.TOP_RIGHT);
+        assertThat(overlay.nearestCorner(new java.awt.Point(10, 190))).isEqualTo(FloatingOverlay.Anchor.BOTTOM_LEFT);
+        assertThat(overlay.nearestCorner(new java.awt.Point(300, 150))).isEqualTo(FloatingOverlay.Anchor.BOTTOM_RIGHT);
+    }
+
+    @Test
     void gantiKontenTidakMenghapusTombol() {
         var overlay = new FloatingOverlay();
         var fab = box(52, 52);
