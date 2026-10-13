@@ -2,6 +2,7 @@ package dev.egateza.termul.app.ui;
 
 import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.app.monitor.HostStatusPanel;
+import dev.egateza.termul.app.monitor.NetworkIndicator;
 import dev.egateza.termul.app.ui.anim.Animation;
 import dev.egateza.termul.app.ui.anim.AnimationChoice;
 import dev.egateza.termul.app.ui.anim.AnimationKind;
@@ -23,8 +24,8 @@ import javax.swing.Timer;
 import javax.swing.UIManager;
 
 /**
- * Panel paling bawah window, selalu tampil: animasi kecil pilihan user di tengah dan tanggal/waktu mesin ini di
- * kanan. Timer jam dan rotasi animasi acak hanya berjalan selama panel terpasang. EDT.
+ * Panel paling bawah window, selalu tampil: animasi kecil pilihan user di tengah, status internet dan
+ * tanggal/waktu mesin ini di kanan. Timer jam dan rotasi animasi acak hanya berjalan selama panel terpasang. EDT.
  */
 public final class BottomBar extends JPanel {
 
@@ -32,6 +33,7 @@ public final class BottomBar extends JPanel {
     static final int RANDOM_ROTATE_MS = 5 * 60 * 1000;
 
     private final JLabel clock = new JLabel();
+    private final NetworkIndicator network = new NetworkIndicator();
     private final JPanel left = new JPanel(new BorderLayout());
     private final JPanel right = new JPanel();
     private final AnimationView animation = new AnimationView(Animation.Size.COMPACT,
@@ -47,6 +49,8 @@ public final class BottomBar extends JPanel {
         add(animation, BorderLayout.CENTER);
         right.setOpaque(false);
         right.setLayout(new BoxLayout(right, BoxLayout.X_AXIS));
+        right.add(network);
+        right.add(Box.createHorizontalStrut(8));
         right.add(HostStatusPanel.verticalDivider(16)); // pemisah di kiri jam
         right.add(Box.createHorizontalStrut(8));
         right.add(clock);
