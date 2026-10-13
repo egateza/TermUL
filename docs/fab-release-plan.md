@@ -51,7 +51,7 @@ atau per grup host (termasuk subgrup), dan speed dial tidak dibuat.
 | ✅ | Fitur **Snippet** | `snippets.json` di config. Satu baris tanpa karakter kontrol (Enter/Tab/ESC ditolak), jadi tidak pernah berjalan sendiri. Kelola lewat **Terminal → Snippet…** |
 | ✅ | #8 Draggable FAB **Snippet cepat** | Tombol petir di atas terminal; seret ke sudut mana pun (disimpan di `config.json` untuk semua tab). Bisa disembunyikan lewat **Pengaturan → Tampilkan tombol snippet** |
 | ✅ | Unit test | `SnippetTest`, `SnippetStoreTest`, `AppConfigSnippetTest`, `SnippetButtonTest`, sudut & seret di `FloatingOverlayTest`; ikon baru `BOLT` |
-| ⬜ | Rilis | v0.1.171 |
+| ✅ | Rilis | [v0.1.171](https://github.com/egateza/TermUL/releases/tag/v0.1.171) |
 
 **Catatan:** snippet yang terikat ke grup tidak ikut berpindah kalau grupnya di-rename; ubah grupnya lewat dialog
 snippet.
