@@ -49,7 +49,7 @@ public final class UpdateDialog extends JDialog {
     private final UpdateClient client = new UpdateClient();
     private final Updater updater;
     private final JTextArea status = new JTextArea();
-    private final JTextArea notes = new JTextArea(8, 50);
+    private final ReleaseNotesPane notes = new ReleaseNotesPane(8);
     private final JScrollPane notesScroll = new JScrollPane(notes);
     private final JProgressBar progress = new JProgressBar();
     private final JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT));
@@ -80,9 +80,8 @@ public final class UpdateDialog extends JDialog {
         status.setWrapStyleWord(true);
         status.setFont(UIManager.getFont("Label.font"));
         status.setBorder(BorderFactory.createEmptyBorder(0, 0, 8, 0));
-        notes.setEditable(false);
-        notes.setLineWrap(true);
-        notes.setWrapStyleWord(true);
+        notesScroll.setPreferredSize(new Dimension(560, 200));
+        notesScroll.getVerticalScrollBar().setUnitIncrement(16);
         notesScroll.setBorder(BorderFactory.createTitledBorder(I18n.t("update.notes")));
         notesScroll.setVisible(false);
         progress.setStringPainted(false);
@@ -231,8 +230,7 @@ public final class UpdateDialog extends JDialog {
 
     private void showNotes(SignedRelease release) {
         String text = release.manifest().notes();
-        notes.setText(text);
-        notes.setCaretPosition(0);
+        notes.setNotes(text);
         notesScroll.setVisible(!text.isBlank());
     }
 

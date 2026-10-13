@@ -7,13 +7,10 @@ import dev.egateza.termul.update.UpdateProtocol;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
-import java.awt.Desktop;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.GridLayout;
 import java.awt.Window;
-import java.io.IOException;
-import java.net.URI;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.FormatStyle;
@@ -21,7 +18,6 @@ import java.util.List;
 import java.util.Locale;
 import javax.swing.BorderFactory;
 import javax.swing.JDialog;
-import javax.swing.JEditorPane;
 import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JPanel;
@@ -30,11 +26,6 @@ import javax.swing.ListCellRenderer;
 import javax.swing.ListSelectionModel;
 import javax.swing.UIManager;
 import javax.swing.WindowConstants;
-import javax.swing.event.HyperlinkEvent;
-import javax.swing.text.html.HTMLEditorKit;
-import javax.swing.text.html.StyleSheet;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Bantuan → Yang baru: catatan rilis dari {@link UpdateHistory#MAX_ENTRIES} update terakhir yang sudah dipakai di
@@ -43,12 +34,8 @@ import org.slf4j.LoggerFactory;
  */
 public final class WhatsNewDialog extends JDialog {
 
-    private static final Logger log = LoggerFactory.getLogger(WhatsNewDialog.class);
-
     private final JList<UpdateHistory.Entry> releases;
-    /** Milik dialog ini saja: stylesheet bawaan HTMLEditorKit dipakai bersama semua JEditorPane. */
-    private final StyleSheet css = new StyleSheet();
-    private final JEditorPane page = new JEditorPane();
+    private final ReleaseNotesPane page = new ReleaseNotesPane(24);
     private final JScrollPane pageScroll = new JScrollPane(page);
     private final Locale locale = Locale.forLanguageTag(I18n.current());
 
@@ -67,23 +54,6 @@ public final class WhatsNewDialog extends JDialog {
             }
         });
 
-        page.setEditable(false);
-        css.addStyleSheet(new HTMLEditorKit().getStyleSheet());
-        styleSheet();
-        page.setEditorKit(new HTMLEditorKit() {
-            @Override
-            public StyleSheet getStyleSheet() {
-                return css;
-            }
-        });
-        page.putClientProperty(JEditorPane.HONOR_DISPLAY_PROPERTIES, true);
-        page.setFont(UIManager.getFont("Label.font"));
-        page.setBorder(BorderFactory.createEmptyBorder(16, 24, 16, 24));
-        page.addHyperlinkListener(e -> {
-            if (e.getEventType() == HyperlinkEvent.EventType.ACTIVATED && e.getURL() != null) {
-                browse(e.getURL().toString());
-            }
-        });
         pageScroll.setBorder(BorderFactory.createEmptyBorder());
         pageScroll.getVerticalScrollBar().setUnitIncrement(16);
 
@@ -115,7 +85,7 @@ public final class WhatsNewDialog extends JDialog {
         String notes = entry.notes().isBlank()
                 ? "<p class=\"muted\">" + ReleaseNotesHtml.escape(I18n.t("whatsNew.noNotes")) + "</p>"
                 : ReleaseNotesHtml.toHtml(entry.notes());
-        setPage("<h1>" + ReleaseNotesHtml.escape(I18n.t("whatsNew.heading", entry.version().toString())) + "</h1>"
+        page.setBody("<h1>" + ReleaseNotesHtml.escape(I18n.t("whatsNew.heading", entry.version().toString())) + "</h1>"
                 + "<p class=\"meta\">" + ReleaseNotesHtml.escape(date) + " &bull; "
                 + ReleaseNotesHtml.link(github, I18n.t("whatsNew.viewOnGitHub")) + "</p>"
                 + notes);
@@ -123,59 +93,10 @@ public final class WhatsNewDialog extends JDialog {
 
     private void showEmpty(ReleaseVersion running) {
         String version = running == null ? "dev" : running.toString();
-        setPage("<h1>" + ReleaseNotesHtml.escape(I18n.t("whatsNew.empty")) + "</h1>"
+        page.setBody("<h1>" + ReleaseNotesHtml.escape(I18n.t("whatsNew.empty")) + "</h1>"
                 + "<p>" + ReleaseNotesHtml.escape(I18n.t("whatsNew.empty.detail")) + "</p>"
                 + "<p class=\"meta\">" + ReleaseNotesHtml.escape(I18n.t("whatsNew.running", version)) + " &bull; "
                 + ReleaseNotesHtml.link(UpdateProtocol.RELEASES.toString(), I18n.t("whatsNew.viewOnGitHub")) + "</p>");
-    }
-
-    private void setPage(String body) {
-        page.setText("<html><body>" + body + "</body></html>");
-        page.setCaretPosition(0);
-    }
-
-    /** Warna dari tema yang aktif (dialog dibuat ulang setiap dibuka, jadi ganti tema cukup buka ulang). */
-    private void styleSheet() {
-        Color fg = UIManager.getColor("Label.foreground");
-        Color muted = UIManager.getColor("Label.disabledForeground");
-        Color link = UIManager.getColor("Component.linkColor");
-        Color codeBg = UIManager.getColor("TextField.background");
-        Font font = UIManager.getFont("Label.font");
-        css.addRule("body { color: " + hex(fg) + "; font-family: '" + font.getFamily() + "'; font-size: "
-                + font.getSize() + "pt; }");
-        css.addRule("h1 { font-size: " + (font.getSize() + 10) + "pt; margin-top: 0; margin-bottom: 4px; }");
-        css.addRule("h2 { font-size: " + (font.getSize() + 5) + "pt; margin-top: 14px; margin-bottom: 4px; }");
-        css.addRule("h3 { font-size: " + (font.getSize() + 3) + "pt; margin-top: 12px; margin-bottom: 4px; }");
-        css.addRule("h4 { font-size: " + (font.getSize() + 1) + "pt; margin-top: 10px; margin-bottom: 4px; }");
-        css.addRule("p { margin-top: 4px; margin-bottom: 6px; }");
-        css.addRule("ul { margin-top: 2px; margin-left: 18px; }");
-        css.addRule("li { margin-bottom: 4px; }");
-        css.addRule(".meta { color: " + hex(muted) + "; margin-bottom: 18px; }");
-        css.addRule(".muted { color: " + hex(muted) + "; }");
-        css.addRule("a { color: " + hex(link) + "; }");
-        css.addRule("code { font-family: monospaced; font-size: " + font.getSize() + "pt; background-color: "
-                + hex(codeBg) + "; }");
-    }
-
-    private static String hex(Color c) {
-        return c == null ? "inherit" : String.format("#%06X", c.getRGB() & 0xFFFFFF);
-    }
-
-    private void browse(String url) {
-        URI uri = URI.create(url);
-        if (!"https".equalsIgnoreCase(uri.getScheme()) && !"http".equalsIgnoreCase(uri.getScheme())) {
-            return;
-        }
-        Thread.ofVirtual().name("open-release-notes-link").start(() -> {
-            try {
-                if (!Desktop.isDesktopSupported() || !Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
-                    throw new IOException("browser tidak tersedia");
-                }
-                Desktop.getDesktop().browse(uri);
-            } catch (IOException | RuntimeException e) {
-                log.warn("Link catatan rilis tidak bisa dibuka: {}", e.toString());
-            }
-        });
     }
 
     /** Dua baris seperti daftar rilis PowerToys: bulan + tahun, lalu nomor versi yang lebih kecil. */
