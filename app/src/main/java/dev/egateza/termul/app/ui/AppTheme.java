@@ -4,6 +4,9 @@ import com.formdev.flatlaf.FlatDarkLaf;
 import com.formdev.flatlaf.FlatLaf;
 import com.formdev.flatlaf.FlatLightLaf;
 import dev.egateza.termul.app.themes.FlatIllustrationLaf;
+import dev.egateza.termul.app.themes.NeoBrutalismDarkLaf;
+import dev.egateza.termul.app.themes.NeoBrutalismLaf;
+import dev.egateza.termul.app.themes.NeoBrutalismRetroLaf;
 import java.util.EnumSet;
 import java.util.Set;
 import java.util.function.Supplier;
@@ -16,7 +19,9 @@ import java.util.function.Supplier;
 public enum AppTheme implements UiTheme {
     DEFAULT("default", "Default", FlatLightLaf::new, FlatDarkLaf::new),
     /** Hanya terang: tombol mode di menu bar nonaktif saat tema ini dipakai. */
-    FLAT_ILLUSTRATION("flat-illustration", FlatIllustrationLaf.NAME, FlatIllustrationLaf::new, null);
+    FLAT_ILLUSTRATION("flat-illustration", FlatIllustrationLaf.NAME, FlatIllustrationLaf::new, null),
+    NEO_BRUTALISM("neo-brutalism", NeoBrutalismLaf.NAME, NeoBrutalismLaf::new, NeoBrutalismDarkLaf::new),
+    NEO_BRUTALISM_RETRO("neo-brutalism-retro", NeoBrutalismRetroLaf.NAME, NeoBrutalismRetroLaf::new, null);
 
     private final String id;
     private final String label;

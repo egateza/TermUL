@@ -28,6 +28,14 @@ class AppThemeTest {
     }
 
     @Test
+    void neoBrutalismHasBothModes() {
+        assertThat(AppTheme.NEO_BRUTALISM.modes()).containsExactlyInAnyOrder(ThemeMode.LIGHT, ThemeMode.DARK);
+        assertThat(AppTheme.fromId("neo-brutalism")).isEqualTo(AppTheme.NEO_BRUTALISM);
+        assertThat(AppTheme.NEO_BRUTALISM_RETRO.modes()).containsExactly(ThemeMode.LIGHT);
+        assertThat(AppTheme.fromId("neo-brutalism-retro")).isEqualTo(AppTheme.NEO_BRUTALISM_RETRO);
+    }
+
+    @Test
     void everyThemeSupportsAtLeastOneModeAndAlwaysResolvesToASupportedOne() {
         for (AppTheme theme : AppTheme.values()) {
             assertThat(theme.modes()).isNotEmpty();

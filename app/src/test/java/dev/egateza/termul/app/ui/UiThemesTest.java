@@ -26,7 +26,7 @@ class UiThemesTest {
     @Test
     void allListsBuiltinFirstThenCustom() {
         assertThat(UiThemes.all(custom)).extracting(UiTheme::id)
-                .containsExactly("default", "flat-illustration", "laut", "pagi");
+                .containsExactly("default", "flat-illustration", "neo-brutalism", "neo-brutalism-retro", "laut", "pagi");
     }
 
     @Test
