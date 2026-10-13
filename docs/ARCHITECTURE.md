@@ -95,6 +95,7 @@ Lokasi per OS (`AppPaths`): Windows `%APPDATA%` / `%LOCALAPPDATA%`; macOS `~/Lib
   vault.bin           secret terenkripsi
   update-history.json 5 update terakhir yang sudah berjalan + catatan rilisnya (Bantuan → Yang baru)
   snippets.json       snippet perintah (teks biasa, satu baris, tanpa secret); file rusak disisihkan ke .corrupt-<waktu>
+  streak.json         streak api harian (jumlah hari + tanggal terakhir dihitung); file rusak disisihkan ke .corrupt-<waktu>
   logs\               log aplikasi (tanpa secret)
 %LOCALAPPDATA%\TermUL\
   edit\<profileId>\<remote-path>   cache file yang sedang diedit

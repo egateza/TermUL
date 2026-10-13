@@ -50,6 +50,19 @@ class BottomBarTest {
     }
 
     @Test
+    void animasiTetapDiTengahSetelahIkonDiPojokKiri() {
+        var bar = new BottomBar();
+        var leading = new javax.swing.JLabel("🔥 1234x klik 3x — ikon lebar");
+        bar.setLeading(leading);
+        bar.setSize(1100, bar.getPreferredSize().height);
+        bar.doLayout();
+        bar.getComponent(1).doLayout(); // sisi kiri
+        var view = bar.animationView();
+        assertThat(view.getX() + view.getWidth() / 2).isCloseTo(550, org.assertj.core.data.Offset.offset(1));
+        assertThat(javax.swing.SwingUtilities.convertPoint(leading, 0, 0, bar).x).as("menempel di kiri").isEqualTo(8);
+    }
+
+    @Test
     void gantiAnimasiDanTanpaAnimasi() {
         var bar = new BottomBar();
 

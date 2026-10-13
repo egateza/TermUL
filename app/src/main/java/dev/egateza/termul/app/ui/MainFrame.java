@@ -49,6 +49,7 @@ import dev.egateza.termul.core.profile.HostProfile;
 import dev.egateza.termul.core.profile.ProfileSnapshot;
 import dev.egateza.termul.core.profile.OsInfo;
 import dev.egateza.termul.core.profile.ProfileStore;
+import dev.egateza.termul.core.streak.StreakStore;
 import dev.egateza.termul.core.theme.CustomTheme;
 import dev.egateza.termul.ssh.OsDetector;
 import dev.egateza.termul.ssh.hostkey.KnownHostsStore;
@@ -68,6 +69,7 @@ import javax.swing.JButton;
 import javax.swing.JCheckBoxMenuItem;
 import javax.swing.JFrame;
 import dev.egateza.termul.app.ui.idle.HomeScreen;
+import dev.egateza.termul.app.ui.streak.StreakController;
 import dev.egateza.termul.app.ui.idle.IdleOverlay;
 import dev.egateza.termul.app.ui.idle.IdleState;
 import javax.swing.JLabel;
@@ -154,6 +156,9 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private final javax.swing.Timer badgePulse = new javax.swing.Timer(BadgeDotIcon.FRAME_MS, e -> updateBadge.repaint());
     private final JCheckBoxMenuItem autoUpdate = new JCheckBoxMenuItem(I18n.t("main.menu.settings.autoUpdate"));
     private final JCheckBoxMenuItem snippetToggle = new JCheckBoxMenuItem(I18n.t("main.menu.settings.snippetButton"));
+    private final JCheckBoxMenuItem streakToggle = new JCheckBoxMenuItem(I18n.t("main.menu.settings.streak"));
+    /** Api streak di pojok kiri panel bawah + animasinya saat aplikasi dibuka. */
+    private final StreakController streak;
     private final WslController wsl;
     private JCheckBoxMenuItem miWslToggle; // EDT; Pengaturan → Manajemen WSL (null di luar Windows)
     private JMenuItem checkUpdateItem; // EDT
@@ -334,6 +339,9 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         resourceMonitor.setActive(hostStatus.isVisible());
         // panel bawah selalu tampil: animasi + jam
         bottomBar.setAnimation(AnimationChoice.fromId(ctx.config().current().statusAnimation()));
+        streak = new StreakController(new StreakStore(ctx.paths().streakFile()), io, getLayeredPane(),
+                ctx.config().current().streak());
+        bottomBar.setLeading(streak.chip());
         getContentPane().add(bottomBar, BorderLayout.SOUTH);
         roundedPanels = AppConfig.PANEL_ROUNDED.equals(ctx.config().current().panelCorners());
         applyHostMode(ctx.config().current().hostPanelMode());
@@ -653,6 +661,10 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         snippetToggle.addActionListener(e -> saveSnippetSettings(
                 ctx.config().current().withSnippetButton(snippetToggle.isSelected())));
         settings.add(snippetToggle);
+        streakToggle.setSelected(ctx.config().current().streak());
+        streakToggle.setToolTipText(I18n.t("main.menu.settings.streak.tooltip"));
+        streakToggle.addActionListener(e -> setStreakVisible(streakToggle.isSelected()));
+        settings.add(streakToggle);
         if (Os.current().isWindows()) {
             miWslToggle = new JCheckBoxMenuItem(I18n.t("main.menu.settings.wsl"), ctx.config().current().wslManager());
             miWslToggle.setToolTipText(I18n.t("main.menu.settings.wsl.tooltip"));
@@ -1974,6 +1986,11 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         updateNotifier.start();
     }
 
+    /** Hitung streak hari ini dan putar animasinya; panggil setelah window tampil. */
+    public void startStreak() {
+        streak.start();
+    }
+
     private void openUpdateDialog() {
         openUpdateDialog(false);
     }
@@ -2071,6 +2088,11 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             snippetToggle.setSelected(saved.snippetButton());
             allPanes().forEach(TerminalTab::refreshSnippetButton);
         }, err -> Dialogs.error(this, I18n.t("error.saveSettings"), err));
+    }
+
+    private void setStreakVisible(boolean on) {
+        streak.setEnabled(on);
+        mutate(I18n.t("error.saveSettings"), () -> ctx.config().save(ctx.config().current().withStreak(on)));
     }
 
     private void setAutoUpdate(boolean on) {

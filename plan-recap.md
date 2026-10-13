@@ -122,6 +122,14 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] Kolom "Port SSH" di WSL Manager: terdeteksi dari `sshd -T` (selain 22 diutamakan), bisa diisi user; mengubahnya di distro berprofil ikut mengubah port profil
 - [ ] Uji manual user: nyalakan Pengaturan → Manajemen WSL, siapkan sshd lewat Panduan SSH, connect dari grup WSL
 
+### Streak api (permintaan user 2026-10-13)
+- [x] `core.streak`: `Streak` (aturan hari: bara hari 1–2, aktif hari ke-3, padam absen 1–2 hari, beku absen 3–10 hari dengan 5–10 klik, hangus absen > 10 hari) + `StreakStore` (`streak.json`, atomic, file rusak disisihkan)
+- [x] `AppConfig.streak` (config lama = tampil); Pengaturan → Tampilkan streak api. Hari tetap dihitung walau disembunyikan
+- [x] Ikon api + `23x` di pojok kiri panel bawah (`StreakChip`); 9 level warna (`StreakTier`); triple klik untuk yang padam, klik berulang memecahkan es
+- [x] Animasi besar saat dibuka (`StreakSplash`): naik level, bara, menunggu dinyalakan (Esc / "Nanti saja"), api padam sampai hilang saat hangus; terbang ke ikon pojok
+- [x] Tanggal berganti selagi aplikasi terbuka dihitung seperti membuka lagi (cek tiap menit)
+- [ ] Uji manual user: ubah tanggal `lastDay` di `streak.json` untuk mencoba padam (2 hari lalu), beku (7 hari lalu), hangus (12 hari lalu)
+
 ### Tambahan dari uji manual user (setelah Fase 4)
 - [x] Auth "Default": coba key `~/.ssh`, lalu jatuh ke password (sebelumnya error kalau tidak ada key)
 - [x] Terminal tidak lagi terlihat hang setelah logout: banner Reconnect + Enter untuk reconnect
@@ -190,6 +198,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 | Tanggal | Commit | Task |
 |---|---|---|
+| 2026-10-13 | `feat(streak): streak api harian dengan animasi saat aplikasi dibuka` | Streak api ala Duolingo (permintaan user) |
 | 2026-10-06 | `feat(terminal): kotak cari terminal membulat dan minimalis` | Search box terminal ala VS Code tanpa replace (permintaan user) |
 | 2026-10-06 | `feat(terminal): scroll wheel halus dan scrollbar bergaya FlatLaf` | Scroll terminal disamakan dengan panel (permintaan user) |
 | 2026-10-06 | `feat(wsl): WSL Manager opsional, grup WSL di panel host, profil SSH ke distro` | WSL Manager (permintaan user, ADR 0004) |

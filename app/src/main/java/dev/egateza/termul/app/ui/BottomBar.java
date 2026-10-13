@@ -32,6 +32,8 @@ public final class BottomBar extends JPanel {
     static final int RANDOM_ROTATE_MS = 5 * 60 * 1000;
 
     private final JLabel clock = new JLabel();
+    private final JPanel left = new JPanel(new BorderLayout());
+    private final JPanel right = new JPanel();
     private final AnimationView animation = new AnimationView(Animation.Size.COMPACT,
             AnimationKind.PACMAN.create(Animation.Size.COMPACT, null));
     private final Timer clockTimer = new Timer(1000, e -> updateClock());
@@ -43,20 +45,15 @@ public final class BottomBar extends JPanel {
         super(new BorderLayout(10, 0));
         animation.getAccessibleContext().setAccessibleName(I18n.t("main.menu.settings.statusAnimation"));
         add(animation, BorderLayout.CENTER);
-        var right = new JPanel();
         right.setOpaque(false);
         right.setLayout(new BoxLayout(right, BoxLayout.X_AXIS));
         right.add(HostStatusPanel.verticalDivider(16)); // pemisah di kiri jam
         right.add(Box.createHorizontalStrut(8));
         right.add(clock);
-        add(right, BorderLayout.EAST);
-        // penyeimbang tak terlihat selebar bagian jam, supaya animasi tepat di tengah panel (bukan di tengah sisa ruang)
-        add(new JComponent() {
-            @Override
-            public Dimension getPreferredSize() {
-                return new Dimension(right.getPreferredSize().width, 0);
-            }
-        }, BorderLayout.WEST);
+        left.setOpaque(false);
+        // kedua sisi selebar sisi yang paling lebar, supaya animasi tepat di tengah panel (bukan di tengah sisa ruang)
+        add(new Side(left, BorderLayout.WEST), BorderLayout.WEST);
+        add(new Side(right, BorderLayout.EAST), BorderLayout.EAST);
         updateClock();
     }
 
@@ -74,6 +71,16 @@ public final class BottomBar extends JPanel {
             }
             case AnimationChoice.Fixed(var kind) -> show(kind);
         }
+    }
+
+    /** Komponen di pojok kiri (ikon streak); null untuk mengosongkan. */
+    public void setLeading(JComponent component) {
+        left.removeAll();
+        if (component != null) {
+            left.add(component, BorderLayout.CENTER);
+        }
+        revalidate();
+        repaint();
     }
 
     AnimationView animationView() {
@@ -121,6 +128,23 @@ public final class BottomBar extends JPanel {
         setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createMatteBorder(1, 0, 0, 0, line != null ? line : getBackground().darker()),
                 BorderFactory.createEmptyBorder(3, 8, 3, 8)));
+    }
+
+    /** Pembungkus sisi kiri/kanan: lebarnya mengikuti sisi yang paling lebar, isinya menempel ke tepi luar. */
+    private final class Side extends JPanel {
+
+        Side(JComponent content, String edge) {
+            super(new BorderLayout());
+            setOpaque(false);
+            add(content, edge);
+        }
+
+        @Override
+        public Dimension getPreferredSize() {
+            // komponen tersembunyi tidak ikut dihitung BorderLayout/BoxLayout
+            int width = Math.max(left.getPreferredSize().width, right.getPreferredSize().width);
+            return new Dimension(width, super.getPreferredSize().height);
+        }
     }
 
     private void updateClock() {

@@ -140,6 +140,7 @@ public final class TermULApp {
             MacIntegration.install(frame);
             frame.setVisible(true);
             frame.startUpdateChecks();
+            frame.startStreak();
             io.execute(() -> AppUpdates.markHealthy(paths, log)); // rollback otomatis tidak dipicu untuk versi ini
             UiAsync.run(io, store::load, frame::showSnapshot,
                     err -> Dialogs.error(frame, "Gagal memuat profil", err));

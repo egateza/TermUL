@@ -140,6 +140,11 @@ public record AppPaths(Path configDir, Path cacheDir) {
         return configDir.resolve("snippets.json");
     }
 
+    /** Streak harian (berapa hari berturut-turut aplikasi dibuka); bukan tempat secret. */
+    public Path streakFile() {
+        return configDir.resolve("streak.json");
+    }
+
     private static Path envPath(Function<String, String> env, String name, Path fallback) {
         String value = env.apply(name);
         return value == null || value.isBlank() ? fallback : Path.of(value);
