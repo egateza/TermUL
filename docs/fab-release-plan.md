@@ -38,7 +38,7 @@ belum selesai.
 | ✅ | #6 Status **Upload remote edit** | Tombol status di kanan bawah terminal. Mengunggah/berhasil hilang sendiri; konflik (kuning) dan gagal (merah) tetap tampil sampai diklik, lalu membuka daftar file yang diedit |
 | ✅ | #7 Floating toolbar **Cari / Salin / Sudo** (terminal) | Cari + Salin saat ada seleksi; Password sudo/root saat baris kursor berupa prompt password. Inject manual yang sama dengan Ctrl+Shift+P |
 | ✅ | Unit test | `TransferListTest`, `EditStatusFloatTest`, `PromptResponderTest.passwordPrompt…`, gaya peringatan/gagal; ikon baru `SEARCH` dan `COPY` |
-| ⬜ | Rilis | v0.1.169 |
+| ✅ | Rilis | [v0.1.169](https://github.com/egateza/TermUL/releases/tag/v0.1.169) |
 
 ## Rilis C: menunggu keputusan
 
