@@ -93,6 +93,7 @@ Lokasi per OS (`AppPaths`): Windows `%APPDATA%` / `%LOCALAPPDATA%`; macOS `~/Lib
   profiles.json       host tree + profil (TANPA secret)
   known_hosts         host key terverifikasi (format OpenSSH)
   vault.bin           secret terenkripsi
+  update-history.json 5 update terakhir yang sudah berjalan + catatan rilisnya (Bantuan → Yang baru)
   logs\               log aplikasi (tanpa secret)
 %LOCALAPPDATA%\TermUL\
   edit\<profileId>\<remote-path>   cache file yang sedang diedit

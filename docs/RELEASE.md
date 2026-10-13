@@ -50,7 +50,9 @@ Buat file teks di luar repo, atau di dalam repo tapi jangan di-commit, misalnya 
 - Baru: tombol salin path di panel SFTP.
 ```
 
-Isi file ini tampil di dialog **Periksa update** dan di halaman rilis GitHub. Isinya ikut ditandatangani, jadi tidak
+Isi file ini tampil di dialog **Periksa update**, di halaman **Bantuan → Yang baru** (setelah update dipakai), dan di halaman
+rilis GitHub. Markdown yang dirender di aplikasi: heading `#`/`##`/`###`, bullet `-`/`*`, `**tebal**`, `` `kode` ``,
+`[teks](https://…)`, dan `#123` (link ke issue). Isinya ikut ditandatangani, jadi tidak
 bisa diubah setelah rilis terbit. Tulis untuk pengguna: apa yang berubah dan apa yang perlu mereka lakukan, kalau ada.
 
 ### 3. Jalankan skrip rilis

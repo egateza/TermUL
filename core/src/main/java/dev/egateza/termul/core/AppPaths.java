@@ -130,6 +130,11 @@ public record AppPaths(Path configDir, Path cacheDir) {
         return cacheDir.resolve("updates");
     }
 
+    /** Riwayat update yang sudah dipakai (halaman "Yang baru"); di config supaya tidak hilang saat cache dibersihkan. */
+    public Path updateHistoryFile() {
+        return configDir.resolve("update-history.json");
+    }
+
     private static Path envPath(Function<String, String> env, String name, Path fallback) {
         String value = env.apply(name);
         return value == null || value.isBlank() ? fallback : Path.of(value);

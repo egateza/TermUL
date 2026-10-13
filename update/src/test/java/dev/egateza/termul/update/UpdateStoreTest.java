@@ -193,6 +193,24 @@ class UpdateStoreTest {
         }
     }
 
+    @Test
+    void manifestMembacaCatatanRilisTerverifikasi() throws Exception {
+        release.notes = "- Baru: halaman Yang baru";
+        install(release);
+
+        var manifest = store.manifest(ReleaseVersion.parse("0.1.200"), key.getPublic());
+
+        assertThat(manifest.notes()).isEqualTo("- Baru: halaman Yang baru");
+    }
+
+    @Test
+    void manifestDenganKeyLainDitolak() throws Exception {
+        install(release);
+
+        assertThatThrownBy(() -> store.manifest(ReleaseVersion.parse("0.1.200"), Fixtures.keyPair().getPublic()))
+                .isInstanceOf(UpdateException.class);
+    }
+
     private UpdateStore.Installed install(Fixtures.Release r) throws Exception {
         var feed = r.feed(key);
         return store.install(InstallPlan.of(feed.release, new LocalJars(List.of())), feed, key.getPublic(), n -> { });

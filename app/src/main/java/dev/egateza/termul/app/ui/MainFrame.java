@@ -22,11 +22,15 @@ import dev.egateza.termul.app.terminal.TerminalTab;
 import dev.egateza.termul.app.ui.anim.AnimationChoice;
 import dev.egateza.termul.app.ui.anim.LoadingPanel;
 import dev.egateza.termul.app.ui.tree.HostTreePanel;
+import dev.egateza.termul.app.update.AppUpdates;
 import dev.egateza.termul.app.update.BadgeDotIcon;
 import dev.egateza.termul.app.update.InstallerInfo;
 import dev.egateza.termul.app.update.RestartCommand;
 import dev.egateza.termul.app.update.UpdateDialog;
 import dev.egateza.termul.app.update.UpdateNotifier;
+import dev.egateza.termul.app.update.UpdatePrompter;
+import dev.egateza.termul.app.update.WhatsNewDialog;
+import dev.egateza.termul.update.ReleaseVersion;
 import dev.egateza.termul.app.wsl.WslController;
 import java.awt.Color;
 import java.io.IOException;
@@ -148,6 +152,10 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private JCheckBoxMenuItem miWslToggle; // EDT; Pengaturan → Manajemen WSL (null di luar Windows)
     private JMenuItem checkUpdateItem; // EDT
     private final UpdateNotifier updateNotifier;
+    /** Modal update otomatis saat badge menemukan versi baru. */
+    private final UpdatePrompter updatePrompter;
+    private UpdateDialog updateDialog; // EDT; dialog update yang sedang tampil, null kalau tidak ada
+    private WhatsNewDialog whatsNew; // EDT; Bantuan → Yang baru, satu jendela saja
     private UiTheme theme; // EDT
     private List<CustomTheme> customThemes; // EDT; disegarkan setelah editor tema ditutup
     private long backdropRequest; // EDT; nomor permintaan muat gambar latar terakhir, untuk membuang hasil yang usang
@@ -171,6 +179,8 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         this.onExit = onExit;
         this.updateNotifier = UpdateNotifier.forGitHub(ctx.paths(), () -> ctx.config().current().autoUpdateCheck(),
                 this::showUpdateState);
+        this.updatePrompter = new UpdatePrompter(MainFrame::modalDialogShowing,
+                () -> updateDialog != null && updateDialog.isShowing(), version -> openUpdateDialog(true));
         this.hostTree = new HostTreePanel(this);
         this.wsl = new WslController(this, ctx.wsl(),
                 () -> Os.current().isWindows() && ctx.config().current().wslManager(), store::snapshot, ctx.sshOps(),
@@ -497,6 +507,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         java.awt.Toolkit.getDefaultToolkit().removeAWTEventListener(activity);
         idleTimer.stop();
         badgePulse.stop();
+        updatePrompter.stop();
         drawer.dispose();
         resourceMonitor.close();
         wsl.close();
@@ -665,6 +676,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         help.addSeparator();
         checkUpdateItem = menuItem(null, I18n.t("main.menu.help.checkUpdate"), null, this::openUpdateDialog);
         help.add(checkUpdateItem);
+        help.add(menuItem(null, I18n.t("main.menu.help.whatsNew"), null, this::openWhatsNew));
         help.add(menuItem(null, I18n.t("main.menu.help.reportBug"), null,
                 () -> BugReportDialog.show(this, ctx.paths().logDir(), io)));
         help.add(menuItem(AppIcon.INFO, I18n.t("main.menu.help.about"), null, this::showAbout));
@@ -1945,7 +1957,47 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     }
 
     private void openUpdateDialog() {
-        new UpdateDialog(this, ctx.paths(), updateNotifier, this::restartForUpdate).setVisible(true);
+        openUpdateDialog(false);
+    }
+
+    /** @param prompted dibuka otomatis oleh {@link UpdatePrompter}, bukan dari menu/badge */
+    private void openUpdateDialog(boolean prompted) {
+        if (updateDialog != null && updateDialog.isShowing()) {
+            updateDialog.toFront();
+            return;
+        }
+        updateDialog = new UpdateDialog(this, ctx.paths(), updateNotifier, this::restartForUpdate, prompted);
+        try {
+            updateDialog.setVisible(true); // modal: kembali setelah ditutup
+        } finally {
+            updateDialog = null;
+        }
+    }
+
+    /** @return true kalau ada dialog modal yang sedang tampil (jangan tumpuk modal update di atasnya). EDT. */
+    private static boolean modalDialogShowing() {
+        for (Window w : Window.getWindows()) {
+            if (w instanceof java.awt.Dialog d && d.isModal() && d.isShowing()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Bantuan → Yang baru: riwayat dibaca dari disk di luar EDT. */
+    private void openWhatsNew() {
+        if (whatsNew != null && whatsNew.isDisplayable()) {
+            whatsNew.toFront();
+            return;
+        }
+        UiAsync.run(io, () -> AppUpdates.history(ctx.paths()).load(), history -> {
+            if (whatsNew != null && whatsNew.isDisplayable()) {
+                whatsNew.toFront();
+                return;
+            }
+            whatsNew = new WhatsNewDialog(this, history, ReleaseVersion.parseOrNull(BuildInfo.load().version()));
+            whatsNew.setVisible(true);
+        }, err -> Dialogs.error(this, I18n.t("whatsNew.error"), err));
     }
 
     /** Badge update di menu bar dan titik di menu Bantuan → Periksa update. EDT. */
@@ -1973,6 +2025,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         }
         getJMenuBar().revalidate();
         getJMenuBar().repaint();
+        updatePrompter.onState(state);
     }
 
     /** Klik badge: buka dialog update, atau (update sudah terpasang) restart dengan konfirmasi. EDT. */

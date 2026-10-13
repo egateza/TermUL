@@ -151,6 +151,20 @@ public final class UpdateStore {
         }
     }
 
+    /**
+     * Manifest versi terpasang dengan tanda tangan terverifikasi, tanpa menghitung hash jar (ringan; untuk membaca
+     * catatan rilis, bukan untuk memutuskan apa yang dijalankan).
+     */
+    public UpdateManifest manifest(ReleaseVersion version, PublicKey key) throws UpdateException {
+        Path d = versionDir(version);
+        UpdateManifest manifest = SignedRelease.verify(read(d.resolve(UpdateProtocol.MANIFEST)),
+                read(d.resolve(UpdateProtocol.SIGNATURE)), key).manifest();
+        if (!manifest.version().equals(version)) {
+            throw new UpdateException("versi di manifest berbeda (" + manifest.version() + ")");
+        }
+        return manifest;
+    }
+
     /** Verifikasi tanda tangan manifest dan ukuran + SHA-256 setiap jar di {@code versionDir}. */
     public static Installed verify(Path versionDir, PublicKey key) throws UpdateException {
         if (!Files.isDirectory(versionDir)) {

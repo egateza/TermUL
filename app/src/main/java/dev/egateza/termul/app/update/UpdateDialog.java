@@ -44,6 +44,8 @@ public final class UpdateDialog extends JDialog {
 
     private final Consumer<List<String>> restart;
     private final UpdateNotifier notifier;
+    /** Dibuka otomatis (bukan oleh user): tanpa tombol default, supaya ketikan di terminal tidak memasang update. */
+    private final boolean prompted;
     private final UpdateClient client = new UpdateClient();
     private final Updater updater;
     private final JTextArea status = new JTextArea();
@@ -59,11 +61,16 @@ public final class UpdateDialog extends JDialog {
     /**
      * @param notifier badge di menu bar; diberi tahu hasil pemeriksaan dan pemasangan
      * @param restart  dipanggil di EDT dengan perintah buka ulang; pemanggil yang menutup aplikasi
+     * @param prompted true = dibuka otomatis karena ada versi baru ({@link UpdatePrompter}); dialog tidak merebut
+     *                 fokus dan tidak punya tombol default
      */
-    public UpdateDialog(Window owner, AppPaths paths, UpdateNotifier notifier, Consumer<List<String>> restart) {
+    public UpdateDialog(Window owner, AppPaths paths, UpdateNotifier notifier, Consumer<List<String>> restart,
+                        boolean prompted) {
         super(owner, I18n.t("update.title"), ModalityType.APPLICATION_MODAL);
         this.restart = restart;
         this.notifier = notifier;
+        this.prompted = prompted;
+        setAutoRequestFocus(!prompted);
         this.updater = AppUpdates.updater(paths, client);
 
         status.setEditable(false);
@@ -247,8 +254,11 @@ public final class UpdateDialog extends JDialog {
         for (JButton b : list) {
             buttons.add(b);
         }
-        if (list.length > 0) {
+        if (list.length > 0 && !prompted) {
             getRootPane().setDefaultButton(list[0]);
+        }
+        for (JButton b : list) {
+            b.setFocusable(!prompted); // Spasi pada tombol yang fokus juga menekannya
         }
         buttons.revalidate();
         buttons.repaint();
