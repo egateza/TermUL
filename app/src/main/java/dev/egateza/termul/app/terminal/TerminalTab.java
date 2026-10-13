@@ -3,6 +3,7 @@ package dev.egateza.termul.app.terminal;
 import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.app.sftp.SftpPanel;
 import dev.egateza.termul.app.ui.AppIcon;
+import dev.egateza.termul.app.ui.fab.FloatingOverlay;
 import dev.egateza.termul.app.ui.Dialogs;
 import dev.egateza.termul.app.ui.anim.AnimationKind;
 import dev.egateza.termul.app.ui.anim.LoadingPanel;
@@ -66,6 +67,9 @@ public final class TerminalTab extends JPanel {
     private ConnectCancel connectCancel; // EDT; connect/reconnect terakhir, dibatalkan saat tab ditutup
     private boolean disposed;            // hanya diakses di EDT
     private final JPanel content = new JPanel(new BorderLayout()); // banner + terminal
+    /** Isi tengah {@code content}: terminal/loading/error/SFTP, dengan tombol mengambang di atasnya. */
+    private final FloatingOverlay center = new FloatingOverlay();
+    private TerminalFloats floats; // EDT; tombol di atas widget yang sedang tampil, null tanpa widget
     private final Function<HostProfile, SftpPanel> sftpFactory;
     private final SftpLinks links;
     private final SftpLinks.TerminalHandle gate;   // status sesi ini untuk panel SFTP & sesi edit
@@ -89,10 +93,12 @@ public final class TerminalTab extends JPanel {
         this.sftpFactory = sftpFactory;
         content.add(banner, BorderLayout.NORTH);
         banner.setVisible(false);
+        center.setMargins(28, 16); // kanan lebih lebar: jangan menutupi scrollbar terminal
+        content.add(center, BorderLayout.CENTER);
         add(content, BorderLayout.CENTER);
         if (sftpOnly) {
             sftp = sftpFactory.apply(profile);
-            content.add(sftp, BorderLayout.CENTER);
+            center.setBase(sftp);
         }
     }
 
@@ -327,6 +333,10 @@ public final class TerminalTab extends JPanel {
         reconnector = null;
         autoReconnecting = false;
         hideBanner();
+        if (floats != null) {
+            floats.dispose(); // tombol milik terminal lama
+            floats = null;
+        }
         if (widget != null) {
             widget.close(); // terminal lama yang beku setelah koneksi putus
         }
@@ -350,6 +360,7 @@ public final class TerminalTab extends JPanel {
         gate.set(TerminalState.CONNECTED);
         settings.setPaletteOverride(hostPalette.apply(latestProfile().terminalTheme()));
         widget = new ZoomableTermWidget(settings);
+        floats = new TerminalFloats(widget, center, this::reconnect);
         widget.setTtyConnector(tty);
         widget.setPasteFilter(this::confirmPaste);
         applyEnvironmentColor();
@@ -404,11 +415,19 @@ public final class TerminalTab extends JPanel {
             return;
         }
         gate.set(TerminalState.DOWN);
-        sessionEnded = true;
+        setSessionEnded(true);
         showBanner(I18n.t("tab.sessionEnded", profile.address()));
     }
 
     private boolean sessionEnded; // EDT
+
+    /** Sesi berakhir/menyerah (true) atau berjalan lagi; tombol Sambung ulang ikut tampil/hilang. EDT. */
+    private void setSessionEnded(boolean ended) {
+        sessionEnded = ended;
+        if (floats != null) {
+            floats.setSessionEnded(ended);
+        }
+    }
     private boolean autoReconnecting; // EDT
 
     /** Koneksi terminal putus: sambung ulang shell dan SFTP bersama. */
@@ -446,7 +465,7 @@ public final class TerminalTab extends JPanel {
         var r = new Reconnector<T>();
         reconnector = r;
         autoReconnecting = true;
-        sessionEnded = false;
+        setSessionEnded(false);
         gate.set(TerminalState.RECONNECTING);
         stateListener.run();
         log.info("Koneksi ke {} terputus, menyambung ulang {}", address, what);
@@ -502,7 +521,7 @@ public final class TerminalTab extends JPanel {
                     reconnector = null;
                     autoReconnecting = false;
                     gate.set(TerminalState.DOWN);
-                    sessionEnded = true;
+                    setSessionEnded(true);
                     stateListener.run();
                     showBanner(I18n.t("tab.reconnect.gaveUp", address, lastError.getMessage()),
                             I18n.t("tab.reconnect"), TerminalTab.this::reconnect);
@@ -688,7 +707,7 @@ public final class TerminalTab extends JPanel {
     }
 
     private void hideBanner() {
-        sessionEnded = false;
+        setSessionEnded(false);
         banner.setVisible(false);
         banner.removeAll();
     }
@@ -832,6 +851,10 @@ public final class TerminalTab extends JPanel {
             connector.closeByUser();
             connector = null;
         }
+        if (floats != null) {
+            floats.dispose();
+            floats = null;
+        }
         if (widget != null) {
             widget.close();
             widget = null;
@@ -839,13 +862,6 @@ public final class TerminalTab extends JPanel {
     }
 
     private void showCenter(java.awt.Component c) {
-        var layout = (BorderLayout) content.getLayout();
-        var old = layout.getLayoutComponent(BorderLayout.CENTER);
-        if (old != null) {
-            content.remove(old);
-        }
-        content.add(c, BorderLayout.CENTER);
-        content.revalidate();
-        content.repaint();
+        center.setBase(c);
     }
 }

@@ -23,6 +23,7 @@ public enum AppIcon {
     // <icons> (dikelola oleh tools/AddIcon.java)
     ANGLES_LEFT,
     ANGLES_RIGHT,
+    ARROW_DOWN,
     ARROW_UP,
     BROOM,
     DOWNLOAD,
@@ -37,6 +38,7 @@ public enum AppIcon {
     LINK,
     PEN,
     PERMISSION,
+    PLUS,
     RECONNECT,
     REFRESH,
     SERVER,

@@ -22,6 +22,9 @@ import dev.egateza.termul.app.terminal.TerminalTab;
 import dev.egateza.termul.app.ui.anim.AnimationChoice;
 import dev.egateza.termul.app.ui.anim.LoadingPanel;
 import dev.egateza.termul.app.ui.tree.HostTreePanel;
+import dev.egateza.termul.app.ui.fab.FloatingButton;
+import dev.egateza.termul.app.ui.fab.FloatingOverlay;
+import dev.egateza.termul.app.ui.fab.FloatingStyle;
 import dev.egateza.termul.app.update.AppUpdates;
 import dev.egateza.termul.app.update.BadgeDotIcon;
 import dev.egateza.termul.app.update.InstallerInfo;
@@ -99,6 +102,8 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private final RoundedPanel center = new RoundedPanel();
     /** Isi area terminal selama belum ada tab: jam, host terakhir/favorit, animasi. */
     private final HomeScreen home = new HomeScreen(this::open);
+    /** Beranda dengan tombol mengambang "Host baru" di pojok kanan bawah. */
+    private final FloatingOverlay homeView = new FloatingOverlay();
     /** Layar idle (glass pane): menutupi window setelah sekian menit tanpa input atau lewat shortcut. */
     private final IdleOverlay idleOverlay = new IdleOverlay(this::wakeFromIdle);
     private final IdleState idle = new IdleState(nowMillis()); // EDT
@@ -266,6 +271,12 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         });
         var idleAnimation = AnimationChoice.fromId(ctx.config().current().idleAnimation());
         home.setAnimation(idleAnimation);
+        homeView.setBase(home);
+        var newHostFab = new FloatingButton(AppIcon.PLUS, null, FloatingStyle.Kind.PRIMARY, FloatingButton.Size.NORMAL);
+        newHostFab.setToolTipText(I18n.t("fab.newHost", Shortcuts.text(Shortcuts.menu(KeyEvent.VK_N))));
+        newHostFab.getAccessibleContext().setAccessibleName(I18n.t("main.menu.file.newHost"));
+        newHostFab.addActionListener(e -> newHost(hostTree.selectedGroup()));
+        homeView.addFloating(newHostFab, FloatingOverlay.Anchor.BOTTOM_RIGHT);
         home.setSnapshot(store.snapshot());
         idleOverlay.setAnimation(idleAnimation);
         setGlassPane(idleOverlay);
@@ -1337,7 +1348,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         com.formdev.flatlaf.FlatLaf.updateUI();
         // FlatLaf.updateUI hanya menjangkau komponen yang sedang ada di window; yang terlepas dari hierarki
         // (tabs saat belum ada tab, host tree di mode melayang, dst.) harus diperbarui sendiri
-        for (var detached : new java.awt.Component[] {tabs, home, hostTree, hostSide, logSide, editTracker}) {
+        for (var detached : new java.awt.Component[] {tabs, homeView, hostTree, hostSide, logSide, editTracker}) {
             if (detached != null) {
                 SwingUtilities.updateComponentTreeUI(detached);
             }
@@ -1872,9 +1883,9 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     }
 
     private void updateCenter() {
-        var wanted = tabs.getTabCount() == 0 ? home : tabs;
+        java.awt.Component wanted = tabs.getTabCount() == 0 ? homeView : tabs;
         if (center.getComponentCount() == 0 || center.getComponent(0) != wanted) {
-            if (wanted == home) {
+            if (wanted == homeView) {
                 home.reshuffle(); // animasi acak: berganti setiap beranda tampil lagi
             }
             center.removeAll();
