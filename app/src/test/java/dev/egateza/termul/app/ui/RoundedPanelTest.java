@@ -66,4 +66,36 @@ class RoundedPanelTest {
         assertThat(new Color(image.getRGB(4, 4))).isEqualTo(Color.BLUE); // sudut isi ditutup
         assertThat(new Color(image.getRGB(60, 40))).isEqualTo(Color.RED); // isi tetap terlihat
     }
+
+    @Test
+    void viewportTanpaBlitSelamaMembulatSupayaTepiTidakTersalinSaatScroll() {
+        var panel = new RoundedPanel();
+        var log = new javax.swing.JScrollPane(new javax.swing.JTextArea("baris"));
+        var own = new javax.swing.JScrollPane(new javax.swing.JTextArea());
+        own.getViewport().setScrollMode(javax.swing.JViewport.BACKINGSTORE_SCROLL_MODE); // pilihan komponen sendiri
+        var inner = new JPanel(new BorderLayout());
+        inner.add(log, BorderLayout.CENTER);
+        inner.add(own, BorderLayout.SOUTH);
+        panel.add(inner, BorderLayout.CENTER);
+
+        panel.setRounded(true);
+        assertThat(log.getViewport().getScrollMode()).isEqualTo(javax.swing.JViewport.SIMPLE_SCROLL_MODE);
+        assertThat(own.getViewport().getScrollMode()).isEqualTo(javax.swing.JViewport.BACKINGSTORE_SCROLL_MODE);
+
+        panel.setRounded(false);
+        assertThat(log.getViewport().getScrollMode()).isEqualTo(javax.swing.JViewport.BLIT_SCROLL_MODE);
+        assertThat(own.getViewport().getScrollMode()).isEqualTo(javax.swing.JViewport.BACKINGSTORE_SCROLL_MODE);
+    }
+
+    @Test
+    void scrollPaneYangDitambahkanKemudianIkutSaatLayout() {
+        var panel = new RoundedPanel();
+        panel.setRounded(true);
+        var later = new javax.swing.JScrollPane(new javax.swing.JTextArea());
+        panel.add(later, BorderLayout.CENTER);
+        panel.setSize(300, 200);
+        panel.doLayout();
+
+        assertThat(later.getViewport().getScrollMode()).isEqualTo(javax.swing.JViewport.SIMPLE_SCROLL_MODE);
+    }
 }

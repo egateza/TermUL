@@ -2,6 +2,8 @@ package dev.egateza.termul.app.ui;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Component;
+import java.awt.Container;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Insets;
@@ -11,6 +13,7 @@ import java.awt.geom.Rectangle2D;
 import java.awt.geom.RoundRectangle2D;
 import javax.swing.BorderFactory;
 import javax.swing.JPanel;
+import javax.swing.JViewport;
 import javax.swing.UIManager;
 
 /**
@@ -21,6 +24,11 @@ import javax.swing.UIManager;
  * <p>Saat membulat, panel ini menjadi painting origin: repaint dari anak (mis. JediTerm yang menggambar ulang kursor
  * atau output) selalu dimulai dari panel ini, sehingga penutup sudut tidak tertimpa. Dalam mode kotak panel ini
  * tidak menambah apa pun. Semua method dipanggil di EDT.
+ *
+ * <p>Viewport scroll pane di dalamnya (mis. log, daftar host) tidak boleh memakai blit scrolling selama membulat:
+ * blit menyalin pixel layar yang sudah ada, termasuk garis tepi dan penutup sudut yang digambar panel ini di atas
+ * viewport, lalu hanya menggambar ulang bagian yang baru. Akibatnya garis tepi bawah dan lengkungan sudut
+ * "tertinggal" di tengah isi setiap kali di-scroll (mis. auto-scroll log). Lihat {@link #updateScrollModes}.
  */
 public final class RoundedPanel extends JPanel {
 
@@ -63,8 +71,40 @@ public final class RoundedPanel extends JPanel {
         var in = rounded ? gaps : new Insets(0, 0, 0, 0);
         setBorder(BorderFactory.createEmptyBorder(in.top, in.left, in.bottom, in.right));
         mask = null;
+        updateScrollModes(this, rounded);
         revalidate();
         repaint();
+    }
+
+    /** Layout ulang juga terjadi saat isi panel diganti (mis. scroll pane baru): mode scroll-nya ikut disesuaikan. */
+    @Override
+    public void doLayout() {
+        super.doLayout();
+        updateScrollModes(this, rounded);
+    }
+
+    /** Penanda viewport yang mode scroll-nya diubah panel ini (dikembalikan ke blit saat mode kotak). */
+    private static final String SIMPLE_SCROLL_KEY = RoundedPanel.class.getName() + ".simpleScroll";
+
+    /**
+     * Membulat: semua viewport di dalam {@code root} memakai {@link JViewport#SIMPLE_SCROLL_MODE} (gambar ulang, bukan
+     * salin pixel). Kotak: viewport yang tadi diubah kembali ke {@link JViewport#BLIT_SCROLL_MODE}.
+     */
+    static void updateScrollModes(Container root, boolean rounded) {
+        for (Component c : root.getComponents()) {
+            if (c instanceof JViewport viewport) {
+                if (rounded && viewport.getScrollMode() == JViewport.BLIT_SCROLL_MODE) {
+                    viewport.setScrollMode(JViewport.SIMPLE_SCROLL_MODE);
+                    viewport.putClientProperty(SIMPLE_SCROLL_KEY, Boolean.TRUE);
+                } else if (!rounded && Boolean.TRUE.equals(viewport.getClientProperty(SIMPLE_SCROLL_KEY))) {
+                    viewport.setScrollMode(JViewport.BLIT_SCROLL_MODE);
+                    viewport.putClientProperty(SIMPLE_SCROLL_KEY, null);
+                }
+            }
+            if (c instanceof Container container) {
+                updateScrollModes(container, rounded);
+            }
+        }
     }
 
     @Override
