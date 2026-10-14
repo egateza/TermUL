@@ -100,6 +100,24 @@ class SshTtyConnectorTest {
     }
 
     @Test
+    void resizeBeruntunHanyaMengirimUkuranTerakhir() throws Exception {
+        SshTtyConnector tty = factory.open(profile, new PtySize(90, 30));
+        readUntil(tty, "$ ");
+        int before = server.windowChanges.size();
+
+        // seperti divider yang diseret: banyak ukuran sementara dalam waktu singkat
+        for (int cols = 120; cols >= 9; cols -= 3) {
+            tty.resize(new TermSize(cols, 40));
+        }
+        tty.resize(new TermSize(77, 40));
+
+        await().atMost(Duration.ofSeconds(5)).until(() -> server.windowChanges.contains("77x40"));
+        Thread.sleep(SshTtyConnector.RESIZE_DEBOUNCE_MILLIS * 2);
+        assertThat(server.windowChanges.subList(before, server.windowChanges.size())).containsExactly("77x40");
+        tty.closeByUser();
+    }
+
+    @Test
     void remoteExitMemicuCloseListenerDanMelepasKoneksi() throws Exception {
         SshTtyConnector tty = factory.open(profile, SshTerminalFactory.DEFAULT_SIZE);
         var closed = new AtomicReference<SshTtyConnector>();

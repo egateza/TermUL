@@ -13,6 +13,10 @@ import java.util.EnumSet;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -55,6 +59,17 @@ public final class SshTtyConnector implements TtyConnector {
     private final AtomicBoolean closeNotified = new AtomicBoolean();
     private volatile boolean closedByUser;
     private volatile boolean connectionLost;
+
+    /**
+     * Jeda resize: ukuran baru baru dikirim ke server setelah tidak berubah selama ini. Saat divider diseret atau window
+     * di-resize, panel terminal berubah ukuran puluhan kali; kalau setiap ukuran dikirim, shell (bash/readline)
+     * menggambar ulang prompt di setiap lebar sementara dan sisa gambarnya tertinggal di layar.
+     */
+    static final long RESIZE_DEBOUNCE_MILLIS = 150;
+    private static final ScheduledExecutorService RESIZE_TIMER = Executors.newSingleThreadScheduledExecutor(
+            Thread.ofPlatform().name("term-resize").daemon().factory());
+    private final AtomicReference<TermSize> pendingSize = new AtomicReference<>();
+    private ScheduledFuture<?> resizeTask; // guarded by this
 
     public SshTtyConnector(SshLease lease, ChannelShell channel, String name) {
         this.lease = Objects.requireNonNull(lease, "lease");
@@ -163,7 +178,21 @@ public final class SshTtyConnector implements TtyConnector {
         if (cols < 1 || rows < 1) {
             return;
         }
-        submit(() -> channel.sendWindowChange(cols, rows));
+        pendingSize.set(size);
+        synchronized (this) {
+            if (resizeTask != null) {
+                resizeTask.cancel(false);
+            }
+            resizeTask = RESIZE_TIMER.schedule(this::flushResize, RESIZE_DEBOUNCE_MILLIS, TimeUnit.MILLISECONDS);
+        }
+    }
+
+    /** Kirim ukuran terakhir (sekali) lewat writer thread, berurutan dengan write lain. */
+    private void flushResize() {
+        TermSize size = pendingSize.getAndSet(null);
+        if (size != null && !closed.get()) {
+            submit(() -> channel.sendWindowChange(size.getColumns(), size.getRows()));
+        }
     }
 
     @Override
