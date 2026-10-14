@@ -16,6 +16,15 @@ class SnippetButtonTest {
     }
 
     @Test
+    void geseranKecilSaatKlikBukanSeret() {
+        // dulu: dx+dy >= 5 sudah dianggap seret, sehingga klik dengan sedikit geseran tidak membuka menu
+        assertThat(SnippetButton.isDrag(3, 3, SnippetButton.DRAG_THRESHOLD)).isFalse();
+        assertThat(SnippetButton.isDrag(-7, 7, SnippetButton.DRAG_THRESHOLD)).isFalse();
+        assertThat(SnippetButton.isDrag(0, 8, SnippetButton.DRAG_THRESHOLD)).isTrue();
+        assertThat(SnippetButton.isDrag(-40, 2, SnippetButton.DRAG_THRESHOLD)).isTrue();
+    }
+
+    @Test
     void sudutTidakDikenalKeKananAtas() {
         assertThat(SnippetButton.anchorOf(null)).isEqualTo(FloatingOverlay.Anchor.TOP_RIGHT);
         assertThat(SnippetButton.anchorOf("tengah")).isEqualTo(FloatingOverlay.Anchor.TOP_RIGHT);

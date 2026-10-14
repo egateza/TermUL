@@ -24,8 +24,13 @@ import javax.swing.SwingUtilities;
  */
 final class SnippetButton {
 
-    /** Jarak seret minimum sebelum dianggap seret, bukan klik. */
-    static final int DRAG_THRESHOLD = 5;
+    /**
+     * Geseran minimum (per sumbu) sebelum tekan-lepas dianggap seret, bukan klik. Ambang lama (5 px, dx+dy) terlalu
+     * kecil: klik biasa dengan touchpad / layar ber-scaling sering bergeser sejauh itu, sehingga menu tidak terbuka.
+     */
+    static final int DRAG_THRESHOLD = 8;
+    /** Seret yang berakhir di sudut asal dengan geseran sekecil ini dianggap klik (menu tetap dibuka). */
+    static final int CLICK_SLOP = 24;
 
     final FloatingButton button = new FloatingButton(AppIcon.BOLT, null, FloatingStyle.Kind.PRIMARY,
             FloatingButton.Size.MINI);
@@ -75,7 +80,7 @@ final class SnippetButton {
                 Point now = e.getLocationOnScreen();
                 int dx = now.x - pressOnScreen.x;
                 int dy = now.y - pressOnScreen.y;
-                if (!dragging && Math.abs(dx) + Math.abs(dy) < DRAG_THRESHOLD) {
+                if (!dragging && !isDrag(dx, dy, DRAG_THRESHOLD)) {
                     return;
                 }
                 dragging = true;
@@ -84,14 +89,27 @@ final class SnippetButton {
 
             @Override
             public void mouseReleased(MouseEvent e) {
+                Point press = pressOnScreen;
                 pressOnScreen = null;
                 if (!dragging) {
                     return;
                 }
                 var b = button.getBounds();
+                var from = overlay.anchorOf(button);
                 var anchor = overlay.nearestCorner(new Point(b.x + b.width / 2, b.y + b.height / 2));
                 overlay.setAnchor(button, anchor);
-                SnippetButton.this.cornerChanged.accept(cornerOf(anchor));
+                Point now = e.getLocationOnScreen();
+                if (anchor == from && press != null && !isDrag(now.x - press.x, now.y - press.y, CLICK_SLOP)) {
+                    // hanya tergeser sedikit dan kembali ke sudut yang sama: maksud user adalah klik
+                    SwingUtilities.invokeLater(() -> {
+                        dragging = false;
+                        showMenu();
+                    });
+                    return;
+                }
+                if (anchor != from) {
+                    SnippetButton.this.cornerChanged.accept(cornerOf(anchor));
+                }
                 // klik yang ikut terpicu oleh lepasnya tombol tidak boleh membuka menu (urutan listener bisa berubah
                 // setelah ganti tema), jadi tanda seret baru dihapus setelah event ini selesai
                 SwingUtilities.invokeLater(() -> dragging = false);
@@ -145,6 +163,11 @@ final class SnippetButton {
         int x = right ? button.getWidth() - size.width : 0;
         int y = top ? button.getHeight() + 4 : -size.height - 4;
         menu.show(button, x, y);
+    }
+
+    /** true kalau geseran (dx, dy) melewati {@code threshold} di salah satu sumbu. */
+    static boolean isDrag(int dx, int dy, int threshold) {
+        return Math.abs(dx) >= threshold || Math.abs(dy) >= threshold;
     }
 
     static FloatingOverlay.Anchor anchorOf(String corner) {
