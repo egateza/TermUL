@@ -86,7 +86,7 @@ public final class RemoteEditSession {
     private final Path localFile;
     private final EditCache cache;
     private Uploader uploader;                 // guarded by this
-    private final LineEndings.Style originalEnding;
+    private LineEndings.Style originalEnding;  // guarded by this
     private final CopyOnWriteArrayList<Consumer<RemoteEditSession>> listeners = new CopyOnWriteArrayList<>();
     private Baseline baseline;                 // guarded by this
     private byte[] syncedHash;                 // guarded by this
@@ -110,13 +110,7 @@ public final class RemoteEditSession {
     public static RemoteEditSession open(RemoteFileService files, EditCache cache, java.util.UUID profileId,
                                          String remotePath, Uploader uploader) throws RemoteFileException {
         Objects.requireNonNull(uploader);
-        RemoteEntry entry = files.stat(remotePath);
-        if (entry.type() != RemoteEntry.Type.FILE) {
-            throw new RemoteFileException("Bukan file biasa: " + remotePath);
-        }
-        if (entry.size() > MAX_SIZE) {
-            throw new RemoteFileException("File terlalu besar untuk diedit (" + entry.size() / (1024 * 1024) + " MB): " + remotePath);
-        }
+        RemoteEntry entry = editableStat(files, remotePath);
         Path local = cache.pathFor(profileId, remotePath);
         try {
             cache.prepare(local);
@@ -131,6 +125,45 @@ public final class RemoteEditSession {
             throw e instanceof RemoteFileException rfe ? rfe
                     : new RemoteFileException("Gagal menyiapkan cache edit: " + e.getMessage(), e);
         }
+    }
+
+    private static RemoteEntry editableStat(RemoteFileService files, String remotePath) throws RemoteFileException {
+        RemoteEntry entry = files.stat(remotePath);
+        if (entry.type() != RemoteEntry.Type.FILE) {
+            throw new RemoteFileException("Bukan file biasa: " + remotePath);
+        }
+        if (entry.size() > MAX_SIZE) {
+            throw new RemoteFileException("File terlalu besar untuk diedit (" + entry.size() / (1024 * 1024) + " MB): " + remotePath);
+        }
+        return entry;
+    }
+
+    /** true kalau file di server berubah sejak download/upload terakhir sesi ini (mis. ditimpa dari panel SFTP). */
+    public synchronized boolean remoteChanged() throws RemoteFileException {
+        return !baseline.matches(files.stat(remotePath));
+    }
+
+    /**
+     * Download ulang versi server ke file lokal dan jadikan baseline baru, seperti membuka file dari awal.
+     * Perubahan lokal yang belum ter-upload ikut tertimpa (pemanggil yang memastikan user setuju).
+     */
+    public synchronized void reload() throws RemoteFileException {
+        if (state == State.CLOSED) {
+            return;
+        }
+        RemoteEntry entry = editableStat(files, remotePath);
+        files.download(remotePath, localFile, TransferListener.NONE); // atomic: editor tidak melihat file setengah jadi
+        byte[] content;
+        try {
+            content = Files.readAllBytes(localFile);
+        } catch (IOException e) {
+            throw new RemoteFileException("File lokal tidak bisa dibaca: " + localFile, e);
+        }
+        baseline = Baseline.of(entry);
+        syncedHash = sha256(content);
+        originalEnding = LineEndings.detect(content);
+        setState(State.EDITING, "Dimuat ulang");
+        log.info("Edit dimuat ulang dari server: {}", remotePath);
     }
 
     /** Upload default: SFTP atomic, mode file dipertahankan. */

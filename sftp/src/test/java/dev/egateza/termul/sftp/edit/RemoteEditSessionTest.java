@@ -85,6 +85,29 @@ class RemoteEditSessionTest {
     }
 
     @Test
+    void reloadMengambilVersiServerYangDitimpaDariLuar() throws Exception {
+        var session = open("app.conf", "x=1\n");
+        Path remote = fx.remoteRoot.resolve("app.conf");
+        assertThat(session.remoteChanged()).isFalse();
+
+        Files.writeString(remote, "x=ditimpa-dari-panel\r\n");
+        Files.setLastModifiedTime(remote, FileTime.from(Instant.now().plusSeconds(60)));
+        assertThat(session.remoteChanged()).isTrue();
+
+        session.reload();
+
+        assertThat(session.localFile()).hasContent("x=ditimpa-dari-panel\r\n");
+        assertThat(session.remoteChanged()).isFalse();
+        assertThat(session.hasPendingChanges()).isFalse();
+        assertThat(session.sync(SyncOptions.DEFAULT)).isInstanceOf(SyncResult.Unchanged.class);
+
+        // baseline & line ending ikut versi baru: edit berikutnya ter-upload tanpa konflik / dialog CRLF
+        Files.writeString(session.localFile(), "x=2\r\n");
+        assertThat(session.sync(SyncOptions.DEFAULT)).isInstanceOf(SyncResult.Uploaded.class);
+        assertThat(remote).hasContent("x=2\r\n");
+    }
+
+    @Test
     void crlfDariEditorWindowsDitahanLaluDikonversi() throws Exception {
         var session = open("run.sh", "#!/bin/sh\necho hi\n");
         Files.writeString(session.localFile(), "#!/bin/sh\r\necho halo\r\n");

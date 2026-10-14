@@ -174,6 +174,7 @@ public final class EditManager implements AutoCloseable {
         sshOps.execute(() -> {
             try {
                 Entry entry = entries.get(key);
+                Entry created = null;
                 if (entry == null) {
                     activity(profile, Level.INFO, I18n.t("edit.activity.downloading", remotePath));
                     SftpConnection link = links.acquire(profile);
@@ -198,11 +199,11 @@ public final class EditManager implements AutoCloseable {
                         links.release(profile);
                         throw e;
                     }
-                    var created = new Entry(profile, session, link, sudo, needsSudo);
-                    entry = created;
+                    var fresh = new Entry(profile, session, link, sudo, needsSudo);
+                    entry = created = fresh;
                     session.addListener(s -> {
                         fireChanged();
-                        publishState(created, s);
+                        publishState(fresh, s);
                     });
                     entries.put(key, entry);
                     byLocal.put(session.localFile().toAbsolutePath().normalize(), entry);
@@ -223,6 +224,9 @@ public final class EditManager implements AutoCloseable {
                     } else if (!useSudo && entry.sudo != null) {
                         downgradeToViewOnly(entry);
                     }
+                }
+                if (created == null && !refreshFromServer(entry)) {
+                    return; // dibatalkan
                 }
                 entry.template = template;
                 launchEditor(entry);
@@ -271,11 +275,53 @@ public final class EditManager implements AutoCloseable {
     public void reopenEditor(Entry entry) {
         sshOps.execute(() -> {
             try {
-                launchEditor(entry);
+                if (refreshFromServer(entry)) {
+                    launchEditor(entry);
+                }
             } catch (IOException e) {
                 showError(I18n.t("edit.error.editorLaunch"), e);
             }
         });
+    }
+
+    /**
+     * Sesi edit yang masih terbuka dibuka lagi: file lokal disamakan dulu dengan server, supaya isi yang ditimpa
+     * dari luar (upload panel SFTP, sesi lain, orang lain) tidak tertutup cache lama. Tanpa perubahan lokal yang
+     * tertunda, file selalu diunduh ulang (sama seperti membuka dari awal). Kalau ada perubahan tertunda dan file
+     * server juga berubah, user memilih versi mana yang dipakai. Tidak tersambung = pakai salinan lokal apa adanya.
+     *
+     * @return false kalau dibatalkan user (editor tidak dibuka)
+     */
+    private boolean refreshFromServer(Entry entry) {
+        var session = entry.session;
+        try {
+            var live = entry.link.ensureLive();
+            if (session.files() != live) {
+                session.rebind(live);
+            }
+            if (!session.hasPendingChanges()) {
+                session.reload();
+                return true;
+            }
+            if (!session.remoteChanged()) {
+                return true; // perubahan lokal tetap, di-upload pada save berikutnya
+            }
+            Object[] choices = {I18n.t("edit.reload.server"), I18n.t("edit.reload.local"), I18n.t("edit.common.cancel")};
+            int choice = ask(I18n.t("edit.reload.title", session.remotePath()), I18n.t("edit.reload.message"), choices);
+            switch (choice) {
+                case 0 -> session.reload();
+                case 1 -> { } // save berikutnya memunculkan dialog konflik
+                default -> {
+                    return false;
+                }
+            }
+            return true;
+        } catch (RemoteFileException e) {
+            log.warn("Edit {} tidak bisa disamakan dengan server, memakai salinan lokal: {}",
+                    session.remotePath(), e.getMessage());
+            activity(entry.profile, Level.WARN, I18n.t("edit.activity.reloadFailed", session.remotePath(), e.getMessage()));
+            return true;
+        }
     }
 
     private void launchEditor(Entry entry) throws IOException {
@@ -323,6 +369,8 @@ public final class EditManager implements AutoCloseable {
                             : I18n.t("edit.activity.uploadedSudo", path, installed.backupPath()));
                 } else if ("Dibuka".equals(s.lastMessage())) {
                     activity(profile, Level.INFO, I18n.t("edit.activity.opened", path));
+                } else if ("Dimuat ulang".equals(s.lastMessage())) {
+                    activity(profile, Level.INFO, I18n.t("edit.activity.reloaded", path));
                 }
             }
             case NEEDS_ATTENTION -> activity(profile, Level.WARN, I18n.t("edit.activity.attention", path, s.lastMessage()));

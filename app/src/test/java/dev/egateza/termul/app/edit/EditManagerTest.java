@@ -90,6 +90,56 @@ class EditManagerTest {
     }
 
     @Test
+    void bukaUlangSetelahFileDitimpaDariLuarMemakaiIsiServerTerbaru() throws Exception {
+        Path remote = fx.remoteRoot.resolve("app.conf");
+        Files.writeString(remote, "v=1\n");
+        edits.open(fx.profile, "/app.conf");
+        await().atMost(Duration.ofSeconds(10)).until(() -> edits.entries().size() == 1);
+        var entry = edits.entries().getFirst();
+        Path local = entry.session().localFile();
+
+        // ditimpa lewat upload panel SFTP / sesi lain, sesi edit masih terbuka (editor non-wait)
+        Files.writeString(remote, "v=2-diupload-ulang\n");
+        Files.setLastModifiedTime(remote, java.nio.file.attribute.FileTime.from(java.time.Instant.now().plusSeconds(60)));
+
+        edits.open(fx.profile, "/app.conf");
+
+        await().atMost(Duration.ofSeconds(10)).until(() -> Files.readString(local).equals("v=2-diupload-ulang\n"));
+        assertThat(edits.entries()).containsExactly(entry);
+
+        // save berikutnya ter-upload tanpa konflik
+        Files.writeString(local, "v=3\n");
+        await().atMost(Duration.ofSeconds(10)).until(() -> Files.readString(remote).equals("v=3\n"));
+    }
+
+    @Test
+    void bukaUlangDenganPerubahanLokalTertundaDanServerBerubahMenanyakanUser() throws Exception {
+        Path remote = fx.remoteRoot.resolve("app.conf");
+        Files.writeString(remote, "v=1\n");
+        var asked = new java.util.concurrent.atomic.AtomicInteger();
+        edits.setAsker((title, message, choices) -> {
+            if (title.startsWith("Line ending")) {
+                return 2; // batal: perubahan lokal (CRLF) tetap tertunda
+            }
+            asked.incrementAndGet();
+            return 0; // muat versi server
+        });
+        edits.open(fx.profile, "/app.conf");
+        await().atMost(Duration.ofSeconds(10)).until(() -> edits.entries().size() == 1);
+        var session = edits.entries().getFirst().session();
+        Files.writeString(session.localFile(), "v=lokal\r\n");
+        await().atMost(Duration.ofSeconds(10)).until(() -> session.state() == State.NEEDS_ATTENTION);
+        Files.writeString(remote, "v=server\n");
+        Files.setLastModifiedTime(remote, java.nio.file.attribute.FileTime.from(java.time.Instant.now().plusSeconds(60)));
+
+        edits.open(fx.profile, "/app.conf");
+
+        await().atMost(Duration.ofSeconds(10)).until(() -> Files.readString(session.localFile()).equals("v=server\n"));
+        assertThat(asked).hasValue(1);
+        assertThat(session.hasPendingChanges()).isFalse();
+    }
+
+    @Test
     void editSebagaiRootPadaFileYangSudahDibukaTanpaSudoMemakaiSudo() throws Exception {
         Files.writeString(fx.remoteRoot.resolve("root.conf"), "a=1\n");
         edits.open(fx.profile, "/root.conf");
