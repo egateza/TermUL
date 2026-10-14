@@ -133,6 +133,8 @@ public final class TermULApp {
             terminalSettings.bell().setShake(config.current().bellShake());
             terminalSettings.setRightClickCopyPaste(
                     AppConfig.RIGHT_CLICK_COPY_PASTE.equals(config.current().rightClick()));
+            terminalSettings.setCursorShape(TerminalSettings.cursorShapeOf(config.current().cursorShape(),
+                    config.current().cursorBlink()));
             var ctx = new AppContext(paths, config, store, io, sshOps, sessions, new SshTerminalFactory(sessions),
                     terminalSettings, vault, edits, sftpLinks, themes, knownHosts, wsl, snippets);
             var frame = new MainFrame(ctx, customThemes, () -> shutdown(io, sshOps, sessions, vault, edits, wsl, log));

@@ -130,6 +130,24 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] Tanggal berganti selagi aplikasi terbuka dihitung seperti membuka lagi (cek tiap menit)
 - [ ] Uji manual user: ubah tanggal `lastDay` di `streak.json` untuk mencoba padam (2 hari lalu), beku (7 hari lalu), hangus (12 hari lalu)
 
+### Kursor terminal (permintaan user 2026-10-14)
+- [x] `AppConfig.cursorShape` (`block`/`underline`/`bar`) + `cursorBlink` (config lama = blok berkedip, bawaan JediTerm); Pengaturan → Kursor terminal, berlaku langsung di semua tab lewat `TerminalPanel.setDefaultCursorShape` (program seperti vim tetap boleh mengganti bentuknya sementara)
+- [x] Kursor garis bawah/tegak digambar sendiri (`LineCursor`, `ZoomPanel`): 1 px (JediTerm 2 px), garis tegak setinggi huruf yang terlihat (bukan sel penuh), garis bawah tepat di bawah ekor huruf di dalam sel. Blok tetap digambar JediTerm. Posisi/bentuk/visibilitas dari program dilacak lewat setter publik `TerminalPanel`
+- [ ] Uji manual user: ganti bentuk/kedip di tab yang terbuka, buka vim (mode insert) lalu keluar, htop (kursor disembunyikan), zoom font
+
+### SFTP dua panel ala WinSCP (permintaan user 2026-10-14)
+- [x] `AppConfig.sftpLayout` (`single` default / `dual`; config lama = satu panel); Terminal → SFTP dua panel (berlaku ke panel yang terbuka + panel baru)
+- [x] Tombol toggle di toolbar SFTP (ikon folder terbuka) mengganti tampilan panel itu dan menyimpan default
+- [x] Toolbar per panel: panel remote membawa toolbar + path sendiri (Upload disembunyikan, Download ikon saja di dua panel); panel lokal punya drive/up/home/refresh, Upload, filter nama (Ctrl/Cmd+F)
+- [x] `LocalFilePane`: file lokal (pilih drive di Windows, up/home/refresh, path bisa diketik, type-ahead, double-click folder = masuk, file = buka dengan aplikasi default); file tersembunyi tidak ditampilkan
+- [x] Transfer: drag lokal → remote = upload, remote → lokal = download (flavor JVM-lokal `RemoteSelection`); tombol Upload/Download di mode dua panel memakai pilihan/folder panel lokal tanpa dialog. Direktori belum didukung (dilewati + info)
+- [x] Lebar SFTP di samping terminal (`TerminalTab.sftpWidth`): dua panel ±900 px tetapi terminal disisakan ≥ 480 px; ganti tampilan selagi terbuka ikut menggeser divider; seret divider dibatasi terminal ≥ 320 px
+- [x] Resize PTY di-debounce 150 ms (`SshTtyConnector`): seret divider / resize window tidak lagi membuat bash menggambar ulang prompt di setiap lebar sementara (prompt dobel/rusak)
+- [x] Tombol snippet: klik dengan sedikit geseran tidak lagi dianggap seret (ambang 8 px per sumbu; seret pendek kembali ke sudut asal = klik)
+- [x] Upload/download folder rekursif (`sftp.TreeTransfer`): rencana dulu (progress total folder), folder tujuan sudah ada = konfirmasi gabung sekali, symlink ke folder / file khusus / nama tidak valid di Windows dilewati + dilaporkan, batal di antara file. Berlaku untuk tombol, menu, drag & drop (termasuk dari Explorer)
+- [x] Panel lokal: menu klik kanan lengkap (Buka, Upload, Tampilkan di Explorer/Finder, Rename F2, Hapus ke Recycle Bin Delete, Folder baru F7, Salin path, Refresh) + tombol toolbar folder baru/rename/hapus. Hapus lokal selalu lewat Recycle Bin/Trash, tidak pernah permanen
+- [ ] Uji manual user: drag & drop dua arah (file + folder), Upload/Download via tombol, ganti drive, toggle saat panel SFTP di samping terminal, seret divider lebar-sempit (prompt tetap rapi), klik tombol snippet berulang, operasi file lokal
+
 ### Tambahan dari uji manual user (setelah Fase 4)
 - [x] Auth "Default": coba key `~/.ssh`, lalu jatuh ke password (sebelumnya error kalau tidak ada key)
 - [x] Terminal tidak lagi terlihat hang setelah logout: banner Reconnect + Enter untuk reconnect
@@ -198,6 +216,8 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 | Tanggal | Commit | Task |
 |---|---|---|
+| 2026-10-14 | `feat(sftp): tampilan dua panel lokal/remote, transfer folder, dan bentuk kursor terminal` | SFTP ala WinSCP + kursor terminal (permintaan user) |
+| 2026-10-14 | `fix(ui)` / `fix(snippet)` / `fix(terminal)` | Garis tepi panel membulat saat scroll, klik tombol snippet, prompt rusak saat resize |
 | 2026-10-13 | `feat(streak): streak api harian dengan animasi saat aplikasi dibuka` | Streak api ala Duolingo (permintaan user) |
 | 2026-10-06 | `feat(terminal): kotak cari terminal membulat dan minimalis` | Search box terminal ala VS Code tanpa replace (permintaan user) |
 | 2026-10-06 | `feat(terminal): scroll wheel halus dan scrollbar bergaya FlatLaf` | Scroll terminal disamakan dengan panel (permintaan user) |

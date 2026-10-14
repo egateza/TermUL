@@ -18,6 +18,7 @@ import dev.egateza.termul.app.sftp.SftpPanel;
 import dev.egateza.termul.app.sftp.SystemFileIcons;
 import dev.egateza.termul.app.terminal.BackgroundImages;
 import dev.egateza.termul.app.terminal.SplitPanes;
+import dev.egateza.termul.app.terminal.TerminalSettings;
 import dev.egateza.termul.app.terminal.TerminalTab;
 import dev.egateza.termul.app.ui.anim.AnimationChoice;
 import dev.egateza.termul.app.ui.anim.LoadingPanel;
@@ -132,6 +133,8 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private JMenuItem miReconnect;
     private JMenuItem miCloseTab;
     private JMenuItem miSftp;
+    /** Terminal → tampilan SFTP dua panel (default panel baru, berlaku juga ke panel yang terbuka). */
+    private final JCheckBoxMenuItem sftpDualToggle = new JCheckBoxMenuItem(I18n.t("main.menu.terminal.sftpDual"));
     private JMenuItem miZoomIn;
     private JMenuItem miZoomOut;
     private JMenuItem miZoomReset;
@@ -573,6 +576,14 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                 () -> closeTab(tabs.getSelectedIndex())));
         terminal.add(miSftp = menuItem(null, I18n.t("main.menu.terminal.sftp"), Shortcuts.menuShift(KeyEvent.VK_F),
                 () -> currentTab().ifPresent(TerminalTab::toggleSftp)));
+        sftpDualToggle.setSelected(AppConfig.SFTP_DUAL.equals(ctx.config().current().sftpLayout()));
+        sftpDualToggle.setToolTipText(I18n.t("main.menu.terminal.sftpDual.tooltip"));
+        sftpDualToggle.addActionListener(e -> {
+            boolean on = sftpDualToggle.isSelected();
+            allPanes().forEach(t -> t.setSftpDualPane(on));
+            saveSftpLayout(on);
+        });
+        terminal.add(sftpDualToggle);
         terminal.add(menuItem(AppIcon.BOLT, I18n.t("main.menu.terminal.snippets"), null, this::openSnippets));
         terminal.addSeparator();
         terminal.add(miGroup = menuItem(null, I18n.t("main.menu.terminal.group"), Shortcuts.menu(KeyEvent.VK_G),
@@ -650,6 +661,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         settings.add(buildLanguageMenu());
         settings.add(buildBellMenu());
         settings.add(buildRightClickMenu());
+        settings.add(buildCursorMenu());
         settings.addSeparator();
         settings.add(buildMemoryMenu());
         autoUpdate.setSelected(ctx.config().current().autoUpdateCheck());
@@ -1110,6 +1122,31 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         }
         menu.add(opacity);
         return menu;
+    }
+
+    /** Submenu kursor teks terminal (bentuk + berkedip); berlaku langsung di semua tab dan disimpan di config.json. */
+    private JMenu buildCursorMenu() {
+        var menu = new JMenu(I18n.t("menu.settings.cursor"));
+        menu.setToolTipText(I18n.t("menu.settings.cursor.tooltip"));
+        var group = new ButtonGroup();
+        var blink = new JCheckBoxMenuItem(I18n.t("menu.settings.cursor.blink"), ctx.config().current().cursorBlink());
+        for (String shape : AppConfig.CURSOR_SHAPES) {
+            var item = new JRadioButtonMenuItem(I18n.t("menu.settings.cursor." + shape),
+                    shape.equals(ctx.config().current().cursorShape()));
+            item.addActionListener(e -> applyCursor(ctx.config().current().withCursorShape(shape)));
+            group.add(item);
+            menu.add(item);
+        }
+        menu.addSeparator();
+        blink.addActionListener(e -> applyCursor(ctx.config().current().withCursorBlink(blink.isSelected())));
+        menu.add(blink);
+        return menu;
+    }
+
+    private void applyCursor(AppConfig next) {
+        ctx.terminalSettings().setCursorShape(TerminalSettings.cursorShapeOf(next.cursorShape(), next.cursorBlink()));
+        allPanes().forEach(TerminalTab::reloadCursor);
+        mutate(I18n.t("error.saveSettings"), () -> ctx.config().save(next));
     }
 
     /** Submenu perilaku klik kanan di terminal; berlaku langsung di semua tab dan disimpan di config.json. */
@@ -2090,6 +2127,11 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         }, err -> Dialogs.error(this, I18n.t("error.saveSettings"), err));
     }
 
+    private void saveSftpLayout(boolean dual) {
+        mutate(I18n.t("error.saveSettings"), () -> ctx.config().save(ctx.config().current()
+                .withSftpLayout(dual ? AppConfig.SFTP_DUAL : AppConfig.SFTP_SINGLE)));
+    }
+
     private void setStreakVisible(boolean on) {
         streak.setEnabled(on);
         mutate(I18n.t("error.saveSettings"), () -> ctx.config().save(ctx.config().current().withStreak(on)));
@@ -2192,7 +2234,10 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                                                java.util.function.BiConsumer<ActivityBar.Level, String> sink) {
                         return ctx.edits().addActivityListener(profileId, sink);
                     }
-                }, fileIcons));
+                }, fileIcons, AppConfig.SFTP_DUAL.equals(ctx.config().current().sftpLayout()), on -> {
+                    sftpDualToggle.setSelected(on); // tombol toolbar panel juga mengganti default panel berikutnya
+                    saveSftpLayout(on);
+                }));
         tab.setConnectedListener(tty -> detectOs(profile.id(), tty));
         tab.setBeforeConnect(wsl::prepare);
         tab.setStateListener(this::updateTerminalMenu);

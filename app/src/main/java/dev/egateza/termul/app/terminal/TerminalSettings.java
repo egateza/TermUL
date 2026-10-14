@@ -1,10 +1,12 @@
 package dev.egateza.termul.app.terminal;
 
 import com.jediterm.core.Color;
+import com.jediterm.terminal.CursorShape;
 import com.jediterm.terminal.TerminalColor;
 import com.jediterm.terminal.TextStyle;
 import com.jediterm.terminal.emulator.ColorPalette;
 import com.jediterm.terminal.ui.settings.DefaultSettingsProvider;
+import dev.egateza.termul.core.config.AppConfig;
 import dev.egateza.termul.core.theme.CustomTheme.TerminalPalette;
 import java.awt.Font;
 import java.awt.GraphicsEnvironment;
@@ -36,6 +38,8 @@ public final class TerminalSettings extends DefaultSettingsProvider {
     private final AtomicReference<Colors> colors; // null = warna bawaan JediTerm; dipakai bersama semua tab
     private final AtomicReference<Backdrop> backdrop; // null = tanpa gambar latar; dipakai bersama semua tab
     private final AtomicBoolean rightClickCopyPaste; // true = klik kanan copy/paste gaya Windows; dipakai bersama semua tab
+    /** Bentuk default kursor teks (program di server bisa menggantinya sementara); dipakai bersama semua tab. */
+    private final AtomicReference<CursorShape> cursorShape;
     private volatile Colors override; // null = ikut warna bersama; hanya untuk tab ini (warna khusus host)
     /**
      * Warna default yang dibaca saat digambar ({@link TerminalColor} berbasis supplier), bukan disalin ke sel. JediTerm
@@ -67,14 +71,15 @@ public final class TerminalSettings extends DefaultSettingsProvider {
     /** @param family nama font pilihan user; null atau tidak terpasang = pilihan otomatis */
     public TerminalSettings(String family, float fontSize) {
         this(new AtomicReference<>(family), fontSize, new BellSettings(), new AtomicReference<>(),
-                new AtomicReference<>(), new AtomicBoolean());
+                new AtomicReference<>(), new AtomicBoolean(), new AtomicReference<>(CursorShape.BLINK_BLOCK));
     }
 
     private TerminalSettings(AtomicReference<String> chosenFamily, float fontSize, BellSettings bell,
                              AtomicReference<Colors> colors, AtomicReference<Backdrop> backdrop,
-                             AtomicBoolean rightClickCopyPaste) {
+                             AtomicBoolean rightClickCopyPaste, AtomicReference<CursorShape> cursorShape) {
         this.chosenFamily = chosenFamily;
         this.rightClickCopyPaste = rightClickCopyPaste;
+        this.cursorShape = cursorShape;
         this.bell = bell;
         this.colors = colors;
         this.backdrop = backdrop;
@@ -93,7 +98,28 @@ public final class TerminalSettings extends DefaultSettingsProvider {
 
     /** Salinan dengan ukuran default yang sama (untuk tab baru); family font, warna, dan pengaturan bell dipakai bersama. */
     public TerminalSettings copy() {
-        return new TerminalSettings(chosenFamily, defaultSize, bell, colors, backdrop, rightClickCopyPaste);
+        return new TerminalSettings(chosenFamily, defaultSize, bell, colors, backdrop, rightClickCopyPaste, cursorShape);
+    }
+
+    /** Bentuk default kursor teks untuk semua tab. Tab yang sudah terbuka perlu {@code TerminalTab.reloadCursor()}. */
+    public CursorShape cursorShape() {
+        return cursorShape.get();
+    }
+
+    public void setCursorShape(CursorShape shape) {
+        cursorShape.set(java.util.Objects.requireNonNull(shape));
+    }
+
+    /**
+     * @param shape nilai {@code AppConfig.CURSOR_*}; tidak dikenal = blok
+     * @param blink kursor berkedip
+     */
+    public static CursorShape cursorShapeOf(String shape, boolean blink) {
+        return switch (shape == null ? "" : shape) {
+            case AppConfig.CURSOR_UNDERLINE -> blink ? CursorShape.BLINK_UNDERLINE : CursorShape.STEADY_UNDERLINE;
+            case AppConfig.CURSOR_BAR -> blink ? CursorShape.BLINK_VERTICAL_BAR : CursorShape.STEADY_VERTICAL_BAR;
+            default -> blink ? CursorShape.BLINK_BLOCK : CursorShape.STEADY_BLOCK;
+        };
     }
 
     /**

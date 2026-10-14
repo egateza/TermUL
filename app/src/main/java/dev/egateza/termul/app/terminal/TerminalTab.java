@@ -294,20 +294,30 @@ public final class TerminalTab extends JPanel {
             return; // panel SFTP adalah isi tab ini
         }
         if (split != null) {
-            sftpDivider = split.getDividerLocation();
+            if (!sftp.isDualPane()) {
+                sftpDivider = split.getDividerLocation(); // lebar dua panel tidak dipakai lagi untuk satu panel
+            }
             remove(split);
-            split.remove(content);
-            split = null;
+            split = null; // add() di bawah memindahkan content keluar dari split
             add(content, BorderLayout.CENTER);
             focusTerminal();
         } else {
             if (sftp == null) {
                 sftp = sftpFactory.apply(profile);
+                sftp.addPropertyChangeListener(SftpPanel.DUAL_PANE_PROPERTY, e -> onSftpLayoutChanged());
             }
             remove(content);
-            split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, sftp, content);
+            // batas seret divider: terminal yang disempitkan sampai beberapa kolom membuat prompt shell rusak
+            var terminalSide = new JPanel(new BorderLayout()) {
+                @Override
+                public java.awt.Dimension getMinimumSize() {
+                    return new java.awt.Dimension(MIN_TERMINAL_DRAG_WIDTH, 0);
+                }
+            };
+            terminalSide.add(content, BorderLayout.CENTER);
+            split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, sftp, terminalSide);
             split.setContinuousLayout(true);
-            split.setDividerLocation(sftpDivider);
+            split.setDividerLocation(sftpWidth(sftp.isDualPane(), sftpDivider, getWidth()));
             add(split, BorderLayout.CENTER);
             sftp.connect();
         }
@@ -335,6 +345,49 @@ public final class TerminalTab extends JPanel {
             return sftp != null && sftp.isConnected();
         }
         return pending != null || (connector != null && connector.isConnected());
+    }
+
+    /** Lebar yang diinginkan panel SFTP dua panel (lokal | remote) di samping terminal. */
+    static final int DUAL_SFTP_WIDTH = 900;
+    /**
+     * Lebar terminal yang selalu disisakan saat panel SFTP dibuka/dilebarkan otomatis. Terminal yang terlalu sempit
+     * membuat shell membungkus prompt per beberapa huruf, dan tampilannya tetap kacau setelah window dilebarkan.
+     */
+    static final int MIN_TERMINAL_WIDTH = 480;
+    /** Lebar terminal minimum saat divider SFTP diseret user (±40 kolom). */
+    static final int MIN_TERMINAL_DRAG_WIDTH = 320;
+
+    /**
+     * Lebar panel SFTP di split.
+     *
+     * @param single lebar panel satu panel yang diingat (default atau hasil geser divider)
+     * @param total  lebar tab; 0 = belum di-layout (tanpa batas)
+     */
+    static int sftpWidth(boolean dual, int single, int total) {
+        int wanted = dual ? Math.max(single, DUAL_SFTP_WIDTH) : single;
+        if (total <= 0) {
+            return wanted;
+        }
+        // tab sempit: jangan lebih sempit dari lebar satu panel (maks. separuh tab) supaya SFTP tetap terpakai
+        return Math.max(Math.min(wanted, total - MIN_TERMINAL_WIDTH), Math.min(single, total / 2));
+    }
+
+    /** Tampilan SFTP diganti (tombol toolbar atau menu) selagi panelnya terbuka: sesuaikan lebarnya. */
+    private void onSftpLayoutChanged() {
+        if (split == null) {
+            return;
+        }
+        if (sftp.isDualPane()) {
+            sftpDivider = split.getDividerLocation(); // lebar satu panel, dipulihkan saat kembali ke satu panel
+        }
+        split.setDividerLocation(sftpWidth(sftp.isDualPane(), sftpDivider, split.getWidth()));
+    }
+
+    /** Ganti tampilan panel SFTP tab ini (kalau sudah pernah dibuka): true = dua panel lokal | remote. */
+    public void setSftpDualPane(boolean on) {
+        if (sftp != null) {
+            sftp.setDualPane(on);
+        }
     }
 
     /** Jumlah transfer SFTP yang berjalan/antre di tab ini. */
@@ -448,6 +501,7 @@ public final class TerminalTab extends JPanel {
         gate.set(TerminalState.CONNECTED);
         settings.setPaletteOverride(hostPalette.apply(latestProfile().terminalTheme()));
         widget = new ZoomableTermWidget(settings);
+        widget.getTerminalPanel().setDefaultCursorShape(settings.cursorShape());
         floats = new TerminalFloats(widget, center, this::reconnect, secretInjector);
         if (snippetButton != null) {
             snippetButton.setShown(snippetHost.buttonVisible());
@@ -740,6 +794,14 @@ public final class TerminalTab extends JPanel {
         settings.reloadFont();
         if (widget != null) {
             widget.refreshFont();
+        }
+    }
+
+    /** Pakai bentuk kursor yang baru dipilih (pengaturan bersama) di tab ini. EDT. */
+    public void reloadCursor() {
+        if (widget != null) {
+            widget.getTerminalPanel().setDefaultCursorShape(settings.cursorShape());
+            widget.getTerminalPanel().repaint();
         }
     }
 

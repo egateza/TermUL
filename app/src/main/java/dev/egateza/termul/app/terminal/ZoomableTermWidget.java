@@ -1,6 +1,7 @@
 package dev.egateza.termul.app.terminal;
 
 import com.jediterm.core.TerminalCoordinates;
+import com.jediterm.terminal.CursorShape;
 import com.jediterm.terminal.TerminalCopyPasteHandler;
 import com.jediterm.terminal.model.StyleState;
 import dev.egateza.termul.app.ui.ShakeEffect;
@@ -102,6 +103,11 @@ public final class ZoomableTermWidget extends JediTermWidget {
         ((ZoomPanel) getTerminalPanel()).clipboard = clipboard;
     }
 
+    /** Area kursor garis yang digambar sendiri (untuk test), atau null kalau bentuknya blok / tersembunyi. */
+    java.awt.Rectangle lineCursorBounds() {
+        return ((ZoomPanel) getTerminalPanel()).lineCursorBounds();
+    }
+
     /** Ukuran satu sel karakter, px (untuk test koordinat mouse). */
     java.awt.Dimension charSize() {
         return ((ZoomPanel) getTerminalPanel()).charSize();
@@ -154,12 +160,17 @@ public final class ZoomableTermWidget extends JediTermWidget {
             repaint();
         }
 
+        @Override
+        public void paintComponent(Graphics g) {
+            paintTerminal(g);
+            paintLineCursor((Graphics2D) g);
+        }
+
         /**
          * Tanpa gambar latar: gambar seperti biasa. Dengan gambar latar: warna dasar dan gambar digambar dulu, lalu
          * JediTerm menggambar teks lewat {@link FillFilterGraphics2D} yang membuang isian latar default-nya.
          */
-        @Override
-        public void paintComponent(Graphics g) {
+        private void paintTerminal(Graphics g) {
             var layer = settings instanceof TerminalSettings ts ? ts.backgroundLayer() : null;
             if (layer == null || getWidth() <= 0 || getHeight() <= 0) {
                 super.paintComponent(g);
@@ -178,6 +189,120 @@ public final class ZoomableTermWidget extends JediTermWidget {
             g2.drawImage(scaled, 0, 0, null);
             g2.setComposite(previous);
             super.paintComponent(new FillFilterGraphics2D(g2, layer.base()));
+        }
+
+        // --- kursor garis (bawah / tegak) digambar sendiri, lihat LineCursor ---
+        // Setter di bawah dipanggil thread emulator (dan sebagian dari constructor TerminalPanel, sebelum field
+        // subclass ini diinisialisasi), jadi state-nya volatile dan tidak diberi initializer.
+        private volatile CursorShape defaultShape; // null = blok bawaan JediTerm
+        private volatile CursorShape appShape;     // bentuk dari program (DECSCUSR); null = ikut default
+        private volatile boolean appHidden;        // program menyembunyikan kursor (DECTCEM)
+        private volatile int cursorX;              // kolom 0-based
+        private volatile int cursorY;              // baris 1-based (seperti JediTerm), termasuk history
+        private volatile long cursorMovedNanos;
+        private boolean blinkOff;                  // EDT
+        private javax.swing.Timer blink;           // EDT
+
+        @Override
+        public void setCursor(int x, int y) {
+            super.setCursor(x, y);
+            cursorX = x;
+            cursorY = y;
+            cursorMovedNanos = System.nanoTime();
+        }
+
+        @Override
+        public void setCursorShape(CursorShape shape) {
+            super.setCursorShape(shape);
+            appShape = shape;
+            syncCursor();
+        }
+
+        @Override
+        public void setDefaultCursorShape(CursorShape shape) {
+            super.setDefaultCursorShape(shape);
+            defaultShape = shape;
+            syncCursor();
+        }
+
+        @Override
+        public void setCursorVisible(boolean visible) {
+            appHidden = !visible;
+            syncCursor();
+        }
+
+        private CursorShape effectiveShape() {
+            var app = appShape;
+            return app != null ? app : defaultShape;
+        }
+
+        /** Kursor JediTerm hanya tampil untuk bentuk blok; bentuk garis digambar di {@link #paintLineCursor}. */
+        private void syncCursor() {
+            super.setCursorVisible(!appHidden && !LineCursor.isLine(effectiveShape()));
+            repaint();
+        }
+
+        /** Area kursor garis di panel (koordinat panel), atau null kalau tidak digambar sendiri. */
+        java.awt.Rectangle lineCursorBounds() {
+            var shape = effectiveShape();
+            int row = cursorY - 1 - myClientScrollOrigin;
+            if (appHidden || !LineCursor.isLine(shape) || row < 0 || row >= getTerminalTextBuffer().getHeight()) {
+                return null;
+            }
+            var font = settings.getTerminalFont();
+            var fm = getFontMetrics(font);
+            if (glyphs == null || glyphsFont != font) { // dihitung sekali per font (zoom mengganti font)
+                glyphs = LineCursor.Glyphs.of(font, fm.getFontRenderContext());
+                glyphsFont = font;
+            }
+            return LineCursor.bounds(shape, getInsetX() + cursorX * myCharSize.width, row * myCharSize.height,
+                    myCharSize.width, myCharSize.height,
+                    LineCursor.baseline(myCharSize.height, fm.getHeight(), fm.getDescent()), glyphs);
+        }
+
+        private LineCursor.Glyphs glyphs; // EDT
+        private Font glyphsFont;          // EDT
+
+        private void paintLineCursor(Graphics2D g) {
+            var bounds = lineCursorBounds();
+            if (bounds == null || (blinkOff && effectiveShape().isBlinking() && isFocusOwner())) {
+                return;
+            }
+            var palette = settings.getTerminalColorPalette();
+            var fg = settings.getDefaultStyle().getForeground();
+            g.setColor(fg == null ? getForeground()
+                    : com.jediterm.terminal.ui.AwtTransformers.toAwtColor(palette.getForeground(fg)));
+            g.fillRect(bounds.x, bounds.y, bounds.width, bounds.height);
+        }
+
+        /** Kedip dengan periode yang sama seperti kursor JediTerm; tetap tampil sesaat setelah kursor berpindah. */
+        private void blinkTick() {
+            if (!LineCursor.isLine(effectiveShape()) || !effectiveShape().isBlinking()) {
+                return;
+            }
+            long sinceMove = System.nanoTime() - cursorMovedNanos;
+            blinkOff = sinceMove >= settings.caretBlinkingMs() * 1_000_000L && !blinkOff;
+            var bounds = lineCursorBounds();
+            if (bounds != null) {
+                repaint(bounds);
+            }
+        }
+
+        @Override
+        public void addNotify() {
+            super.addNotify();
+            if (blink == null) {
+                blink = new javax.swing.Timer(Math.max(100, settings.caretBlinkingMs()), e -> blinkTick());
+            }
+            blink.start();
+        }
+
+        @Override
+        public void removeNotify() {
+            if (blink != null) {
+                blink.stop();
+            }
+            super.removeNotify();
         }
 
         private SmoothWheel smoothWheel; // EDT; dibuat saat wheel pertama (model scroll baru ada setelah constructor)

@@ -78,12 +78,18 @@ public final class SftpTableModel extends AbstractTableModel {
      * @return null kalau query kosong (= tanpa filter)
      */
     public static Predicate<RemoteEntry> nameFilter(String query) {
+        var match = namePredicate(query);
+        return match == null ? null : e -> match.test(e.name());
+    }
+
+    /** Pencocok nama seperti {@link #nameFilter}, untuk nama apa saja (juga file lokal). */
+    static Predicate<String> namePredicate(String query) {
         String q = query == null ? "" : query.strip().toLowerCase(Locale.ROOT);
         if (q.isEmpty()) {
             return null;
         }
         if (q.indexOf('*') < 0 && q.indexOf('?') < 0) {
-            return e -> e.name().toLowerCase(Locale.ROOT).contains(q);
+            return name -> name.toLowerCase(Locale.ROOT).contains(q);
         }
         var regex = new StringBuilder();
         for (String part : q.split("((?<=[*?])|(?=[*?]))")) {
@@ -94,7 +100,7 @@ public final class SftpTableModel extends AbstractTableModel {
             });
         }
         var pattern = Pattern.compile(regex.toString(), Pattern.DOTALL);
-        return e -> pattern.matcher(e.name().toLowerCase(Locale.ROOT)).matches();
+        return name -> pattern.matcher(name.toLowerCase(Locale.ROOT)).matches();
     }
 
     /** Comparator per kolom; direktori selalu di atas untuk kolom nama. */
