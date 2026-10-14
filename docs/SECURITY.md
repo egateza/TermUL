@@ -75,6 +75,12 @@ Rekomendasi operasional (di luar aplikasi): untuk server prod, pertimbangkan aks
 - `-k` memaksa sudo selalu membaca password dari stdin (tidak memakai cache), supaya password tidak pernah sampai ke script. Tanpa password tersimpan dicoba `sudo -n` dulu (NOPASSWD), baru user diminta (tidak disimpan). Password salah tidak diulang.
 - Hook validasi (`config.json` → `validationHooks`) adalah command milik user sendiri yang dijalankan sebagai root; hanya bisa diubah lewat config lokal.
 
+## Single instance & run at startup
+
+- Hanya satu proses TermUL per folder data (`core.instance.SingleInstance`): `FileLock` di `instance.lock`, supaya vault, `known_hosts`, dan profil tidak ditulis dua proses sekaligus.
+- Instance kedua meminta instance pertama menampilkan window lewat socket **loopback** (`127.0.0.1`, port acak). Port + token acak 32 byte ada di `instance.port` di folder data user (POSIX: mode 600; Windows: ACL profil). Permintaan tanpa token yang cocok (dibandingkan waktu konstan) diabaikan, request dibatasi 256 byte dan timeout 2 detik, dan satu-satunya perintah yang dikenal adalah "tampilkan window". Token dibuat ulang setiap start dan bukan credential user.
+- Run at startup (`app.startup.AutoStart`) menulis entri milik user saja (Windows `HKCU\...\Run`, macOS `~/Library/LaunchAgents`), tanpa admin. Command-nya hanya path launcher + `--tray`: aplikasi start tersembunyi **tanpa** membuka vault, tanpa prompt master password, dan tanpa konek ke server.
+
 ## Update aplikasi
 
 Detail di `docs/adr/0003-self-update.md`.

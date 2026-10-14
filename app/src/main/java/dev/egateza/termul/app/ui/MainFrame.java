@@ -16,6 +16,7 @@ import dev.egateza.termul.app.monitor.ResourceMonitor;
 import dev.egateza.termul.app.sftp.ActivityBar;
 import dev.egateza.termul.app.sftp.SftpPanel;
 import dev.egateza.termul.app.sftp.SystemFileIcons;
+import dev.egateza.termul.app.startup.AutoStart;
 import dev.egateza.termul.app.terminal.BackgroundImages;
 import dev.egateza.termul.app.terminal.SplitPanes;
 import dev.egateza.termul.app.terminal.TerminalSettings;
@@ -46,6 +47,7 @@ import java.util.Set;
 import java.util.function.BiConsumer;
 import dev.egateza.termul.core.Os;
 import dev.egateza.termul.core.config.AppConfig;
+import dev.egateza.termul.core.config.TrayConfig;
 import dev.egateza.termul.core.profile.HostProfile;
 import dev.egateza.termul.core.profile.ProfileSnapshot;
 import dev.egateza.termul.core.profile.OsInfo;
@@ -160,10 +162,21 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private final JCheckBoxMenuItem autoUpdate = new JCheckBoxMenuItem(I18n.t("main.menu.settings.autoUpdate"));
     private final JCheckBoxMenuItem snippetToggle = new JCheckBoxMenuItem(I18n.t("main.menu.settings.snippetButton"));
     private final JCheckBoxMenuItem streakToggle = new JCheckBoxMenuItem(I18n.t("main.menu.settings.streak"));
+    private final JCheckBoxMenuItem streakWidgetToggle =
+            new JCheckBoxMenuItem(I18n.t("main.menu.settings.streakWidget"));
     /** Api streak di pojok kiri panel bawah + animasinya saat aplikasi dibuka. */
     private final StreakController streak;
     private final WslController wsl;
     private JCheckBoxMenuItem miWslToggle; // EDT; Pengaturan → Manajemen WSL (null di luar Windows)
+    /** Ikon tray (Pengaturan → Tray &amp; startup); opt-in. */
+    private final TrayController tray;
+    /** Run at startup; null di OS yang tidak didukung (opsinya disembunyikan). */
+    private final AutoStart autoStart = AutoStart.forCurrentOs();
+    private JCheckBoxMenuItem miRunAtStartup; // EDT; null kalau autoStart null
+    private boolean trayHintShown; // EDT; notifikasi "tetap berjalan di tray" sekali per sesi
+    /** Start tersembunyi ({@code --tray}): streak baru dihitung saat window pertama kali dibuka user. EDT. */
+    private boolean streakPending;
+    private dev.egateza.termul.update.ReleaseVersion trayNotifiedVersion; // EDT; versi update terakhir yang diberitahukan lewat tray
     private JMenuItem checkUpdateItem; // EDT
     private final UpdateNotifier updateNotifier;
     /** Modal update otomatis saat badge menemukan versi baru. */
@@ -193,7 +206,8 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         this.onExit = onExit;
         this.updateNotifier = UpdateNotifier.forGitHub(ctx.paths(), () -> ctx.config().current().autoUpdateCheck(),
                 this::showUpdateState);
-        this.updatePrompter = new UpdatePrompter(MainFrame::modalDialogShowing,
+        // window tersembunyi di tray: tawaran update menunggu sampai window dibuka lagi
+        this.updatePrompter = new UpdatePrompter(() -> modalDialogShowing() || !isShowing(),
                 () -> updateDialog != null && updateDialog.isShowing(), version -> openUpdateDialog(true));
         this.hostTree = new HostTreePanel(this);
         this.wsl = new WslController(this, ctx.wsl(),
@@ -218,6 +232,29 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                         mutate(I18n.t("main.error.saveProfile"), () -> store.save(profile));
                     }
                 });
+        this.tray = new TrayController(new TrayController.Actions() {
+            @Override
+            public void showWindow() {
+                MainFrame.this.showWindow();
+            }
+
+            @Override
+            public void connect(HostProfile profile) {
+                MainFrame.this.showWindow();
+                open(profile);
+            }
+
+            @Override
+            public void setStreakWidget(boolean on) {
+                MainFrame.this.setStreakWidget(on);
+            }
+
+            @Override
+            public void exit() {
+                MainFrame.this.showWindow(); // konfirmasi keluar tampil di atas window, bukan melayang sendiri
+                MainFrame.this.exit();
+            }
+        });
         this.customThemes = List.copyOf(customThemes);
         this.theme = UiThemes.resolve(ctx.config().current().theme(), this.customThemes);
         this.wantedMode = ThemeMode.fromId(ctx.config().current().themeMode());
@@ -234,7 +271,26 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosing(WindowEvent e) {
-                exit();
+                if (tray.active() && ctx.config().current().tray().hidesOnClose()) {
+                    hideToTray();
+                } else {
+                    exit();
+                }
+            }
+
+            @Override
+            public void windowIconified(WindowEvent e) {
+                if (tray.active() && ctx.config().current().tray().hidesOnMinimize()) {
+                    hideToTray();
+                }
+            }
+
+            @Override
+            public void windowActivated(WindowEvent e) {
+                if (streakPending) {
+                    streakPending = false;
+                    streak.start();
+                }
             }
 
             @Override
@@ -345,10 +401,17 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         streak = new StreakController(new StreakStore(ctx.paths().streakFile()), io, getLayeredPane(),
                 ctx.config().current().streak());
         bottomBar.setLeading(streak.chip());
+        bottomBar.network().addStatusListener(streak::setNetworkStatus); // widget streak memakai probe yang sama
         getContentPane().add(bottomBar, BorderLayout.SOUTH);
         roundedPanels = AppConfig.PANEL_ROUNDED.equals(ctx.config().current().panelCorners());
         applyHostMode(ctx.config().current().hostPanelMode());
+        // ikon tray dipasang sebelum menu dibangun: menu Tray & startup membaca tray.active()
+        tray.setSnapshot(store.snapshot());
+        tray.setEnabled(ctx.config().current().tray().enabled());
         setJMenuBar(buildMenu());
+        if (ctx.config().current().streakWidget().visible()) {
+            SwingUtilities.invokeLater(() -> setStreakWidget(true)); // setelah konstruksi window selesai
+        }
         wsl.apply();
 
         setSize(1280, 800);
@@ -357,6 +420,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         store.addListener(s -> SwingUtilities.invokeLater(() -> {
             hostTree.setSnapshot(s);
             home.setSnapshot(s);
+            tray.setSnapshot(s);
             wsl.profilesChanged();
             reloadTerminalColors(); // warna khusus host / environment yang diubah di Edit host
         }));
@@ -534,6 +598,8 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         drawer.dispose();
         resourceMonitor.close();
         wsl.close();
+        tray.close();
+        streak.stop(); // termasuk menutup widget mengambang
         super.dispose();
     }
 
@@ -541,6 +607,49 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     public void showSnapshot(ProfileSnapshot snapshot) {
         hostTree.setSnapshot(snapshot);
         home.setSnapshot(snapshot);
+        tray.setSnapshot(snapshot);
+    }
+
+    /**
+     * Tampilkan window dan bawa ke depan: dari tray, dari instance kedua (shortcut dibuka lagi), atau setelah start
+     * tersembunyi. EDT.
+     */
+    public void showWindow() {
+        if (!isVisible()) {
+            setVisible(true);
+        }
+        if ((getExtendedState() & ICONIFIED) != 0) {
+            setExtendedState(getExtendedState() & ~ICONIFIED);
+        }
+        toFront();
+        requestFocus();
+    }
+
+    /**
+     * Start dari run at startup ({@code --tray}): tetap tersembunyi di tray kalau ikon tray aktif, selain itu window
+     * tampil ter-minimize. Streak baru dihitung saat user membuka window, supaya login otomatis tidak menambah
+     * streak. EDT.
+     */
+    public void startHidden() {
+        streakPending = true;
+        if (tray.active()) {
+            // peer dibuat tanpa menampilkan window: komponen jadi displayable, jadi indikator internet (dan widget
+            // streak yang memakai hasilnya) tetap memeriksa selama TermUL di tray
+            addNotify();
+            return;
+        }
+        setExtendedState(ICONIFIED);
+        setVisible(true);
+    }
+
+    /** Sembunyikan window ke tray; sesi SSH dan transfer tetap berjalan. EDT. */
+    private void hideToTray() {
+        setVisible(false);
+        setExtendedState(getExtendedState() & ~ICONIFIED); // dibuka lagi dalam ukuran sebelum di-minimize
+        if (!trayHintShown) {
+            trayHintShown = true;
+            tray.notify("TermUL", I18n.t("tray.hiddenHint"));
+        }
     }
 
     public JTabbedPane tabs() {
@@ -677,12 +786,17 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         streakToggle.setToolTipText(I18n.t("main.menu.settings.streak.tooltip"));
         streakToggle.addActionListener(e -> setStreakVisible(streakToggle.isSelected()));
         settings.add(streakToggle);
+        streakWidgetToggle.setSelected(ctx.config().current().streakWidget().visible());
+        streakWidgetToggle.setToolTipText(I18n.t("main.menu.settings.streakWidget.tooltip"));
+        streakWidgetToggle.addActionListener(e -> setStreakWidget(streakWidgetToggle.isSelected()));
+        settings.add(streakWidgetToggle);
         if (Os.current().isWindows()) {
             miWslToggle = new JCheckBoxMenuItem(I18n.t("main.menu.settings.wsl"), ctx.config().current().wslManager());
             miWslToggle.setToolTipText(I18n.t("main.menu.settings.wsl.tooltip"));
             miWslToggle.addActionListener(e -> setWslManager(miWslToggle.isSelected()));
             settings.add(miWslToggle);
         }
+        settings.add(buildTrayMenu());
         settings.addSeparator();
         settings.add(menuItem(null, I18n.t("main.menu.settings.knownHosts"), null,
                 () -> new KnownHostsDialog(this, ctx.knownHosts(), io).setVisible(true)));
@@ -748,6 +862,110 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         var menu = new JMenu(I18n.t("main.menu.settings.hostStatusGroup"));
         menu.add(show);
         return menu;
+    }
+
+    /**
+     * Pengaturan → Tray &amp; startup: ikon tray, tombol tutup/minimize ke tray, dan run at startup. Status run at startup
+     * dibaca ulang dari OS setiap menu dibuka (bisa diubah user di pengaturan OS).
+     */
+    private JMenu buildTrayMenu() {
+        var menu = new JMenu(I18n.t("menu.settings.tray"));
+        TrayConfig config = ctx.config().current().tray();
+        boolean supported = TrayController.supported();
+        var show = new JCheckBoxMenuItem(I18n.t("menu.settings.tray.show"), config.enabled() && supported);
+        var close = new JCheckBoxMenuItem(I18n.t("menu.settings.tray.closeToTray"), config.closeToTray());
+        var minimize = new JCheckBoxMenuItem(I18n.t("menu.settings.tray.minimizeToTray"), config.minimizeToTray());
+        show.setEnabled(supported);
+        show.setToolTipText(I18n.t(supported ? "menu.settings.tray.show.tooltip" : "menu.settings.tray.unsupported"));
+        close.setToolTipText(I18n.t("menu.settings.tray.closeToTray.tooltip"));
+        Runnable syncSubOptions = () -> {
+            close.setEnabled(tray.active());
+            minimize.setEnabled(tray.active());
+        };
+        syncSubOptions.run();
+        show.addActionListener(e -> {
+            tray.setEnabled(show.isSelected());
+            show.setSelected(tray.active()); // OS bisa menolak memasang ikon
+            syncSubOptions.run();
+            boolean on = tray.active();
+            saveTray(t -> t.withEnabled(on));
+        });
+        close.addActionListener(e -> {
+            boolean on = close.isSelected();
+            saveTray(t -> t.withCloseToTray(on));
+        });
+        minimize.addActionListener(e -> {
+            boolean on = minimize.isSelected();
+            saveTray(t -> t.withMinimizeToTray(on));
+        });
+        menu.add(show);
+        menu.add(close);
+        menu.add(minimize);
+        if (autoStart != null) {
+            menu.addSeparator();
+            miRunAtStartup = new JCheckBoxMenuItem(I18n.t("menu.settings.tray.runAtStartup"));
+            miRunAtStartup.setEnabled(false); // sampai status dari OS terbaca
+            miRunAtStartup.addActionListener(e -> setRunAtStartup(miRunAtStartup.isSelected()));
+            menu.add(miRunAtStartup);
+            refreshRunAtStartup();
+        }
+        menu.addMenuListener(new javax.swing.event.MenuListener() {
+            @Override
+            public void menuSelected(javax.swing.event.MenuEvent e) {
+                show.setSelected(tray.active()); // selalu sesuai ikon yang benar-benar terpasang
+                syncSubOptions.run();
+                if (autoStart != null) {
+                    refreshRunAtStartup();
+                }
+            }
+
+            @Override
+            public void menuDeselected(javax.swing.event.MenuEvent e) {
+            }
+
+            @Override
+            public void menuCanceled(javax.swing.event.MenuEvent e) {
+            }
+        });
+        return menu;
+    }
+
+    private void saveTray(java.util.function.UnaryOperator<TrayConfig> change) {
+        mutate(I18n.t("error.saveSettings"), () -> {
+            var current = ctx.config().current();
+            ctx.config().save(current.withTray(change.apply(current.tray())));
+        });
+    }
+
+    /** Baca status run at startup dari OS (registry/LaunchAgent) di io, tampilkan di EDT. */
+    private void refreshRunAtStartup() {
+        UiAsync.run(io, autoStart::status, this::showRunAtStartup,
+                err -> showRunAtStartup(AutoStart.Status.DISABLED));
+    }
+
+    private void setRunAtStartup(boolean on) {
+        miRunAtStartup.setEnabled(false); // cegah klik ganda selama registry/file ditulis
+        UiAsync.run(io, () -> {
+            try {
+                autoStart.setEnabled(on);
+            } catch (IOException e) {
+                throw new java.io.UncheckedIOException(e);
+            }
+            return autoStart.status();
+        }, this::showRunAtStartup, err -> {
+            Dialogs.error(this, I18n.t("menu.settings.tray.runAtStartup.failed"), err);
+            refreshRunAtStartup();
+        });
+    }
+
+    private void showRunAtStartup(AutoStart.Status status) {
+        miRunAtStartup.setSelected(status == AutoStart.Status.ENABLED);
+        miRunAtStartup.setEnabled(status != AutoStart.Status.UNSUPPORTED);
+        miRunAtStartup.setToolTipText(switch (status) {
+            case ENABLED, DISABLED -> I18n.t("menu.settings.tray.runAtStartup.tooltip");
+            case DISABLED_BY_SYSTEM -> I18n.t("menu.settings.tray.runAtStartup.disabledBySystem");
+            case UNSUPPORTED -> I18n.t("menu.settings.tray.runAtStartup.unsupported");
+        });
     }
 
     /** Pengaturan → Penggunaan memori: hemat / normal, langsung berlaku tanpa restart. */
@@ -2080,6 +2298,10 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                 updateBadge.setText(I18n.t("update.badge.available", version.toString()));
                 updateBadge.setToolTipText(I18n.t("update.badge.available.tooltip"));
                 updateBadge.setVisible(true);
+                if (!isShowing() && !version.equals(trayNotifiedVersion)) {
+                    trayNotifiedVersion = version; // modal update menunggu window dibuka; beri tahu lewat tray
+                    tray.notify("TermUL", I18n.t("tray.updateAvailable", version.toString()));
+                }
             }
             case UpdateNotifier.Installed(var version) -> {
                 updateBadge.setText(I18n.t("update.badge.restart"));
@@ -2130,6 +2352,49 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private void saveSftpLayout(boolean dual) {
         mutate(I18n.t("error.saveSettings"), () -> ctx.config().save(ctx.config().current()
                 .withSftpLayout(dual ? AppConfig.SFTP_DUAL : AppConfig.SFTP_SINGLE)));
+    }
+
+    /** Tampilkan/sembunyikan widget streak mengambang; dari menu Pengaturan, menu tray, atau menu widget. EDT. */
+    private void setStreakWidget(boolean on) {
+        streakWidgetToggle.setSelected(on);
+        tray.setStreakWidgetShown(on);
+        if (on) {
+            var config = ctx.config().current().streakWidget();
+            var saved = config.hasPosition() ? new java.awt.Point(config.x(), config.y()) : null;
+            streak.showWidget(saved, new StreakController.WidgetHost() {
+                @Override
+                public void openApp() {
+                    showWindow();
+                }
+
+                @Override
+                public void hideRequested() {
+                    setStreakWidget(false);
+                }
+
+                @Override
+                public void checkNetwork() {
+                    bottomBar.network().checkNow(); // hasilnya kembali ke widget lewat listener status
+                }
+
+                @Override
+                public void moved(java.awt.Point location) {
+                    mutate(I18n.t("error.saveSettings"), () -> {
+                        var current = ctx.config().current();
+                        ctx.config().save(current.withStreakWidget(
+                                current.streakWidget().withPosition(location.x, location.y)));
+                    });
+                }
+            });
+        } else {
+            streak.hideWidget();
+        }
+        if (ctx.config().current().streakWidget().visible() != on) {
+            mutate(I18n.t("error.saveSettings"), () -> {
+                var current = ctx.config().current();
+                ctx.config().save(current.withStreakWidget(current.streakWidget().withVisible(on)));
+            });
+        }
     }
 
     private void setStreakVisible(boolean on) {

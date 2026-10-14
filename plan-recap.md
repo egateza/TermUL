@@ -148,6 +148,23 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] Panel lokal: menu klik kanan lengkap (Buka, Upload, Tampilkan di Explorer/Finder, Rename F2, Hapus ke Recycle Bin Delete, Folder baru F7, Salin path, Refresh) + tombol toolbar folder baru/rename/hapus. Hapus lokal selalu lewat Recycle Bin/Trash, tidak pernah permanen
 - [ ] Uji manual user: drag & drop dua arah (file + folder), Upload/Download via tombol, ganti drive, toggle saat panel SFTP di samping terminal, seret divider lebar-sempit (prompt tetap rapi), klik tombol snippet berulang, operasi file lokal
 
+### Tray icon & run at startup (permintaan user 2026-10-15)
+- [x] Single instance (`core.instance.SingleInstance`): `FileLock` + socket loopback bertoken; membuka TermUL lagi menampilkan window yang sudah ada (Windows: `AllowSetForegroundWindow` supaya benar-benar ke depan). Instance yang tidak merespons = pesan, bukan instance kedua
+- [x] `AppConfig.tray` (`TrayConfig`: `enabled`, `closeToTray`, `minimizeToTray`; config lama = semua mati, X tetap keluar)
+- [x] `TrayController`: ikon tray (AWT `PopupMenu`), menu Tampilkan / Hubungkan (favorit lalu terakhir, maks 12) / Keluar; dobel klik (Windows) membuka window. Notifikasi sekali per sesi saat disembunyikan, dan saat ada update selagi window tersembunyi (modal update menunggu window dibuka)
+- [x] Run at startup (`app.startup.AutoStart`): Windows `HKCU\...\Run` lewat JNA (status "dimatikan di Settings → Startup" dibaca dari `StartupApproved`), macOS LaunchAgent. Hanya untuk hasil instalasi (`jpackage.app-path`); dari JAR/IDE opsinya nonaktif. Argumen `--tray`: start tersembunyi di tray (atau ter-minimize kalau ikon tray mati), tanpa prompt vault; streak baru dihitung saat window dibuka user
+- [ ] Uji manual user (app-image/installer): centang run at startup lalu logout/login; matikan di Settings Windows → Startup lalu cek menu; X/minimize ke tray dengan sesi aktif; klik ikon tray, menu Hubungkan, Keluar dari tray; buka shortcut TermUL lagi saat di tray (window lama tampil di depan)
+
+### Widget streak mengambang (permintaan user 2026-10-15)
+- [x] `AppConfig.streakWidget` (`StreakWidgetConfig`: `visible`, posisi `x`/`y`; config lama = tidak tampil)
+- [x] `StreakWidget`: `JWindow` tanpa bingkai, transparan per piksel, selalu di depan, tidak di taskbar dan tidak merebut fokus; api 40 px (percikan/bintang sesuai level), angka hari, keterangan level/petunjuk. Tanpa hover hanya api yang terlihat; kartu + teks fade in saat pointer di atas widget (kartu tersembunyi tetap alpha 1/255 supaya Windows tidak meneruskan mouse ke window di belakang). Seret = pindah (posisi disimpan; monitor dicabut = kembali ke pojok kanan bawah), klik = aturan klik api yang sama dengan ikon pojok, dobel klik = buka TermUL, klik kanan = Buka TermUL / Sembunyikan widget
+- [x] Toggle dari Pengaturan → Widget streak mengambang dan menu tray (centang tersinkron). Tetap tampil saat window di tray. Start tersembunyi (`--tray`): streak hanya dibaca, hari baru dihitung saat window dibuka
+- [x] Monitor dengan scaling berbeda (mis. 100% + 125%): window transparan per piksel Java rusak (bergaris / membengkak 1,25× setiap lewat batas) kalau dipindah antar-DPI. Di Windows window dibuat ulang dengan `GraphicsConfiguration` monitor tujuan, saat diseret widget dijaga utuh di monitor tempat pointer (tidak pernah menggantung di dua monitor), dan seret mengikuti pointer lewat polling + `GetAsyncKeyState` (`WinMouse`) karena mouse capture window lama hilang. Diverifikasi dengan seret bolak-balik 3x antar monitor
+- [x] Status internet di widget (titik + latensi / "Offline" merah di samping angka), ikut tersembunyi tanpa hover. Klik status internet = periksa sekarang ("Memeriksa...", kursor tangan + tooltip; dobel klik di situ tidak membuka aplikasi). Memakai hasil `NetworkIndicator` panel bawah lewat `addStatusListener` (tanpa probe kedua); start tersembunyi membuat peer window (`addNotify`) supaya pemeriksaan tetap jalan selama di tray
+- [x] Widget di atas taskbar tertutup setelah tray/taskbar diklik (taskbar juga topmost dan naik saat aktif): di Windows posisi paling atas ditegaskan ulang tiap ±0,5 detik lewat `SetWindowPos(HWND_TOPMOST, SWP_NOACTIVATE)` (`WinTopmost`), tanpa mengambil fokus. Diverifikasi lewat urutan z: taskbar dinaikkan → widget kembali di atas dalam < 1 detik
+- [x] Es/padam yang dipecahkan lewat widget sekarang ikut memperbarui animasi besar di window utama (sebelumnya animasi tetap beku), dan klik api di window utama ikut memutar efek di api widget
+- [ ] Uji manual user: seret ke monitor kedua lalu restart, klik api saat padam (3x) / beku, dobel klik saat window di tray, ganti tema terang/gelap
+
 ### Tambahan dari uji manual user (setelah Fase 4)
 - [x] Auth "Default": coba key `~/.ssh`, lalu jatuh ke password (sebelumnya error kalau tidak ada key)
 - [x] Terminal tidak lagi terlihat hang setelah logout: banner Reconnect + Enter untuk reconnect
@@ -216,6 +233,8 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 
 | Tanggal | Commit | Task |
 |---|---|---|
+| 2026-10-15 | `feat(streak): widget streak mengambang yang selalu di depan` | Widget streak (permintaan user) |
+| 2026-10-15 | `feat(app): ikon tray, run at startup, dan single instance` | Tray & startup (permintaan user) |
 | 2026-10-14 | `feat(sftp): tampilan dua panel lokal/remote, transfer folder, dan bentuk kursor terminal` | SFTP ala WinSCP + kursor terminal (permintaan user) |
 | 2026-10-14 | `fix(ui)` / `fix(snippet)` / `fix(terminal)` | Garis tepi panel membulat saat scroll, klik tombol snippet, prompt rusak saat resize |
 | 2026-10-13 | `feat(streak): streak api harian dengan animasi saat aplikasi dibuka` | Streak api ala Duolingo (permintaan user) |

@@ -5,6 +5,8 @@ import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.app.monitor.MemoryTuning;
 import dev.egateza.termul.app.ssh.SwingCredentialProvider;
 import dev.egateza.termul.app.ssh.SwingHostKeyPrompt;
+import dev.egateza.termul.app.startup.AutoStart;
+import dev.egateza.termul.app.startup.ForegroundPermission;
 import dev.egateza.termul.app.terminal.BackgroundImages;
 import dev.egateza.termul.app.terminal.TerminalSettings;
 import dev.egateza.termul.app.update.AppUpdates;
@@ -27,6 +29,7 @@ import dev.egateza.termul.app.vault.VaultSudoPassword;
 import dev.egateza.termul.core.AppPaths;
 import dev.egateza.termul.core.config.AppConfig;
 import dev.egateza.termul.core.config.ConfigStore;
+import dev.egateza.termul.core.instance.SingleInstance;
 import dev.egateza.termul.core.snippet.SnippetStore;
 import dev.egateza.termul.core.theme.BundledThemes;
 import dev.egateza.termul.core.theme.ThemeStore;
@@ -43,12 +46,15 @@ import dev.egateza.termul.vault.Argon2Params;
 import dev.egateza.termul.vault.DpapiKeyProtector;
 import dev.egateza.termul.vault.FileCredentialVault;
 import java.awt.Component;
+import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,6 +77,10 @@ public final class TermULApp {
         AppUpdates.logBootstrapNotes(log);
 
         Thread.setDefaultUncaughtExceptionHandler((t, e) -> log.error("Uncaught exception di thread {}", t.getName(), e));
+
+        // satu instance per folder data: membuka TermUL lagi (mis. saat di tray) menampilkan window yang sudah ada
+        SingleInstance instance = acquireInstance(paths, log);
+        boolean startHidden = List.of(args).contains(AutoStart.ARG_TRAY);
 
         ExecutorService io = Executors.newSingleThreadExecutor(Thread.ofPlatform().name("io").daemon().factory());
         ExecutorService sshOps = Executors.newThreadPerTaskExecutor(Thread.ofVirtual().name("ssh-ops-", 0).factory());
@@ -137,20 +147,60 @@ public final class TermULApp {
                     config.current().cursorBlink()));
             var ctx = new AppContext(paths, config, store, io, sshOps, sessions, new SshTerminalFactory(sessions),
                     terminalSettings, vault, edits, sftpLinks, themes, knownHosts, wsl, snippets);
-            var frame = new MainFrame(ctx, customThemes, () -> shutdown(io, sshOps, sessions, vault, edits, wsl, log));
+            var frame = new MainFrame(ctx, customThemes,
+                    () -> shutdown(io, sshOps, sessions, vault, edits, wsl, instance, log));
             frameRef.set(frame);
             MacIntegration.install(frame);
-            frame.setVisible(true);
+            if (startHidden) {
+                frame.startHidden(); // run at startup: tetap di tray, tanpa prompt vault / koneksi
+            } else {
+                frame.setVisible(true);
+                frame.startStreak();
+            }
             frame.startUpdateChecks();
-            frame.startStreak();
+            if (instance != null) {
+                instance.listen(() -> SwingUtilities.invokeLater(frame::showWindow));
+            }
             io.execute(() -> AppUpdates.markHealthy(paths, log)); // rollback otomatis tidak dipicu untuk versi ini
             UiAsync.run(io, store::load, frame::showSnapshot,
                     err -> Dialogs.error(frame, "Gagal memuat profil", err));
         });
     }
 
+    /**
+     * Ambil lock single instance. Kalau TermUL lain sudah berjalan, window-nya diminta tampil dan proses ini keluar.
+     *
+     * @return null kalau pemeriksaan gagal (lanjut tanpa single instance, seperti sebelum fitur ini ada)
+     */
+    private static SingleInstance acquireInstance(AppPaths paths, Logger log) {
+        ForegroundPermission.allowAny(); // instance kedua: izinkan instance pertama membawa window-nya ke depan
+        SingleInstance.Result result;
+        try {
+            result = SingleInstance.acquire(paths.configDir());
+        } catch (IOException | RuntimeException e) {
+            log.warn("Pemeriksaan single instance gagal, lanjut tanpa: {}", e.toString());
+            return null;
+        }
+        switch (result) {
+            case SingleInstance.Primary(var instance) -> {
+                return instance;
+            }
+            case SingleInstance.Signaled() -> log.info("TermUL sudah berjalan: window instance itu ditampilkan");
+            case SingleInstance.Unreachable(var reason) -> {
+                log.warn("TermUL sudah berjalan tetapi tidak merespons: {}", reason);
+                var config = new ConfigStore(paths.configFile());
+                config.load();
+                I18n.use(config.current().language());
+                JOptionPane.showMessageDialog(null, I18n.t("instance.unreachable"), I18n.t("instance.unreachable.title"),
+                        JOptionPane.WARNING_MESSAGE);
+            }
+        }
+        System.exit(0);
+        return null; // tidak tercapai
+    }
+
     private static void shutdown(ExecutorService io, ExecutorService sshOps, SessionManager sessions, VaultGate vault,
-                                 EditManager edits, WslManager wsl, Logger log) {
+                                 EditManager edits, WslManager wsl, SingleInstance instance, Logger log) {
         log.info("TermUL keluar");
         edits.close();
         wsl.close(); // lepas keep-alive; distro mati sendiri saat idle kecuali dipakai di luar TermUL
@@ -162,6 +212,9 @@ public final class TermULApp {
             io.awaitTermination(5, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+        }
+        if (instance != null) {
+            instance.close(); // paling akhir: instance baru tidak boleh start selagi state masih disimpan
         }
         System.exit(0);
     }

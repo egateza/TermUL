@@ -75,6 +75,7 @@ Catatan implementasi: satu `sudo sh -c` per upload (backup ke `/var/backups/term
   - [x] (opsional) warna terminal per profil host (Edit host → Warna terminal: ikut pengaturan / latar merah produksi / tema custom; hanya tab host itu, tanpa gambar latar)
 - [x] Profile Maven `package-win`: `jlink` runtime yang di-trim + `jpackage` → app-image (default) atau installer `.msi` (`-Djpackage.type=msi`, butuh WiX; belum diuji karena WiX tidak terpasang)
 - [x] WSL Manager opsional (ADR 0004): start/stop distro, grup WSL di panel host, profil SSH ke sshd distro (`localhost`)
+- [x] Tray icon + run at startup + single instance (Pengaturan → Tray & startup)
 - [ ] (backlog) port forwarding, snippet library, session log dengan masking, follow cwd (OSC 7)
 
 ## Keputusan terbuka

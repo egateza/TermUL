@@ -117,6 +117,11 @@ final class StreakSplash extends JComponent {
         this.absent = missed;
     }
 
+    /** Api sudah dinyalakan/esnya pecah dan animasi sedang menuju selesai (untuk test). */
+    boolean reviving() {
+        return reviveAt >= 0;
+    }
+
     /** Hasil klik api (dari controller): efek + keadaan baru. */
     void update(FlameLook look, FlameActor.Effect effect) {
         if (kind != Kind.PENDING || reviveAt >= 0) {

@@ -56,6 +56,11 @@
             <artifactId>logback-classic</artifactId>
         </dependency>
         <dependency>
+            <!-- registry Run (run at startup) dan izin foreground window di Windows -->
+            <groupId>net.java.dev.jna</groupId>
+            <artifactId>jna-platform</artifactId>
+        </dependency>
+        <dependency>
             <groupId>dev.egateza.termul</groupId>
             <artifactId>termul-ssh</artifactId>
             <type>test-jar</type>

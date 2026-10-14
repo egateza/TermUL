@@ -62,6 +62,11 @@ public final class BottomBar extends JPanel {
     }
 
     /** Ganti animasi; {@link AnimationChoice.Randomized} memilih acak sekarang lalu berganti tiap 5 menit. */
+    /** Indikator internet; sumber status untuk tampilan lain (widget streak). */
+    public NetworkIndicator network() {
+        return network;
+    }
+
     public void setAnimation(AnimationChoice choice) {
         this.choice = choice;
         rotate.stop();

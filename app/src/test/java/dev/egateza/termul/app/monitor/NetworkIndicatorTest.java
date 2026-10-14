@@ -37,6 +37,20 @@ class NetworkIndicatorTest {
     }
 
     @Test
+    void listenerMenerimaStatusSaatIniLaluSetiapHasilBaru() {
+        var indicator = new NetworkIndicator(new NetworkProbe(List.of(NetworkProbe.TARGETS.getFirst()), 100,
+                (address, timeout) -> { }, Clock.systemUTC()));
+        var received = new java.util.ArrayList<NetworkProbe.Status>();
+
+        indicator.addStatusListener(received::add);
+        indicator.show(online(25));
+        var offline = new NetworkProbe.Status.Offline("1.1.1.1:443", AT);
+        indicator.show(offline);
+
+        assertThat(received).containsExactly(null, online(25), offline);
+    }
+
+    @Test
     void tidakMemeriksaSelamaBelumTerpasang() {
         var calls = new AtomicInteger();
         var probe = new NetworkProbe(List.of(NetworkProbe.TARGETS.getFirst()), 100,

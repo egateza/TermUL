@@ -3,6 +3,7 @@ package dev.egateza.termul.app.ui.streak;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.egateza.termul.core.streak.Streak;
+import dev.egateza.termul.core.streak.StreakEvent;
 import dev.egateza.termul.core.streak.StreakStore;
 import java.nio.file.Path;
 import java.time.LocalDate;
@@ -86,6 +87,23 @@ class StreakControllerTest {
             }
             c.click(false);
             assertThat(c.streak()).isEqualTo(new Streak(48, D));
+        });
+    }
+
+    @Test
+    void esDipecahkanLewatWidgetIkutMemecahkanAnimasiDiWindowUtama() throws Exception {
+        var c = started(new Streak(47, D.minusDays(7))); // absen 6 hari -> 8 klik
+        onEdt(() -> {
+            c.play(new StreakEvent.NeedsRevival(c.streak().status(D))); // animasi besar menunggu es dipecahkan
+            var splash = c.splash();
+            assertThat(splash).isNotNull();
+            for (int i = 1; i < 8; i++) {
+                c.widgetClicked();
+            }
+            assertThat(splash.reviving()).as("belum pecah").isFalse();
+            c.widgetClicked();
+            assertThat(c.streak()).isEqualTo(new Streak(48, D));
+            assertThat(splash.reviving()).as("animasi di window utama ikut pecah").isTrue();
         });
     }
 

@@ -12,9 +12,12 @@ import java.awt.event.MouseEvent;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import javax.swing.Icon;
 import javax.swing.JLabel;
 import javax.swing.SwingUtilities;
@@ -47,6 +50,7 @@ public final class NetworkIndicator extends JLabel {
     private long generation;                 // EDT; hasil dari generasi lama diabaikan
     private NetworkProbe.Status status;      // EDT; null = belum pernah diperiksa
     private Color dot = GRAY;                // EDT
+    private final List<Consumer<NetworkProbe.Status>> listeners = new ArrayList<>(); // EDT
 
     public NetworkIndicator() {
         this(new NetworkProbe());
@@ -67,6 +71,15 @@ public final class NetworkIndicator extends JLabel {
             }
         });
         show(null);
+    }
+
+    /**
+     * Dengarkan hasil pemeriksaan (mis. widget streak), tanpa probe tambahan. Langsung dipanggil sekali dengan status
+     * saat ini (null = belum pernah diperiksa). EDT.
+     */
+    public void addStatusListener(Consumer<NetworkProbe.Status> listener) {
+        listeners.add(listener);
+        listener.accept(status);
     }
 
     /** Hasil pemeriksaan terakhir, atau null kalau belum ada. */
@@ -127,6 +140,7 @@ public final class NetworkIndicator extends JLabel {
         setForeground(result instanceof NetworkProbe.Status.Offline ? RED : null);
         setToolTipText(tooltip(result));
         repaint();
+        listeners.forEach(l -> l.accept(result));
     }
 
     // --- tampilan ---
@@ -142,7 +156,7 @@ public final class NetworkIndicator extends JLabel {
         };
     }
 
-    static Color color(NetworkProbe.Status s) {
+    public static Color color(NetworkProbe.Status s) {
         return switch (s) {
             case null -> GRAY;
             case NetworkProbe.Status.Online o -> o.latency().toMillis() >= SLOW_MS ? YELLOW : GREEN;
@@ -150,7 +164,7 @@ public final class NetworkIndicator extends JLabel {
         };
     }
 
-    static String text(NetworkProbe.Status s) {
+    public static String text(NetworkProbe.Status s) {
         return switch (s) {
             case null -> I18n.t("net.checking");
             case NetworkProbe.Status.Online o -> I18n.t("net.latency", String.valueOf(o.latency().toMillis()));

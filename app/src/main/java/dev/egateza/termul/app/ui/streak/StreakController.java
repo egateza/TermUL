@@ -1,11 +1,14 @@
 package dev.egateza.termul.app.ui.streak;
 
 import dev.egateza.termul.app.i18n.I18n;
+import dev.egateza.termul.app.monitor.NetworkIndicator;
+import dev.egateza.termul.app.monitor.NetworkProbe;
 import dev.egateza.termul.app.ui.UiAsync;
 import dev.egateza.termul.core.streak.Streak;
 import dev.egateza.termul.core.streak.StreakEvent;
 import dev.egateza.termul.core.streak.StreakStatus;
 import dev.egateza.termul.core.streak.StreakStore;
+import java.awt.Point;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 import java.awt.geom.Point2D;
@@ -51,6 +54,22 @@ public final class StreakController {
     private int cracks;                  // EDT; retakan es sejak dibuka
     private boolean enabled;             // EDT
     private StreakSplash splash;         // EDT; null kalau tidak tampil
+    private StreakWidget widget;         // EDT; null sampai widget pertama kali ditampilkan
+    private boolean loaded;              // EDT; streak.json sudah dibaca (lewat start() atau widget)
+    private NetworkProbe.Status network; // EDT; status internet terakhir, null = belum diperiksa
+
+    /** Aksi widget mengambang ke window utama; dipanggil di EDT. */
+    public interface WidgetHost {
+        void openApp();
+
+        void hideRequested();
+
+        /** Widget selesai diseret; posisi kiri atas untuk disimpan. */
+        void moved(Point location);
+
+        /** Klik status internet di widget: periksa sekarang. */
+        void checkNetwork();
+    }
 
     /**
      * @param layer   tempat animasi besar (layered pane window utama)
@@ -77,8 +96,11 @@ public final class StreakController {
 
     /** Muat streak di background lalu hitung hari ini; panggil sekali setelah window tampil. */
     public void start() {
-        UiAsync.run(io, store::load, loaded -> {
-            streak = loaded;
+        UiAsync.run(io, store::load, result -> {
+            if (!loaded) { // sudah dimuat widget: state di memori lebih baru (mis. sudah dinyalakan lewat widget)
+                streak = result;
+                loaded = true;
+            }
             openToday();
             dayCheck.start();
         }, err -> log.warn("Streak tidak bisa dimuat: {}", err.toString()));
@@ -87,6 +109,92 @@ public final class StreakController {
     public void stop() {
         dayCheck.stop();
         closeSplash();
+        if (widget != null) {
+            widget.dispose();
+            widget = null;
+        }
+    }
+
+    /**
+     * Tampilkan widget streak mengambang (selalu di depan). Kalau streak belum dimuat (start tersembunyi lewat
+     * {@code --tray}), streak dibaca dulu tanpa menghitung hari ini: hari baru dihitung saat window utama dibuka.
+     *
+     * @param saved posisi tersimpan, atau null untuk pojok kanan bawah layar
+     */
+    public void showWidget(Point saved, WidgetHost host) {
+        if (widget == null) {
+            widget = new StreakWidget(new StreakWidget.Host() {
+                @Override
+                public void flameClicked() {
+                    widgetClicked();
+                }
+
+                @Override
+                public void openApp() {
+                    host.openApp();
+                }
+
+                @Override
+                public void hideRequested() {
+                    host.hideRequested();
+                }
+
+                @Override
+                public void moved(Point location) {
+                    host.moved(location);
+                }
+
+                @Override
+                public void checkNetwork() {
+                    host.checkNetwork();
+                }
+            });
+        }
+        var shown = widget;
+        applyNetwork(shown);
+        if (loaded) {
+            refreshChip();
+            shown.show(saved);
+            return;
+        }
+        UiAsync.run(io, store::load, result -> {
+            if (!loaded) { // start() bisa selesai lebih dulu
+                streak = result;
+                loaded = true;
+            }
+            refreshChip();
+            if (widget == shown) {
+                shown.show(saved);
+            }
+        }, err -> log.warn("Streak tidak bisa dimuat untuk widget: {}", err.toString()));
+    }
+
+    /** Status internet terbaru dari indikator panel bawah; ditampilkan di widget saat di-hover. */
+    public void setNetworkStatus(NetworkProbe.Status status) {
+        network = status;
+        if (widget != null) {
+            applyNetwork(widget);
+        }
+    }
+
+    private void applyNetwork(StreakWidget target) {
+        if (network == null) {
+            target.setNetwork(null, "");
+            return;
+        }
+        var color = network instanceof NetworkProbe.Status.Offline ? StreakWidget.NET_OFFLINE
+                : NetworkIndicator.color(network);
+        target.setNetwork(color, NetworkIndicator.text(network));
+    }
+
+    public void hideWidget() {
+        if (widget != null) {
+            widget.hide();
+        }
+    }
+
+    public boolean widgetShowing() {
+        return widget != null && widget.showing();
     }
 
     public void setEnabled(boolean on) {
@@ -133,7 +241,7 @@ public final class StreakController {
         }
     }
 
-    private void play(StreakEvent event) {
+    void play(StreakEvent event) { // package-private untuk test
         switch (event) {
             case StreakEvent.SameDay _ -> { }
             case StreakEvent.Counted(int from, int to) -> {
@@ -195,6 +303,36 @@ public final class StreakController {
 
     /** Klik pada api besar ({@code fromSplash}) atau ikon pojok. */
     void click(boolean fromSplash) {
+        var effect = applyClick();
+        if (fromSplash && splash != null) {
+            splash.update(look(), effect);
+        } else {
+            chip.actor().react(effect, chip.look().tier().palette(System.nanoTime() / 1e9));
+        }
+        reactWidget(effect); // api widget ikut retak/menyala walau yang diklik api di window utama
+    }
+
+    /**
+     * Klik pada widget mengambang: aturannya sama dengan ikon pojok. Kalau animasi besar sedang menunggu api
+     * dinyalakan (padam/beku), animasi itu ikut diperbarui, jadi es yang dipecahkan lewat widget juga pecah di
+     * window utama.
+     */
+    void widgetClicked() {
+        var effect = applyClick();
+        reactWidget(effect);
+        if (splash != null) {
+            splash.update(look(), effect);
+        }
+    }
+
+    private void reactWidget(FlameActor.Effect effect) {
+        if (widget != null) {
+            widget.actor().react(effect, widget.look().tier().palette(System.nanoTime() / 1e9));
+        }
+    }
+
+    /** Terapkan aturan klik (triple klik untuk yang padam, retakan es) dan kembalikan efek yang perlu diputar. */
+    private FlameActor.Effect applyClick() {
         checkDay();
         var day = today.get();
         FlameActor.Effect effect;
@@ -219,11 +357,7 @@ public final class StreakController {
             default -> effect = FlameActor.Effect.POKE;
         }
         refreshChip();
-        if (fromSplash && splash != null) {
-            splash.update(look(), effect);
-        } else {
-            chip.actor().react(effect, chip.look().tier().palette(System.nanoTime() / 1e9));
-        }
+        return effect;
     }
 
     private void revive(LocalDate day) {
@@ -242,6 +376,9 @@ public final class StreakController {
         var look = look();
         chip.setLook(look);
         chip.setToolTipText(tooltip(look));
+        if (widget != null) {
+            widget.setLook(look, tooltip(look));
+        }
     }
 
     static String tooltip(FlameLook look) {
