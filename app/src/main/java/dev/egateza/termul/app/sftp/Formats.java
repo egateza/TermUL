@@ -32,6 +32,26 @@ public final class Formats {
         return DATE.format(t);
     }
 
+    /**
+     * Teks yang terlalu lebar disingkat di tengah ({@code awal…akhir}), supaya awal nama dan ekstensinya tetap
+     * terlihat. Bagian akhir diberi satu karakter lebih kalau ganjil.
+     *
+     * @param width lebar teks dalam px (mis. {@code FontMetrics::stringWidth})
+     */
+    public static String elideMiddle(String text, int maxWidth, java.util.function.ToIntFunction<String> width) {
+        if (width.applyAsInt(text) <= maxWidth) {
+            return text;
+        }
+        for (int keep = text.length() - 1; keep > 1; keep--) {
+            int tail = (keep + 1) / 2;
+            String candidate = text.substring(0, keep - tail) + "…" + text.substring(text.length() - tail);
+            if (width.applyAsInt(candidate) <= maxWidth) {
+                return candidate;
+            }
+        }
+        return "…";
+    }
+
     /** Parse mode oktal ("644", "0755", "4755"). @throws IllegalArgumentException kalau tidak valid */
     public static int parseMode(String text) {
         String s = text.strip();

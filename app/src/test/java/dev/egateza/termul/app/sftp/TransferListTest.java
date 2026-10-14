@@ -45,7 +45,8 @@ class TransferListTest {
         assertThat(TransferBadge.statusText(new TransferList.Item(1, "x", false, 0, 0)))
                 .isEqualTo(dev.egateza.termul.app.i18n.I18n.t("fab.transfers.queued"));
         assertThat(TransferBadge.statusText(new TransferList.Item(1, "x", true, 50, 200))).isEqualTo("25%");
-        assertThat(TransferBadge.shorten("a".repeat(60))).hasSize(TransferBadge.MAX_TITLE).endsWith("…");
+        assertThat(TransferBadge.shorten("a".repeat(60))).hasSize(TransferBadge.MAX_TITLE).contains("…");
+        assertThat(TransferBadge.shorten("Download " + "x".repeat(60) + ".jar.filepart")).endsWith(".jar.filepart");
         assertThat(TransferBadge.shorten("pendek.txt")).isEqualTo("pendek.txt");
     }
 }

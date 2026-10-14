@@ -22,12 +22,22 @@ class BadgeDotIconTest {
         assertThat(img.getRGB(0, 0) >>> 24).isZero();
     }
 
+    /**
+     * Fase denyut ditetapkan lewat jam test: dulu memakai {@code System.nanoTime()} asli, sehingga test ini gagal
+     * kalau kebetulan dijalankan di lembah denyut (halo terkecil).
+     */
     @Test
-    void badgeBerdenyutTetapMenggambarHalo() {
-        var icon = new BadgeDotIcon(true);
-        var img = paint(icon);
+    void badgeBerdenyutTetapMenggambarHaloDiLembahDanMelebarDiPuncak() {
+        var trough = new BadgeDotIcon(true, () -> 0L);
+        var peak = new BadgeDotIcon(true, () -> BadgeDotIcon.PERIOD_NANOS / 2);
+        int mid = trough.getIconWidth() / 2;
 
-        assertThat(img.getRGB(icon.getIconWidth() / 2 - 6, icon.getIconHeight() / 2) >>> 24).isPositive();
+        var low = paint(trough);
+        var high = paint(peak);
+
+        assertThat(low.getRGB(mid - 5, mid) >>> 24).as("halo tetap ada di lembah denyut").isPositive();
+        assertThat(high.getRGB(mid - 7, mid) >>> 24).as("halo melebar di puncak").isPositive();
+        assertThat(high.getRGB(mid - 7, mid) >>> 24).isGreaterThan(low.getRGB(mid - 7, mid) >>> 24);
     }
 
     private static BufferedImage paint(BadgeDotIcon icon) {

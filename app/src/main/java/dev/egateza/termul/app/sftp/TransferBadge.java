@@ -115,7 +115,7 @@ final class TransferBadge {
     }
 
     static String shorten(String title) {
-        return title.length() <= MAX_TITLE ? title : title.substring(0, MAX_TITLE - 1) + "…";
+        return Formats.elideMiddle(title, MAX_TITLE, String::length); // ekstensi file tetap terlihat
     }
 
     void dispose() {

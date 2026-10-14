@@ -47,6 +47,8 @@ public final class TransferQueue extends JPanel {
 
     public TransferQueue(String name) {
         super(new BorderLayout(6, 0));
+        // jarak tepi sama dengan ActivityBar di bawahnya: label & tombol Batal tidak menempel ke sudut panel membulat
+        setBorder(javax.swing.BorderFactory.createEmptyBorder(3, 6, 3, 6));
         this.worker = Executors.newSingleThreadExecutor(Thread.ofVirtual().name("sftp-transfer-" + name).factory());
         bar.setStringPainted(true);
         cancel.addActionListener(e -> currentCancel.set(true));
@@ -81,7 +83,7 @@ public final class TransferQueue extends JPanel {
             SwingUtilities.invokeLater(() -> {
                 list.start(id);
                 fireChanged();
-                label.setText(queued.get() > 1 ? I18n.t("transfer.label", title, String.valueOf(queued.get() - 1)) : title);
+                showLabel(title, queued.get() - 1);
                 bar.setValue(0);
                 bar.setString("0%");
                 cancel.setEnabled(true);
@@ -142,6 +144,19 @@ public final class TransferQueue extends JPanel {
                 }
             });
         });
+    }
+
+    /** Lebar maksimum label transfer, px; nama yang lebih panjang disingkat di tengah (lengkapnya di tooltip). */
+    static final int MAX_LABEL_WIDTH = 260;
+
+    /** Label "Download nama (+N antre)" dengan nama disingkat supaya progress bar tidak terdesak. EDT. */
+    private void showLabel(String title, int waiting) {
+        var fm = label.getFontMetrics(label.getFont());
+        String suffix = waiting > 0 ? I18n.t("transfer.label", "", String.valueOf(waiting)) : "";
+        int max = getWidth() > 0 ? Math.min(MAX_LABEL_WIDTH, getWidth() * 2 / 5) : MAX_LABEL_WIDTH;
+        String shown = Formats.elideMiddle(title, Math.max(40, max - fm.stringWidth(suffix)), fm::stringWidth);
+        label.setText(waiting > 0 ? I18n.t("transfer.label", shown, String.valueOf(waiting)) : shown);
+        label.setToolTipText(shown.equals(title) ? null : title);
     }
 
     /** Transfer yang berjalan + antre, sesuai urutan antrean. EDT. */

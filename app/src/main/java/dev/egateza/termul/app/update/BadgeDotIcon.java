@@ -26,10 +26,11 @@ public final class BadgeDotIcon implements Icon {
 
     private static final int CORE = 8;
     private static final int SIZE = 18;
-    private static final long PERIOD_NANOS = 1_400_000_000L;
+    static final long PERIOD_NANOS = 1_400_000_000L;
     private static final Color FALLBACK = new Color(0xE5, 0x53, 0x53);
 
     private final boolean pulsing;
+    private final java.util.function.LongSupplier nanoClock;
 
     /** Badge statis (halo tetap), mis. untuk ikon item menu. */
     public BadgeDotIcon() {
@@ -37,7 +38,13 @@ public final class BadgeDotIcon implements Icon {
     }
 
     public BadgeDotIcon(boolean pulsing) {
+        this(pulsing, System::nanoTime);
+    }
+
+    /** @param nanoClock sumber waktu denyut (test memakai fase tetap) */
+    BadgeDotIcon(boolean pulsing, java.util.function.LongSupplier nanoClock) {
         this.pulsing = pulsing;
+        this.nanoClock = nanoClock;
     }
 
     @Override
@@ -80,7 +87,7 @@ public final class BadgeDotIcon implements Icon {
         if (!pulsing) {
             return 0.6f;
         }
-        double phase = (System.nanoTime() % PERIOD_NANOS) / (double) PERIOD_NANOS;
+        double phase = Math.floorMod(nanoClock.getAsLong(), PERIOD_NANOS) / (double) PERIOD_NANOS;
         return (float) ((1 - Math.cos(phase * 2 * Math.PI)) / 2);
     }
 
