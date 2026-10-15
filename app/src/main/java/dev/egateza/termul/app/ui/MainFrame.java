@@ -14,6 +14,7 @@ import dev.egateza.termul.app.monitor.HostStatusPanel;
 import dev.egateza.termul.app.monitor.MemoryTuning;
 import dev.egateza.termul.app.monitor.ResourceMonitor;
 import dev.egateza.termul.app.sftp.ActivityBar;
+import dev.egateza.termul.app.sftp.SftpColumns;
 import dev.egateza.termul.app.sftp.SftpPanel;
 import dev.egateza.termul.app.sftp.SystemFileIcons;
 import dev.egateza.termul.app.startup.AutoStart;
@@ -693,6 +694,11 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             saveSftpLayout(on);
         });
         terminal.add(sftpDualToggle);
+        SftpColumns.configure(ctx.config().current().sftpHiddenColumns(), hidden -> mutate(I18n.t("error.saveSettings"),
+                () -> ctx.config().save(ctx.config().current().withSftpHiddenColumns(hidden))));
+        var sftpColumns = SftpColumns.menu(I18n.t("main.menu.terminal.sftpColumns"));
+        sftpColumns.setToolTipText(I18n.t("main.menu.terminal.sftpColumns.tooltip"));
+        terminal.add(sftpColumns);
         terminal.add(menuItem(AppIcon.BOLT, I18n.t("main.menu.terminal.snippets"), null, this::openSnippets));
         terminal.addSeparator();
         terminal.add(miGroup = menuItem(null, I18n.t("main.menu.terminal.group"), Shortcuts.menu(KeyEvent.VK_G),
@@ -1856,7 +1862,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private void updateTabIcons(java.util.UUID profileId, OsInfo os) {
         for (int i = 0; i < tabs.getTabCount(); i++) {
             if (groupAt(i).panes().getFirst().profile().id().equals(profileId)) { // ikon grup = host panel pertama
-                tabs.setIconAt(i, OsIcons.of(os));
+                tabs.setIconAt(i, tabIcon(groupAt(i), OsIcons.of(os)));
             }
         }
     }
@@ -2032,7 +2038,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private void insertGroupTab(SplitPanes<TerminalTab> group, int index) {
         group.setActiveListener(this::updateTerminalMenu);
         var first = group.panes().getFirst().profile();
-        tabs.insertTab(tabTitle(group), OsIcons.of(first.os()), group, tabTooltip(group), index);
+        tabs.insertTab(tabTitle(group), tabIcon(group, OsIcons.of(first.os())), group, tabTooltip(group), index);
         tabs.setSelectedIndex(index);
         updateCenter();
         updateTerminalMenu();
@@ -2115,12 +2121,33 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         return group.panes().stream().map(t -> t.profile().address()).collect(Collectors.joining(" | "));
     }
 
+    /** Ikon tab: logo OS host panel pertama + ikon terminal/SFTP yang sedang dipakai panel-panel di tab itu. */
+    private static TabIcon tabIcon(SplitPanes<TerminalTab> group, javax.swing.Icon os) {
+        var panes = group.panes();
+        return new TabIcon(os, panes.stream().anyMatch(t -> !t.isSftpOnly()),
+                panes.stream().anyMatch(t -> t.isSftpOnly() || t.isSftpOpen()));
+    }
+
+    /** Perbarui ikon terminal/SFTP semua tab (logo OS yang sudah tampil dipertahankan). EDT. */
+    private void refreshTabIcons() {
+        for (int i = 0; i < tabs.getTabCount(); i++) {
+            var group = groupAt(i);
+            var os = tabs.getIconAt(i) instanceof TabIcon current ? current.os()
+                    : OsIcons.of(group.panes().getFirst().profile().os());
+            var icon = tabIcon(group, os);
+            if (!icon.equals(tabs.getIconAt(i))) {
+                tabs.setIconAt(i, icon);
+            }
+        }
+    }
+
     /** Perbarui judul semua tab (tanda pilih, isi grup). EDT. */
     private void refreshTitles() {
         for (int i = 0; i < tabs.getTabCount(); i++) {
             tabs.setTitleAt(i, tabTitle(groupAt(i)));
             tabs.setToolTipTextAt(i, tabTooltip(groupAt(i)));
         }
+        refreshTabIcons();
     }
 
     /** Submenu arah split tab yang digabung; berlaku langsung ke semua grup dan disimpan di config.json. */
@@ -2505,7 +2532,10 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                 }));
         tab.setConnectedListener(tty -> detectOs(profile.id(), tty));
         tab.setBeforeConnect(wsl::prepare);
-        tab.setStateListener(this::updateTerminalMenu);
+        tab.setStateListener(() -> {
+            updateTerminalMenu();
+            refreshTabIcons(); // panel SFTP dibuka/ditutup
+        });
         tab.setCurrentProfile(() -> store.snapshot().find(profile.id()).orElse(null));
         tab.setAutoSudoVault(ctx.vault());
         tab.setSecretInjector(type -> tab.injectSecret(type, ctx.vault())); // tombol toolbar = hotkey Ctrl+Shift+P

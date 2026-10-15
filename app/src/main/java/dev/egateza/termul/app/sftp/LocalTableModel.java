@@ -21,6 +21,9 @@ public final class LocalTableModel extends AbstractTableModel {
     public static final int COL_TYPE = 2;
     public static final int COL_MODIFIED = 3;
 
+    /** Id kolom per indeks (lihat {@link SftpColumns}). */
+    static final String[] COLUMN_IDS = {"name", "size", "type", "modified"};
+
     private static final String[] COLUMN_KEYS = {"sftp.column.name", "sftp.column.size", "sftp.local.column.type",
             "sftp.column.modified"};
 

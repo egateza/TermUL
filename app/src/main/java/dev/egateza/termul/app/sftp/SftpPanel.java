@@ -4,6 +4,7 @@ import dev.egateza.termul.app.edit.EditorLauncher;
 import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.app.sftp.ActivityBar.Level;
 import dev.egateza.termul.app.ui.AppIcon;
+import dev.egateza.termul.app.ui.OverflowToolBar;
 import dev.egateza.termul.app.ui.fab.FloatingOverlay;
 import dev.egateza.termul.app.ui.Dialogs;
 import dev.egateza.termul.app.ui.Edt;
@@ -81,7 +82,8 @@ public class SftpPanel extends JPanel {
     private final TableRowSorter<SftpTableModel> sorter = new TableRowSorter<>(model);
     /** Keterangan aktivitas panel ini (upload, download, operasi file, reconnect, edit remote). */
     protected final ActivityBar activity = new ActivityBar();
-    protected final JToolBar toolbar = new JToolBar();
+    /** Item yang tidak muat saat panel sempit masuk ke tombol » di ujung kanan. */
+    protected final OverflowToolBar toolbar = new OverflowToolBar();
     private volatile SftpConnection link;        // koneksi bersama profil; ditulis sekali setelah connect
     private Runnable unsubscribeLink = () -> { }; // EDT
     private Runnable unsubscribeEdits = () -> { }; // EDT
@@ -142,7 +144,6 @@ public class SftpPanel extends JPanel {
         this.fileIcons = fileIcons;
         this.layoutChanged = layoutChanged;
 
-        toolbar.setFloatable(false);
         toolbar.add(button(AppIcon.ARROW_UP, null, I18n.t("sftp.toolbar.up"), this::goUp));
         toolbar.add(button(AppIcon.HOME, null, I18n.t("sftp.toolbar.home"), this::goHome));
         toolbar.add(button(AppIcon.REFRESH, null, I18n.t("sftp.toolbar.refresh"), this::refresh));
@@ -178,6 +179,7 @@ public class SftpPanel extends JPanel {
         for (int i = 0; i < widths.length; i++) {
             table.getColumnModel().getColumn(i).setPreferredWidth(widths[i]);
         }
+        SftpColumns.install(table, SftpTableModel.COLUMN_IDS);
         table.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
@@ -315,6 +317,7 @@ public class SftpPanel extends JPanel {
 
         getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(Shortcuts.menu(KeyEvent.VK_F), "focusFilter");
         getActionMap().put("focusFilter", action(() -> {
+            toolbar.reveal(filterField);
             filterField.requestFocusInWindow();
             filterField.selectAll();
         }));

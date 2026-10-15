@@ -19,6 +19,9 @@ public final class SftpTableModel extends AbstractTableModel {
     public static final int COL_OWNER = 4;
     public static final int COL_GROUP = 5;
 
+    /** Id kolom per indeks (lihat {@link SftpColumns}). */
+    static final String[] COLUMN_IDS = {"name", "size", "modified", "mode", "owner", "group"};
+
     private static final String[] COLUMN_KEYS = {"sftp.column.name", "sftp.column.size", "sftp.column.modified",
             "sftp.column.mode", "sftp.column.owner", "sftp.column.group"};
 

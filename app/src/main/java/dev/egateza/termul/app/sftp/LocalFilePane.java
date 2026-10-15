@@ -2,6 +2,7 @@ package dev.egateza.termul.app.sftp;
 
 import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.app.ui.AppIcon;
+import dev.egateza.termul.app.ui.OverflowToolBar;
 import dev.egateza.termul.app.ui.Dialogs;
 import dev.egateza.termul.app.ui.Shortcuts;
 import dev.egateza.termul.app.ui.UiAsync;
@@ -68,6 +69,8 @@ final class LocalFilePane extends JPanel {
     private final JTextField pathField = new JTextField();
     /** Filter nama untuk folder yang sedang dibuka (tanpa membaca ulang disk). */
     private final JTextField filterField = new JTextField();
+    /** Item yang tidak muat saat panel sempit masuk ke tombol » di ujung kanan. */
+    private final OverflowToolBar toolbar = new OverflowToolBar();
     private final JComboBox<Path> drives = new JComboBox<>();
     private final TypeAhead typeAhead = new TypeAhead();
     private final SystemFileIcons fileIcons;
@@ -81,8 +84,7 @@ final class LocalFilePane extends JPanel {
         this.fileIcons = fileIcons;
         this.upload = upload;
 
-        var bar = new JToolBar();
-        bar.setFloatable(false);
+        var bar = toolbar;
         if (Os.current().isWindows()) {
             var roots = new DefaultComboBoxModel<Path>();
             for (File root : File.listRoots()) {
@@ -141,6 +143,7 @@ final class LocalFilePane extends JPanel {
         for (int i = 0; i < widths.length; i++) {
             table.getColumnModel().getColumn(i).setPreferredWidth(widths[i]);
         }
+        SftpColumns.install(table, LocalTableModel.COLUMN_IDS);
         table.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
@@ -205,6 +208,7 @@ final class LocalFilePane extends JPanel {
         bar.add(filterField);
         getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(Shortcuts.menu(KeyEvent.VK_F), "focusFilter");
         getActionMap().put("focusFilter", action(() -> {
+            toolbar.reveal(filterField);
             filterField.requestFocusInWindow();
             filterField.selectAll();
         }));
