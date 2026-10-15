@@ -61,4 +61,17 @@ class OsInfoTest {
         Files.writeString(file, legacy);
         assertThat(new ProfileStore(file).load().find(p.id())).get().extracting(HostProfile::os).isNull();
     }
+
+    @Test
+    void penandaSftpOnly() throws Exception {
+        assertThat(OsInfo.SFTP_ONLY.isSftpOnly()).isTrue();
+        assertThat(new OsInfo("ubuntu", null, null).isSftpOnly()).isFalse();
+
+        Path file = dir.resolve("profiles.json");
+        var store = new ProfileStore(file);
+        var p = HostProfile.create("ftp", "10.0.0.2", "sftpuser").withOs(OsInfo.SFTP_ONLY);
+        store.save(p);
+        assertThat(new ProfileStore(file).load().find(p.id())).get()
+                .extracting(h -> h.os().isSftpOnly()).isEqualTo(true);
+    }
 }

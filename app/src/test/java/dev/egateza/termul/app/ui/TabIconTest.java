@@ -42,4 +42,10 @@ class TabIconTest {
         assertThat(new TabIcon(OS, true, true)).isEqualTo(new TabIcon(OS, true, true))
                 .isNotEqualTo(new TabIcon(OS, true, false));
     }
+
+    @Test
+    void hostSftpTidakMenampilkanIkonSftpDobel() {
+        assertThat(new TabIcon(OsIcons.SFTP_ONLY, false, true).parts()).containsExactly(OsIcons.SFTP_ONLY);
+        assertThat(new TabIcon(OsIcons.SFTP_ONLY, true, true).parts()).hasSize(2);
+    }
 }

@@ -50,4 +50,10 @@ class OsIconsTest {
         g.dispose();
         return img.getRGB(icon.getIconWidth() / 2, icon.getIconHeight() / 2 + 3);
     }
+
+    @Test
+    void hostSftpMemakaiIkonSftp() {
+        assertThat(OsIcons.of(OsInfo.SFTP_ONLY)).isSameAs(OsIcons.SFTP_ONLY);
+        assertThat(OsIcons.label(OsInfo.SFTP_ONLY)).contains("SFTP");
+    }
 }

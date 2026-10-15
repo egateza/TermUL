@@ -19,6 +19,12 @@ public record OsInfo(String id, String versionId, String prettyName) {
     private static final Pattern SAFE_ID = Pattern.compile("[a-z0-9._-]{1,32}");
     private static final int MAX_TEXT = 80;
 
+    /**
+     * Penanda host yang dibuka lewat SFTP tetapi OS-nya tidak bisa dibaca (mis. akun SFTP di-chroot): ditampilkan
+     * dengan ikon SFTP. Diganti OS sebenarnya begitu deteksi lewat terminal berhasil.
+     */
+    public static final OsInfo SFTP_ONLY = new OsInfo("sftp", null, "SFTP");
+
     public OsInfo {
         id = id == null ? null : id.strip().toLowerCase(Locale.ROOT);
         if (id == null || !SAFE_ID.matcher(id).matches()) {
@@ -26,6 +32,11 @@ public record OsInfo(String id, String versionId, String prettyName) {
         }
         versionId = clean(versionId);
         prettyName = clean(prettyName);
+    }
+
+    /** true untuk penanda {@link #SFTP_ONLY}. */
+    public boolean isSftpOnly() {
+        return SFTP_ONLY.id().equals(id);
     }
 
     /** Label untuk tooltip: PRETTY_NAME, atau id + versi. */

@@ -146,6 +146,21 @@ public final class RemoteFileService implements AutoCloseable {
         return result;
     }
 
+    /**
+     * Isi file teks kecil (UTF-8), dipotong di {@code maxBytes}. Untuk file info seperti {@code /etc/os-release};
+     * tidak memakai exec, jadi juga jalan di akun yang hanya boleh SFTP.
+     *
+     * @return isi file, atau null kalau file tidak ada/tidak bisa dibaca (mis. akun SFTP di-chroot)
+     */
+    public String readSmallText(String path, int maxBytes) {
+        try (InputStream in = sftp.read(path)) {
+            return new String(in.readNBytes(maxBytes), java.nio.charset.StandardCharsets.UTF_8);
+        } catch (IOException | RuntimeException e) {
+            log.debug("Membaca {} gagal: {}", path, e.toString());
+            return null;
+        }
+    }
+
     /** Stat (mengikuti symlink). */
     public RemoteEntry stat(String path) throws RemoteFileException {
         try {

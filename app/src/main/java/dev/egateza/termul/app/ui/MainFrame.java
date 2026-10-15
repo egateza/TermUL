@@ -1851,12 +1851,49 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             } catch (IllegalStateException e) { // lease sudah dilepas (tab keburu ditutup)
                 return java.util.Optional.<OsInfo>empty();
             }
-        }, os -> os.ifPresentOrElse(detected -> {
-            updateTabIcons(profileId, detected);
-            mutate(I18n.t("main.error.saveOsInfo"), () -> store.snapshot().find(profileId)
-                    .filter(current -> !detected.equals(current.os()))
-                    .ifPresent(current -> store.save(current.withOs(detected))));
-        }, () -> osDetected.remove(profileId)), err -> osDetected.remove(profileId));
+        }, os -> os.ifPresentOrElse(detected -> applyOs(profileId, detected),
+                () -> osDetected.remove(profileId)), err -> osDetected.remove(profileId));
+    }
+
+    /** Panel SFTP: deteksi OS lewat SFTP saat pertama tersambung (host yang tidak pernah dibuka di terminal). */
+    private SftpPanel detectOsOnConnect(HostProfile profile, SftpPanel panel) {
+        panel.setConnectedListener(svc -> detectOsViaSftp(profile.id(), svc));
+        return panel;
+    }
+
+    /**
+     * Baca {@code /etc/os-release} lewat SFTP (tanpa exec, jadi juga untuk akun yang hanya boleh SFTP). Tidak terbaca
+     * (mis. akun di-chroot) = {@link OsInfo#SFTP_ONLY}: ikon SFTP, dan terminal tetap boleh mencoba deteksi lewat exec.
+     */
+    private void detectOsViaSftp(java.util.UUID profileId, dev.egateza.termul.sftp.RemoteFileService svc) {
+        if (!osDetected.add(profileId)) {
+            return;
+        }
+        UiAsync.run(ctx.sshOps(), () -> {
+            String content = svc.readSmallText("/etc/os-release", 16 * 1024);
+            if (content == null) {
+                content = svc.readSmallText("/usr/lib/os-release", 16 * 1024);
+            }
+            return OsInfo.parseOsRelease(content).orElse(OsInfo.SFTP_ONLY);
+        }, detected -> {
+            if (detected.isSftpOnly()) {
+                osDetected.remove(profileId);
+            }
+            applyOs(profileId, detected);
+        }, err -> osDetected.remove(profileId));
+    }
+
+    /** Pasang OS hasil deteksi ke ikon tab dan profil. Penanda SFTP tidak menimpa OS asli yang sudah diketahui. EDT. */
+    private void applyOs(java.util.UUID profileId, OsInfo detected) {
+        var known = store.snapshot().find(profileId).map(HostProfile::os).orElse(null);
+        if (detected.isSftpOnly() && known != null && !known.isSftpOnly()) {
+            return;
+        }
+        updateTabIcons(profileId, detected);
+        mutate(I18n.t("main.error.saveOsInfo"), () -> store.snapshot().find(profileId)
+                .filter(current -> !detected.equals(current.os()))
+                .filter(current -> !detected.isSftpOnly() || current.os() == null || current.os().isSftpOnly())
+                .ifPresent(current -> store.save(current.withOs(detected))));
     }
 
     private void updateTabIcons(java.util.UUID profileId, OsInfo os) {
@@ -2500,7 +2537,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     /** Panel terminal baru (belum connect) untuk tab baru atau split. */
     private TerminalTab createPane(HostProfile profile, boolean sftpOnly) {
         var tab = new TerminalTab(profile, ctx.terminals(), ctx.sshOps(), ctx.terminalSettings(), ctx.sftpLinks(),
-                sftpOnly, p -> new SftpPanel(p, ctx.sftpLinks(), ctx.sshOps(), new SftpPanel.EditActions() {
+                sftpOnly, p -> detectOsOnConnect(p, new SftpPanel(p, ctx.sftpLinks(), ctx.sshOps(), new SftpPanel.EditActions() {
                     @Override
                     public void edit(HostProfile profile, String remotePath, String command) {
                         ctx.edits().open(profile, remotePath, command);
@@ -2529,7 +2566,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                 }, fileIcons, AppConfig.SFTP_DUAL.equals(ctx.config().current().sftpLayout()), on -> {
                     sftpDualToggle.setSelected(on); // tombol toolbar panel juga mengganti default panel berikutnya
                     saveSftpLayout(on);
-                }));
+                })));
         tab.setConnectedListener(tty -> detectOs(profile.id(), tty));
         tab.setBeforeConnect(wsl::prepare);
         tab.setStateListener(() -> {

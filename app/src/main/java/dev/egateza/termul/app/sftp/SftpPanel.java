@@ -256,6 +256,13 @@ public class SftpPanel extends JPanel {
     private final TransferQueue transfers;
     private final TransferBadge transferBadge;
 
+    private Consumer<RemoteFileService> connectedListener = svc -> { }; // EDT
+
+    /** Dipanggil (di EDT) saat panel pertama kali tersambung, mis. untuk mendeteksi OS host lewat SFTP. */
+    public void setConnectedListener(Consumer<RemoteFileService> listener) {
+        this.connectedListener = listener;
+    }
+
     /** Property change (Boolean) yang dikirim saat tampilan satu/dua panel berganti. */
     public static final String DUAL_PANE_PROPERTY = "dualPane";
 
@@ -818,6 +825,7 @@ public class SftpPanel extends JPanel {
             pendingLink = null;
             link = l;
             unsubscribeEdits = editActions.onActivity(profile.id(), activity::report);
+            connectedListener.accept(l.service());
             navigate(start);
         }, err -> {
             connecting = false;

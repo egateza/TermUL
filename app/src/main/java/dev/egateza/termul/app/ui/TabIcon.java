@@ -25,7 +25,7 @@ public record TabIcon(Icon os, boolean terminal, boolean sftp) implements Icon {
         if (terminal) {
             parts.add(TERMINAL_ICON);
         }
-        if (sftp) {
+        if (sftp && os != OsIcons.SFTP_ONLY) { // ikon host sudah ikon SFTP: jangan dobel
             parts.add(SFTP_ICON);
         }
         return parts;

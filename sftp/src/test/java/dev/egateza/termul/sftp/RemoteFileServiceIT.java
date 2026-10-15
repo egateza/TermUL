@@ -179,4 +179,12 @@ class RemoteFileServiceIT {
         }
         return result.getStdout();
     }
+
+    @Test
+    void readSmallTextMembacaOsReleaseDanNullKalauTidakAda() {
+        String osRelease = files.readSmallText("/etc/os-release", 16 * 1024);
+        assertThat(osRelease).contains("ID=");
+        assertThat(files.readSmallText("/etc/os-release", 4)).hasSize(4);
+        assertThat(files.readSmallText(home + "/tidak-ada.txt", 1024)).isNull();
+    }
 }

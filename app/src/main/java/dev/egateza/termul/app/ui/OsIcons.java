@@ -60,6 +60,8 @@ public final class OsIcons {
     private static final Color UNKNOWN = new Color(0x6B7280);
     private static final Map<String, Icon> CACHE = new ConcurrentHashMap<>();
     private static final Icon UNDETECTED = new Badge(null, null, SIZE);
+    /** Host SFTP yang OS-nya tidak bisa dibaca ({@link OsInfo#SFTP_ONLY}). */
+    static final Icon SFTP_ONLY = AppIcon.SFTP.icon(SIZE);
 
     private OsIcons() {
     }
@@ -68,6 +70,9 @@ public final class OsIcons {
     public static Icon of(OsInfo os) {
         if (os == null) {
             return UNDETECTED;
+        }
+        if (os.isSftpOnly()) {
+            return SFTP_ONLY;
         }
         return CACHE.computeIfAbsent(os.id(), id -> {
             String logo = LOGOS.get(id);
@@ -134,7 +139,10 @@ public final class OsIcons {
 
     /** Teks tooltip OS. */
     public static String label(OsInfo os) {
-        return os == null ? I18n.t("os.undetected") : os.label();
+        if (os == null) {
+            return I18n.t("os.undetected");
+        }
+        return os.isSftpOnly() ? I18n.t("os.sftpOnly") : os.label();
     }
 
     /** Ikon dari logo raster (multi-resolusi). */
