@@ -174,6 +174,8 @@ final class LocalFilePane extends JPanel {
         table.setTransferHandler(dnd);
         scroll.setTransferHandler(dnd);
         add(scroll, BorderLayout.CENTER);
+        add(new SelectionStatus(table, row -> model.entryAt(row).directory(), row -> model.entryAt(row).size()),
+                BorderLayout.SOUTH);
 
         navigate(lastDir != null ? lastDir : home());
     }

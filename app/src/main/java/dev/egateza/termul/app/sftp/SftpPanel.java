@@ -57,6 +57,7 @@ import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.ListSelectionModel;
 import javax.swing.TransferHandler;
+import javax.swing.UIManager;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.RowFilter;
 import javax.swing.table.TableRowSorter;
@@ -234,9 +235,18 @@ public class SftpPanel extends JPanel {
         tableArea.setMargins(24, 16); // jangan menutupi scrollbar tabel
         transferBadge = new TransferBadge(transfers, tableArea);
         remotePane.add(tableArea, BorderLayout.CENTER);
+        remotePane.add(new SelectionStatus(table, row -> model.entryAt(row).isDirectory(),
+                row -> model.entryAt(row).size()), BorderLayout.SOUTH);
         body.add(remotePane, BorderLayout.CENTER);
         add(body, BorderLayout.CENTER);
-        var bottom = new JPanel(new BorderLayout());
+        // garis pemisah antara info seleksi di bawah tabel dan antrean transfer + log aktivitas
+        var bottom = new JPanel(new BorderLayout()) {
+            @Override
+            public void updateUI() {
+                super.updateUI();
+                setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, UIManager.getColor("Component.borderColor")));
+            }
+        };
         bottom.add(transfers, BorderLayout.NORTH);
         bottom.add(activity, BorderLayout.SOUTH);
         add(bottom, BorderLayout.SOUTH);
