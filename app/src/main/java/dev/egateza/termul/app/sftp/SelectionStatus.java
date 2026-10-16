@@ -7,6 +7,7 @@ import java.util.function.IntToLongFunction;
 import javax.swing.BorderFactory;
 import javax.swing.JLabel;
 import javax.swing.JTable;
+import javax.swing.SwingUtilities;
 
 /**
  * Baris di bawah tabel file: jumlah item (yang tampil / total, yang dipilih) dan total ukuran file-nya, mis.
@@ -30,7 +31,9 @@ final class SelectionStatus extends JLabel {
         this.size = size;
         setBorder(BorderFactory.createEmptyBorder(2, 6, 2, 6));
         table.getSelectionModel().addListSelectionListener(e -> refresh());
-        table.getModel().addTableModelListener(e -> refresh());
+        // Ditunda: listener model dipanggil sebelum JTable/sorter diperbarui, jadi konversi indeks view→model masih
+        // memakai isi lama dan melempar IndexOutOfBounds (yang juga memutus update sorter).
+        table.getModel().addTableModelListener(e -> SwingUtilities.invokeLater(this::refresh));
         if (table.getRowSorter() != null) {
             table.getRowSorter().addRowSorterListener(e -> refresh()); // filter nama berubah
         }
