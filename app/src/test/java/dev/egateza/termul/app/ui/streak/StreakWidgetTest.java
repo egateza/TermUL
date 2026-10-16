@@ -41,6 +41,16 @@ class StreakWidgetTest {
     }
 
     @Test
+    void perubahanLayarDikenaliDariIdentitasKonfigurasi() {
+        var a = new Object();
+        var b = new Object();
+        assertThat(StreakWidget.sameElements(List.of(a, b), List.of(a, b))).isTrue();
+        assertThat(StreakWidget.sameElements(List.of(a), List.of(a, b))).as("monitor bertambah").isFalse();
+        assertThat(StreakWidget.sameElements(List.of(new Point(1, 1)), List.of(new Point(1, 1))))
+                .as("objek baru walau equals = layar dikonfigurasi ulang").isFalse();
+    }
+
+    @Test
     void monitorDicabutKembaliKePojokLayarUtama() {
         var fallback = StreakWidget.place(null, SIZE, List.of(MAIN), USABLE);
         assertThat(StreakWidget.place(new Point(-1000, 50), SIZE, List.of(MAIN), USABLE)).isEqualTo(fallback);

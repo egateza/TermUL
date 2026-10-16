@@ -85,9 +85,12 @@ final class StreakWidget {
     private JPopupMenu openMenu; // EDT; menu klik kanan yang sedang tampil (kartu tetap terlihat)
     private Color netColor; // EDT; warna titik status internet, null = belum ada data (tidak digambar)
     private String netText = ""; // EDT; mis. "23 ms" / "Offline"
+    private List<GraphicsConfiguration> displays = currentDisplays(); // EDT; lihat rebuild()
+    private final Timer rebuildTimer = new Timer(1500, e -> rebuild());
 
     StreakWidget(Host host) {
         this.host = Objects.requireNonNull(host);
+        rebuildTimer.setRepeats(false);
         window = createWindow(GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice()
                 .getDefaultConfiguration());
     }
@@ -149,8 +152,63 @@ final class StreakWidget {
         // Windows: taskbar/tray yang diklik naik menutupi widget; naikkan lagi secara berkala (tanpa fokus)
         if (Os.current().isWindows() && ++ticks % RAISE_EVERY_TICKS == 0 && window.isVisible()) {
             WinTopmost.raise(window);
+            if (!sameElements(displays, currentDisplays())) {
+                displays = currentDisplays();
+                rebuildTimer.restart(); // tunggu sampai rentetan perubahan layar selesai
+            }
         }
         face.repaint();
+    }
+
+    /**
+     * Konfigurasi default tiap monitor saat ini. Java membuat objek konfigurasi baru setiap kali Windows mengirim
+     * perubahan layar (monitor mati/nyala, resolusi, scaling), jadi identitasnya menandai perubahan itu.
+     */
+    private static List<GraphicsConfiguration> currentDisplays() {
+        var list = new ArrayList<GraphicsConfiguration>();
+        for (GraphicsDevice device : GraphicsEnvironment.getLocalGraphicsEnvironment().getScreenDevices()) {
+            list.add(device.getDefaultConfiguration());
+        }
+        return list;
+    }
+
+    /** Isi kedua list objek yang sama persis (identitas, bukan equals) dengan urutan sama. */
+    static boolean sameElements(List<?> a, List<?> b) {
+        if (a.size() != b.size()) {
+            return false;
+        }
+        for (int i = 0; i < a.size(); i++) {
+            if (a.get(i) != b.get(i)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Buat ulang window di posisi yang sama setelah perubahan layar. Setelah monitor mati lalu nyala, buffer window
+     * transparan per piksel bisa rusak: piksel semi transparan (cahaya api) tergambar sebagai lingkaran pekat.
+     */
+    private void rebuild() {
+        if (face.dragging) {
+            rebuildTimer.restart(); // jangan ganti window di tengah seretan
+            return;
+        }
+        displays = currentDisplays();
+        if (openMenu != null) {
+            openMenu.setVisible(false);
+        }
+        var location = place(window.getLocation(), window.getSize(), screens(), usableArea());
+        var gc = configurationAt(location);
+        boolean visible = window.isVisible();
+        var old = window;
+        window = createWindow(gc != null ? gc : GraphicsEnvironment.getLocalGraphicsEnvironment()
+                .getDefaultScreenDevice().getDefaultConfiguration());
+        window.setLocation(location);
+        if (visible) {
+            window.setVisible(true);
+        }
+        old.dispose();
     }
 
     /** Ukuran window = ukuran isi (tidak ikut dibesarkan OS saat pindah monitor). */
@@ -186,6 +244,9 @@ final class StreakWidget {
 
     /** @param saved posisi tersimpan, atau null untuk pojok kanan bawah layar utama */
     void show(Point saved) {
+        if (!sameElements(displays, currentDisplays())) { // layar berubah selama widget tersembunyi
+            rebuild();
+        }
         window.setSize(face.getPreferredSize());
         moveTo(place(saved, window.getSize(), screens(), usableArea()));
         window.setVisible(true);
@@ -194,6 +255,7 @@ final class StreakWidget {
 
     void hide() {
         timer.stop();
+        rebuildTimer.stop();
         window.setVisible(false);
     }
 
@@ -203,6 +265,7 @@ final class StreakWidget {
 
     void dispose() {
         timer.stop();
+        rebuildTimer.stop();
         window.dispose();
     }
 
