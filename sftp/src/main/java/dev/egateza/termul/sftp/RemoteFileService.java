@@ -48,9 +48,30 @@ public final class RemoteFileService implements AutoCloseable {
     private final SshLease lease;
     private final SftpClient sftp;
 
+    /**
+     * Channel SFTP khusus aliran data download/upload. Satu channel = satu proses sftp-server yang melayani request
+     * berurutan, jadi listing folder (atau stat) yang lewat channel yang sama harus menunggu read/write besar yang
+     * sudah antre; di link yang dibatasi, pindah folder saat transfer terasa macet. Dibuka lazy.
+     */
+    private SftpClient bulk; // guarded by this; null = belum dibuka
+    private boolean bulkClosed; // guarded by this
+
     private RemoteFileService(SshLease lease, SftpClient sftp) {
         this.lease = lease;
         this.sftp = sftp;
+    }
+
+    /** Channel untuk aliran data transfer; kalau server menolak channel kedua (mis. MaxSessions), pakai channel utama. */
+    private synchronized SftpClient bulk() {
+        if (bulk == null && !bulkClosed) {
+            try {
+                bulk = SftpClientFactory.instance().createSftpClient(lease.connection().session());
+            } catch (IOException | RuntimeException e) {
+                log.warn("Channel SFTP kedua untuk transfer tidak bisa dibuka, memakai channel utama: {}", e.toString());
+                bulkClosed = true;
+            }
+        }
+        return bulk != null && bulk.isOpen() ? bulk : sftp;
     }
 
     /** Membuka subsystem SFTP. Lease menjadi milik service (dilepas di {@link #close()}). */
@@ -247,7 +268,7 @@ public final class RemoteFileService implements AutoCloseable {
         try {
             Files.createDirectories(dir);
             tmp = Files.createTempFile(dir, "." + local.getFileName(), ".part");
-            try (InputStream in = sftp.read(remote, BUFFER); OutputStream out = Files.newOutputStream(tmp)) {
+            try (InputStream in = bulk().read(remote, BUFFER); OutputStream out = Files.newOutputStream(tmp)) {
                 copy(in, out, total, listener);
             }
             Files.move(tmp, local, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
@@ -288,7 +309,7 @@ public final class RemoteFileService implements AutoCloseable {
             Integer mode = existing != null ? Integer.valueOf(existing.getPermissions() & 07777) : newFileMode;
             long total = Files.size(local);
             try (InputStream in = Files.newInputStream(local);
-                 OutputStream out = sftp.write(tmp, BUFFER, OpenMode.Write, OpenMode.Create, OpenMode.Exclusive)) {
+                 OutputStream out = bulk().write(tmp, BUFFER, OpenMode.Write, OpenMode.Create, OpenMode.Exclusive)) {
                 tmpCreated = true;
                 if (existing != null) {
                     requireSameOwner(existing, tmp, remote); // temp dibuat user login: uid-nya = uid user login
@@ -464,6 +485,19 @@ public final class RemoteFileService implements AutoCloseable {
 
     @Override
     public void close() {
+        SftpClient extra;
+        synchronized (this) {
+            extra = bulk;
+            bulk = null;
+            bulkClosed = true;
+        }
+        if (extra != null) {
+            try {
+                extra.close();
+            } catch (IOException e) {
+                log.debug("Menutup SFTP transfer: {}", e.toString());
+            }
+        }
         try {
             sftp.close();
         } catch (IOException e) {
