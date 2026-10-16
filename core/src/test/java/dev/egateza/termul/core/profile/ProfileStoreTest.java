@@ -39,6 +39,22 @@ class ProfileStoreTest {
     }
 
     @Test
+    void exportMenulisSalinanYangBisaDimuatLagi() {
+        var store = new ProfileStore(dir.resolve("profiles.json"));
+        var p = HostProfile.create("web", "10.0.0.5", "ega");
+        store.save(p);
+        store.addGroup("Staging");
+        Path target = dir.resolve("out/termul-profiles.json");
+
+        int count = store.exportTo(target);
+
+        assertThat(count).isEqualTo(1);
+        var loaded = new ProfileStore(target).load();
+        assertThat(loaded.profiles()).containsExactly(p);
+        assertThat(loaded.allGroups()).containsExactly("Staging");
+    }
+
+    @Test
     void distroWslIkutTersimpan() {
         Path file = dir.resolve("profiles.json");
         var p = HostProfile.create("Ubuntu", "localhost", "ega").withWslDistro("Ubuntu-24.04");

@@ -664,6 +664,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                 () -> newHost(hostTree.selectedGroup())));
         file.add(menuItem(AppIcon.FOLDER_PLUS, I18n.t("main.menu.file.newGroup"), null, () -> newGroup(hostTree.selectedGroup())));
         file.add(menuItem(null, I18n.t("main.menu.file.importSshConfig"), null, this::importSshConfig));
+        file.add(menuItem(null, I18n.t("main.menu.file.exportProfiles"), null, this::exportProfiles));
         if (Os.current().isWindows()) {
             // selalu terlihat di Windows; kalau manajemen WSL mati, user ditawari untuk menyalakannya
             file.add(menuItem(AppIcon.TERMINAL, I18n.t("main.menu.file.wslManager"), null, this::openWslManager));
@@ -1096,6 +1097,29 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                 mutate(I18n.t("main.error.saveProfile"), () -> toSave.forEach(store::save));
             }
         }, err -> Dialogs.error(this, I18n.t("sshconfig.title"), err));
+    }
+
+    /** Ekspor semua profil (tanpa secret) ke file JSON pilihan user: pilih file di EDT, tulis di io. */
+    private void exportProfiles() {
+        var chooser = new javax.swing.JFileChooser();
+        chooser.setDialogTitle(I18n.t("export.title"));
+        chooser.setSelectedFile(new java.io.File("termul-profiles.json"));
+        chooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("JSON (*.json)", "json"));
+        if (chooser.showSaveDialog(this) != javax.swing.JFileChooser.APPROVE_OPTION) {
+            return;
+        }
+        java.nio.file.Path target = chooser.getSelectedFile().toPath();
+        if (!target.getFileName().toString().toLowerCase(java.util.Locale.ROOT).endsWith(".json")) {
+            target = target.resolveSibling(target.getFileName() + ".json");
+        }
+        if (java.nio.file.Files.exists(target)
+                && !Dialogs.confirm(this, I18n.t("export.title"), I18n.t("export.overwrite", target.toString()))) {
+            return;
+        }
+        java.nio.file.Path out = target;
+        UiAsync.run(io, () -> store.exportTo(out),
+                count -> Dialogs.info(this, I18n.t("export.title"), I18n.t("export.done", count, out.toString())),
+                err -> Dialogs.error(this, I18n.t("export.title"), err));
     }
 
     private void configureValidationHooks() {

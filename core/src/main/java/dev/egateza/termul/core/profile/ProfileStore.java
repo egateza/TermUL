@@ -141,6 +141,24 @@ public final class ProfileStore {
         });
     }
 
+    /**
+     * Menulis salinan seluruh profil (format sama dengan {@code profiles.json}) ke {@code target} secara atomic.
+     * Tidak berisi secret karena {@link HostProfile} memang tidak menyimpannya. Melakukan disk I/O.
+     *
+     * @return jumlah profil yang diekspor
+     */
+    public int exportTo(Path target) {
+        Objects.requireNonNull(target, "target");
+        ProfileSnapshot s = snapshot;
+        try {
+            AtomicFiles.write(target, mapper.writeValueAsBytes(s));
+        } catch (IOException e) {
+            throw new ProfileStoreException("Gagal mengekspor profil ke: " + target, e);
+        }
+        log.info("Mengekspor {} profil ke {}", s.profiles().size(), target);
+        return s.profiles().size();
+    }
+
     private ProfileSnapshot mutate(java.util.function.UnaryOperator<ProfileSnapshot> change) {
         ProfileSnapshot updated;
         synchronized (lock) {
