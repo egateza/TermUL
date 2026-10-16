@@ -246,6 +246,11 @@ public final class EditManager implements AutoCloseable {
                             links.release(profile);
                             return; // dibatalkan
                         }
+                        if (needsSudo && !useSudo) {
+                            links.release(profile);
+                            view(profile, remotePath); // tanpa sudo = salinan lihat-saja, bukan sesi yang menolak setiap save
+                            return;
+                        }
                         if (useSudo) {
                             sudo = new SudoWriter(sudoPasswords.apply(profile), validationHooks);
                         }
@@ -275,10 +280,12 @@ public final class EditManager implements AutoCloseable {
                     if (useSudo == null) {
                         return; // dibatalkan: sesi tetap ada (tracker), editor tidak dibuka
                     }
-                    if (useSudo && entry.sudo == null) {
+                    if (!useSudo) {
+                        view(profile, remotePath); // sesi yang ada dibiarkan; yang dibuka salinan lihat-saja
+                        return;
+                    }
+                    if (entry.sudo == null) {
                         upgradeToSudo(entry);
-                    } else if (!useSudo && entry.sudo != null) {
-                        downgradeToViewOnly(entry);
                     }
                 }
                 if (created == null && !refreshFromServer(entry)) {
@@ -306,16 +313,7 @@ public final class EditManager implements AutoCloseable {
         fireChanged();
     }
 
-    /** Sesi sudo dibuka lagi dengan pilihan "Lihat saja": save berikutnya lewat SFTP biasa (dan ditolak). */
-    private void downgradeToViewOnly(Entry entry) {
-        entry.session.switchUploader(RemoteEditSession.SFTP_UPLOADER);
-        entry.sudo = null;
-        log.info("Edit {} dialihkan ke lihat saja (tanpa sudo)", entry.session.remotePath());
-        activity(entry.profile, Level.INFO, I18n.t("edit.activity.switchedToViewOnly", entry.session.remotePath()));
-        fireChanged();
-    }
-
-    /** File tidak bisa ditulis user login. @return true = sudo, false = tetap SFTP biasa, null = batal */
+    /** File tidak bisa ditulis user login. @return true = sudo, false = lihat saja (tanpa sudo), null = batal */
     private Boolean askSudo(HostProfile profile, String remotePath) {
         Object[] choices = {I18n.t("edit.sudo.useSudo"), I18n.t("edit.sudo.withoutSudo"), I18n.t("edit.common.cancel")};
         int choice = ask(I18n.t("edit.sudo.title", remotePath),
