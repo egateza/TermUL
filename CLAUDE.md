@@ -87,6 +87,19 @@ Arah dependensi: `app → terminal, sftp → ssh → core`, `vault → core`, da
 - Constructor injection manual (tanpa framework DI). Wiring dilakukan di modul `app`.
 - Setiap fitur baru disertai unit test. Fitur SSH/SFTP juga disertai integration test (Testcontainers).
 
+## Menjalankan perintah di PowerShell (Windows)
+
+- **Jangan pakai `2>&1` pada perintah native** (`mvnw.cmd`, `git`, `.\tools\release.ps1`, dll.). Di Windows PowerShell 5.1,
+  redirect itu membungkus tiap baris stderr jadi `ErrorRecord` dan menandai perintah gagal (`NativeCommandError`), walau exit
+  code-nya 0. Peringatan JDK `WARNING: A terminally deprecated method in sun.misc.Unsafe` dari Maven wrapper adalah stderr
+  yang tidak berbahaya, tapi dengan `2>&1` ia membuat `tools/release.ps1` berhenti.
+- Jalankan apa adanya: `.\tools\release.ps1 -NotesFile <file>`. Stderr sudah ditangkap oleh tool. Untuk memotong output,
+  pakai `| Select-Object -Last N` tanpa `2>&1`.
+- Jangan menjalankan ulang lewat `powershell.exe -ExecutionPolicy Bypass -File ...` sebagai jalan keluar; itu memicu
+  penolakan izin dan tidak perlu.
+- Rilis (`docs/RELEASE.md`) butuh working tree bersih. Perubahan yang belum di-commit milik user di-stash sementara
+  (`git stash push <path>`), lalu dikembalikan dengan `git stash pop` setelah rilis. Jangan ikut meng-commit-nya.
+
 ## Status saat ini
 
 - **Fase 1–6 selesai (kode + test)**, acceptance manual Fase 1–5 lulus (2026-10-01); backlog Fase 6 belum. Progres & langkah berikutnya selalu di `plan-recap.md`.
