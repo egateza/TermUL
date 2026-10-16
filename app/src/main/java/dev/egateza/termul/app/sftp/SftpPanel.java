@@ -114,6 +114,9 @@ public class SftpPanel extends JPanel {
          */
         void edit(HostProfile profile, String remotePath, String command);
 
+        /** Lihat saja: salinan sementara dibuka dengan aplikasi default file; perubahan tidak pernah di-upload. */
+        void view(HostProfile profile, String remotePath);
+
         /** Edit sebagai root: perubahan dipasang lewat sudo (backup, validasi, rollback). */
         void editAsRoot(HostProfile profile, String remotePath);
 
@@ -420,7 +423,10 @@ public class SftpPanel extends JPanel {
         var edit = menuItem(I18n.t("sftp.menu.edit"), () -> editSelected(null));
         var editWith = new javax.swing.JMenu(I18n.t("sftp.menu.editWith"));
         var editAsRoot = menuItem(I18n.t("sftp.menu.editAsRoot"), this::editSelectedAsRoot);
+        var view = menuItem(I18n.t("sftp.menu.view"), this::viewSelected);
+        view.setToolTipText(I18n.t("sftp.menu.view.tip"));
         menu.add(open);
+        menu.add(view);
         menu.add(edit);
         menu.add(editWith);
         menu.add(editAsRoot);
@@ -431,6 +437,7 @@ public class SftpPanel extends JPanel {
                 selectRowUnderPointer();
                 boolean file = selectedEntries().stream().anyMatch(SftpPanel::maybeFile);
                 open.setEnabled(file);
+                view.setEnabled(file);
                 edit.setEnabled(file);
                 editWith.setEnabled(file);
                 editAsRoot.setEnabled(file);
@@ -960,6 +967,11 @@ public class SftpPanel extends JPanel {
         selectedEntries().stream().filter(SftpPanel::maybeFile).findFirst().ifPresent(entry -> {
             editActions.edit(profile, entry.path(), command);
         });
+    }
+
+    private void viewSelected() {
+        selectedEntries().stream().filter(SftpPanel::maybeFile).findFirst()
+                .ifPresent(entry -> editActions.view(profile, entry.path()));
     }
 
     private void editSelectedAsRoot() {

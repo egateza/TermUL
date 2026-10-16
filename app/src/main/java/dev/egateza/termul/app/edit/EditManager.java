@@ -97,6 +97,8 @@ public final class EditManager implements AutoCloseable {
     private final EditWatcher watcher;
     private final Function<HostProfile, SudoWriter.SudoPassword> sudoPasswords;
     private final Supplier<ValidationHooks> validationHooks;
+    /** Folder salinan "lihat saja" yang masih ada → profil pemiliknya; dihapus di {@link #closeProfile} / {@link #close()}. */
+    private static final Map<Path, java.util.UUID> viewDirs = new ConcurrentHashMap<>();
     private final Map<Key, Entry> entries = new ConcurrentHashMap<>();
     private final Map<Path, Entry> byLocal = new ConcurrentHashMap<>();
     private final CopyOnWriteArrayList<Runnable> listeners = new CopyOnWriteArrayList<>();
@@ -163,6 +165,60 @@ public final class EditManager implements AutoCloseable {
     /** Buka file untuk diedit sebagai root: perubahan dipasang lewat sudo (backup + validasi + rollback). */
     public void openAsRoot(HostProfile profile, String remotePath) {
         open(profile, remotePath, null, true);
+    }
+
+    /**
+     * Lihat saja: salinan sementara (read-only) dibuka di editor lokal, tanpa sesi edit, watcher, atau upload.
+     * Mengubah dan menyimpan salinan itu tidak pernah menyentuh file di server. Selalu dibuka dengan aplikasi default
+     * file (association OS). Salinan dihapus di {@link #close()}.
+     */
+    public void view(HostProfile profile, String remotePath) {
+        sshOps.execute(() -> {
+            Path dir = null;
+            boolean linked = false;
+            try {
+                activity(profile, Level.INFO, I18n.t("edit.activity.downloading", remotePath));
+                SftpConnection link = links.acquire(profile);
+                linked = true;
+                try {
+                    dir = Files.createTempDirectory("termul-view-");
+                    viewDirs.put(dir, profile.id());
+                    Path local = dir.resolve(dev.egateza.termul.sftp.RemotePaths.name(remotePath));
+                    link.ensureLive().download(remotePath, local, dev.egateza.termul.sftp.TransferListener.NONE);
+                    if (!local.toFile().setReadOnly()) {
+                        log.debug("Salinan lihat-saja {} tidak bisa ditandai read-only", local);
+                    }
+                    launcher.launch(local, EditorLauncher.SYSTEM_DEFAULT);
+                    activity(profile, Level.INFO, I18n.t("edit.activity.viewing", remotePath));
+                } finally {
+                    links.release(profile);
+                    linked = false;
+                }
+            } catch (Exception e) {
+                if (linked) {
+                    links.release(profile);
+                }
+                deleteViewCopy(dir);
+                activity(profile, Level.ERROR, I18n.t("edit.activity.openFailed", remotePath, e.getMessage()));
+                showError(I18n.t("edit.error.openFailed", remotePath), e);
+            }
+        });
+    }
+
+    private static void deleteViewCopy(Path dir) {
+        if (dir == null) {
+            return;
+        }
+        try (var files = Files.list(dir)) {
+            for (Path f : (Iterable<Path>) files::iterator) {
+                f.toFile().setWritable(true);
+                Files.deleteIfExists(f);
+            }
+            Files.deleteIfExists(dir);
+            viewDirs.remove(dir);
+        } catch (IOException e) { // mis. file masih dikunci aplikasi; tetap terdaftar, dicoba lagi saat close()
+            log.warn("Salinan lihat-saja {} tidak bisa dihapus: {}", dir, e.toString());
+        }
     }
 
     /**
@@ -510,6 +566,11 @@ public final class EditManager implements AutoCloseable {
                     close(entry);
                 }
             }
+            viewDirs.forEach((dir, owner) -> {
+                if (owner.equals(profileId)) {
+                    deleteViewCopy(dir); // salinan "lihat saja" ikut hilang; editor yang masih terbuka tidak terpengaruh
+                }
+            });
         });
     }
 
@@ -576,6 +637,7 @@ public final class EditManager implements AutoCloseable {
     @Override
     public void close() {
         watcher.close();
+        List.copyOf(viewDirs.keySet()).forEach(EditManager::deleteViewCopy);
         for (var item : entries.entrySet()) {
             Entry e = item.getValue();
             if (!entries.remove(item.getKey(), e)) {

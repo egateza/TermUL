@@ -2544,6 +2544,11 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                     }
 
                     @Override
+                    public void view(HostProfile profile, String remotePath) {
+                        ctx.edits().view(profile, remotePath);
+                    }
+
+                    @Override
                     public void editAsRoot(HostProfile profile, String remotePath) {
                         ctx.edits().openAsRoot(profile, remotePath);
                     }
