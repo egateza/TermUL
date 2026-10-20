@@ -40,10 +40,12 @@ public class MakeAppIcon {
             entries.add(png(draw(size)));
         }
         Files.write(ico, ico(ICO_SIZES, entries));
+        Path icns = ico.resolveSibling("termul.icns");
+        Files.write(icns, icns());
         for (int size : WINDOW_SIZES) {
             ImageIO.write(draw(size), "png", pngDir.resolve("app-" + size + ".png").toFile());
         }
-        System.out.println("Ditulis: " + ico + " dan " + WINDOW_SIZES.length + " PNG di " + pngDir);
+        System.out.println("Ditulis: " + ico + ", " + icns + " dan " + WINDOW_SIZES.length + " PNG di " + pngDir);
     }
 
     static BufferedImage draw(int size) {
@@ -98,5 +100,22 @@ public class MakeAppIcon {
         }
         pngs.forEach(buf::put);
         return buf.array();
+    }
+
+    /** Format ICNS (macOS, jpackage): header 'icns' + panjang, lalu entry tipe OSType + panjang + PNG (big endian). */
+    private static byte[] icns() throws IOException {
+        String[] types = {"icp4", "icp5", "icp6", "ic07", "ic08", "ic09", "ic10", "ic11", "ic12", "ic13", "ic14"};
+        int[] sizes = {16, 32, 64, 128, 256, 512, 1024, 32, 64, 256, 512};
+        var body = new ByteArrayOutputStream();
+        for (int i = 0; i < types.length; i++) {
+            byte[] data = png(draw(sizes[i]));
+            body.write(types[i].getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+            body.write(ByteBuffer.allocate(4).putInt(8 + data.length).array());
+            body.write(data);
+        }
+        var out = ByteBuffer.allocate(8 + body.size());
+        out.put("icns".getBytes(java.nio.charset.StandardCharsets.US_ASCII)).putInt(8 + body.size());
+        out.put(body.toByteArray());
+        return out.array();
     }
 }
