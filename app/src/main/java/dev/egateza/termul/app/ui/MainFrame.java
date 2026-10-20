@@ -21,6 +21,9 @@ import dev.egateza.termul.app.startup.AutoStart;
 import dev.egateza.termul.app.terminal.BackgroundImages;
 import dev.egateza.termul.app.terminal.SplitPanes;
 import dev.egateza.termul.app.terminal.TerminalSettings;
+import dev.egateza.termul.app.terminal.LocalTerminalTab;
+import dev.egateza.termul.localterm.LocalTerminalFactory;
+import dev.egateza.termul.app.terminal.TermPane;
 import dev.egateza.termul.app.terminal.TerminalTab;
 import dev.egateza.termul.app.ui.anim.AnimationChoice;
 import dev.egateza.termul.app.ui.anim.LoadingPanel;
@@ -105,9 +108,15 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private final JTabbedPane tabs = new JTabbedPane(JTabbedPane.TOP, JTabbedPane.SCROLL_TAB_LAYOUT);
     /** Tab yang dipilih dengan Ctrl+klik untuk digabung (Ctrl+G), urutan pilih. EDT. */
     private final java.util.Set<java.awt.Component> marked = new java.util.LinkedHashSet<>();
+    private final LocalTerminalFactory localTerminals = new LocalTerminalFactory(Os.current());
+    /** Nama tab yang diganti user (klik kanan → Ganti nama), per isi tab; hanya selama aplikasi berjalan. EDT. */
+    private final java.util.Map<java.awt.Component, String> customTitles = new java.util.HashMap<>();
     private final RoundedPanel center = new RoundedPanel();
     /** Isi area terminal selama belum ada tab: jam, host terakhir/favorit, animasi. */
     private final HomeScreen home = new HomeScreen(this::open);
+    /** Item menu per aksi shortcut (accelerator-nya diganti saat user mengubah shortcut). EDT. */
+    private final java.util.EnumMap<ShortcutAction, JMenuItem> actionItems = new java.util.EnumMap<>(ShortcutAction.class);
+    private FloatingButton newHostFab; // EDT; tooltip berisi shortcut host baru
     /** Beranda dengan tombol mengambang "Host baru" di pojok kanan bawah. */
     private final FloatingOverlay homeView = new FloatingOverlay();
     /** Layar idle (glass pane): menutupi window setelah sekian menit tanpa input atau lewat shortcut. */
@@ -135,6 +144,8 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private JMenuItem miDuplicate;
     private JMenuItem miReconnect;
     private JMenuItem miCloseTab;
+    private JMenuItem miNextTab;
+    private JMenuItem miPreviousTab;
     private JMenuItem miSftp;
     /** Terminal → tampilan SFTP dua panel (default panel baru, berlaku juga ke panel yang terbuka). */
     private final JCheckBoxMenuItem sftpDualToggle = new JCheckBoxMenuItem(I18n.t("main.menu.terminal.sftpDual"));
@@ -211,12 +222,19 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         this.updatePrompter = new UpdatePrompter(() -> modalDialogShowing() || !isShowing(),
                 () -> updateDialog != null && updateDialog.isShowing(), version -> openUpdateDialog(true));
         this.hostTree = new HostTreePanel(this);
+        hostTree.setLocalChoices(localChoices());
+        ctx.locals().store().addListener(s -> SwingUtilities.invokeLater(this::refreshLocalChoices));
+        this.highlightSettings = ctx.highlights().snapshot();
+        ctx.highlights().addListener(s -> SwingUtilities.invokeLater(() -> highlightChanged(s)));
+        ctx.shortcuts().addListener(o -> SwingUtilities.invokeLater(
+                () -> applyShortcuts(KeyBindings.of(o, Os.current().isMac()))));
         this.wsl = new WslController(this, ctx.wsl(),
                 () -> Os.current().isWindows() && ctx.config().current().wslManager(), store::snapshot, ctx.sshOps(),
                 new WslController.Host() {
                     @Override
                     public void wslRunningChanged(List<String> running) {
                         hostTree.setWslRunning(running);
+                        refreshLocalChoices(); // distro WSL terpasang ikut jadi pilihan terminal lokal
                     }
 
                     @Override
@@ -312,34 +330,38 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                 SwingUtilities.invokeLater(tab::focusTerminal);
             }
         });
-        // Ctrl+klik tab (Cmd+klik di Mac) = pilih/batal pilih untuk digabung (Ctrl+G); klik biasa membatalkan semua pilihan
+        // Ctrl+klik tab (Cmd+klik di Mac) = pilih/batal pilih untuk digabung (Ctrl+G); klik biasa membatalkan semua
+        // pilihan; klik kanan = menu tab (popup trigger: saat ditekan di Mac, saat dilepas di Windows)
         tabs.addMouseListener(new java.awt.event.MouseAdapter() {
             @Override
             public void mousePressed(java.awt.event.MouseEvent e) {
-                if (!SwingUtilities.isLeftMouseButton(e)) {
-                    return;
+                if (maybeTabMenu(e) || !SwingUtilities.isLeftMouseButton(e)) {
+                    return; // ⌃klik di Mac = klik kanan, jangan sampai membatalkan tanda gabung
                 }
                 int index = tabs.indexAtLocation(e.getX(), e.getY());
                 if (index < 0) {
                     return;
                 }
                 if (Shortcuts.isMenuDown(e)) {
-                    var c = tabs.getComponentAt(index);
-                    if (!marked.remove(c)) {
-                        marked.add(c);
-                    }
+                    toggleMark(tabs.getComponentAt(index));
                 } else if (!marked.isEmpty()) {
                     marked.clear();
+                    refreshTitles();
+                    updateTerminalMenu();
                 }
-                refreshTitles();
-                updateTerminalMenu();
+            }
+
+            @Override
+            public void mouseReleased(java.awt.event.MouseEvent e) {
+                maybeTabMenu(e);
             }
         });
+        TabDragSupport.install(tabs, this::moveTab);
         var idleAnimation = AnimationChoice.fromId(ctx.config().current().idleAnimation());
         home.setAnimation(idleAnimation);
         homeView.setBase(home);
-        var newHostFab = new FloatingButton(AppIcon.PLUS, null, FloatingStyle.Kind.PRIMARY, FloatingButton.Size.NORMAL);
-        newHostFab.setToolTipText(I18n.t("fab.newHost", Shortcuts.text(Shortcuts.menu(KeyEvent.VK_N))));
+        newHostFab = new FloatingButton(AppIcon.PLUS, null, FloatingStyle.Kind.PRIMARY, FloatingButton.Size.NORMAL);
+        newHostFab.setToolTipText(I18n.t("fab.newHost", Shortcuts.text(ShortcutAction.NEW_HOST)));
         newHostFab.getAccessibleContext().setAccessibleName(I18n.t("main.menu.file.newHost"));
         newHostFab.addActionListener(e -> newHost(hostTree.selectedGroup()));
         homeView.addFloating(newHostFab, FloatingOverlay.Anchor.BOTTOM_RIGHT);
@@ -377,7 +399,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         hostTree.setMinimumSize(new Dimension(160, 100));
         // mode tombol melayang: daftar host tampil di atas area terminal (terminal tidak di-resize)
         drawer = new HostDrawer(getLayeredPane(), center, hostTree,
-                () -> currentTab().ifPresent(TerminalTab::focusTerminal));
+                () -> currentTab().ifPresent(TermPane::focusTerminal));
         drawer.setOpacity(ctx.config().current().hostButtonOpacity());
         drawer.setStyle(hostToggleStyle, false);
         // panel log di bawah; disembunyikan dengan setVisible supaya tab terminal tidak di-reparent
@@ -424,6 +446,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             tray.setSnapshot(s);
             wsl.profilesChanged();
             reloadTerminalColors(); // warna khusus host / environment yang diubah di Edit host
+            allPanes().forEach(this::applyHighlight); // host pindah grup: profil highlight bisa berubah
         }));
         // belum ada tab: langsung tampilkan daftar host (mode tombol melayang), menutup otomatis saat host dibuka
         SwingUtilities.invokeLater(() -> drawer.setOpen(true));
@@ -463,7 +486,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
     private void hideIdle() {
         idleOverlay.setVisible(false);
-        SwingUtilities.invokeLater(() -> currentTab().ifPresent(TerminalTab::focusTerminal));
+        SwingUtilities.invokeLater(() -> currentTab().ifPresent(TermPane::focusTerminal));
     }
 
     /**
@@ -497,9 +520,9 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     }
 
     /**
-     * Shortcut aplikasi (Ctrl+Shift+…, Ctrl+F5; di Mac Cmd+Shift+…, Cmd+R, Cmd+W) ditangkap sebelum JediTerm, supaya
-     * tetap jalan saat fokus di terminal dan tidak ikut terkirim ke remote. Shortcut shell biasa (Ctrl+F, Ctrl+N, ...)
-     * tidak disentuh. Lihat {@link Shortcuts#isAppCombo}.
+     * Shortcut aplikasi (Ctrl+Shift+…, Ctrl+F5; di Mac Cmd+Shift+…, Cmd+R, Cmd+W, plus yang diganti user) ditangkap
+     * sebelum JediTerm, supaya tetap jalan saat fokus di terminal dan tidak ikut terkirim ke remote. Shortcut shell biasa
+     * (Ctrl+F, Ctrl+N, ...) tidak disentuh. Lihat {@link Shortcuts#isAppCombo}.
      */
     private boolean dispatchHotkey(KeyEvent e) {
         if (dispatchIdleKey(e)) {
@@ -510,22 +533,32 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             e.consume();
             return true;
         }
-        if (e.getID() != KeyEvent.KEY_PRESSED || !Shortcuts.isMenuDown(e) || e.isAltDown()) {
+        if (e.getID() != KeyEvent.KEY_PRESSED || e.isAltDown()) {
             return false;
         }
-        // Ctrl+G hanya diambil kalau ada tab yang dipilih untuk digabung; selain itu tetap ^G ke shell
-        if (e.getKeyCode() == KeyEvent.VK_G && !e.isShiftDown() && marked.size() >= 2
-                && e.getComponent() != null && SwingUtilities.getWindowAncestor(e.getComponent()) == this) {
+        var ks = KeyStroke.getKeyStrokeForEvent(e);
+        var action = Shortcuts.bindings().actionFor(ks).orElse(null);
+        if (action == null || e.getComponent() == null || SwingUtilities.getWindowAncestor(e.getComponent()) != this) {
+            return false;
+        }
+        // Gabung (Ctrl+G) diambil kalau ada tab yang dipilih untuk digabung; selain itu tetap ^G ke shell
+        if (action == ShortcutAction.GROUP && marked.size() >= 2) {
             groupMarkedTabs();
             e.consume();
             return true;
         }
-        if (!Shortcuts.isAppCombo(KeyStroke.getKeyStrokeForEvent(e)) || e.getComponent() == null
-                || SwingUtilities.getWindowAncestor(e.getComponent()) != this) {
+        if (!Shortcuts.isAppCombo(ks)) {
             return false;
         }
+        if (action.tabNumber() > 0) { // Ctrl/⌘+1..9, tanpa item menu
+            if (action.tabNumber() <= tabs.getTabCount()) {
+                selectTab(action.tabNumber() - 1);
+            }
+            e.consume(); // tab tidak ada: tetap tidak dikirim ke shell
+            return true;
+        }
         updateTerminalMenu(); // status bisa berubah sejak menu terakhir dibuka
-        JMenuItem item = findAccelerator(getJMenuBar(), KeyStroke.getKeyStrokeForEvent(e));
+        JMenuItem item = actionItems.get(action);
         if (item == null || !item.isEnabled()) {
             return false;
         }
@@ -543,11 +576,14 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             return;
         }
         var tab = currentTab();
-        var state = TerminalMenuState.of(tab.isPresent(), tab.map(TerminalTab::isConnected).orElse(false),
-                tab.map(TerminalTab::isSftpOpen).orElse(false), tab.map(t -> !t.isSftpOnly()).orElse(true));
+        var state = tab.orElse(null) instanceof LocalTerminalTab ? TerminalMenuState.LOCAL
+                : TerminalMenuState.of(tab.isPresent(), tab.map(TermPane::isConnected).orElse(false),
+                        currentSsh().map(TerminalTab::isSftpOpen).orElse(false), tab.map(TermPane::hasTerminal).orElse(true));
         for (var item : new JMenuItem[] {miDuplicate, miReconnect, miCloseTab, miZoomIn, miZoomOut, miZoomReset}) {
             item.setEnabled(state.tabActions());
         }
+        miNextTab.setEnabled(tabs.getTabCount() > 1);
+        miPreviousTab.setEnabled(tabs.getTabCount() > 1);
         miSftp.setEnabled(state.sftp());
         miInjectSudo.setEnabled(state.inject());
         miInjectRoot.setEnabled(state.inject());
@@ -660,8 +696,11 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private JMenuBar buildMenu() {
         var bar = new JMenuBar();
         var file = new JMenu(I18n.t("main.menu.file"));
-        file.add(menuItem(AppIcon.SERVER, I18n.t("main.menu.file.newHost"), Shortcuts.menu(KeyEvent.VK_N),
+        file.add(actionItem(AppIcon.PLUS, I18n.t("main.menu.file.newTab"), ShortcutAction.NEW_TAB, this::showQuickOpen));
+        file.add(actionItem(AppIcon.SERVER, I18n.t("main.menu.file.newHost"), ShortcutAction.NEW_HOST,
                 () -> newHost(hostTree.selectedGroup())));
+        file.add(actionItem(AppIcon.TERMINAL, I18n.t("main.menu.file.newLocal"), ShortcutAction.NEW_LOCAL,
+                this::openLocalTerminal));
         file.add(menuItem(AppIcon.FOLDER_PLUS, I18n.t("main.menu.file.newGroup"), null, () -> newGroup(hostTree.selectedGroup())));
         file.add(menuItem(null, I18n.t("main.menu.file.importSshConfig"), null, this::importSshConfig));
         file.add(menuItem(null, I18n.t("main.menu.file.exportProfiles"), null, this::exportProfiles));
@@ -669,29 +708,35 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             // selalu terlihat di Windows; kalau manajemen WSL mati, user ditawari untuk menyalakannya
             file.add(menuItem(AppIcon.TERMINAL, I18n.t("main.menu.file.wslManager"), null, this::openWslManager));
         }
-        file.add(menuItem(null, I18n.t("main.menu.file.findHost"), Shortcuts.menu(KeyEvent.VK_F),
+        file.add(actionItem(null, I18n.t("main.menu.file.findHost"), ShortcutAction.FIND_HOST,
                 () -> {
                     showHostList();
                     SwingUtilities.invokeLater(hostTree::focusSearch);
                 }));
+        file.add(actionItem(null, I18n.t("main.menu.file.toggleHostList"), ShortcutAction.TOGGLE_HOST_LIST,
+                this::toggleHostList));
         file.addSeparator();
         file.add(menuItem(AppIcon.EXIT, I18n.t("main.menu.file.exit"), Shortcuts.exit(), this::exit));
         bar.add(file);
 
         var terminal = new JMenu(I18n.t("main.menu.terminal"));
-        terminal.add(miDuplicate = menuItem(null, I18n.t("main.menu.terminal.duplicate"), Shortcuts.menuShift(KeyEvent.VK_T),
-                () -> currentTab().ifPresent(t -> openTab(t.profile(), t.isSftpOnly()))));
-        terminal.add(miReconnect = menuItem(null, I18n.t("main.menu.terminal.reconnect"), Shortcuts.reconnect(),
-                () -> currentTab().ifPresent(TerminalTab::reconnect)));
-        terminal.add(miCloseTab = menuItem(null, I18n.t("main.tab.close"), Shortcuts.closeTab(),
+        terminal.add(miDuplicate = actionItem(null, I18n.t("main.menu.terminal.duplicate"), ShortcutAction.DUPLICATE_TAB,
+                () -> currentTab().ifPresent(this::duplicate)));
+        terminal.add(miReconnect = actionItem(null, I18n.t("main.menu.terminal.reconnect"), ShortcutAction.RECONNECT,
+                () -> currentTab().ifPresent(TermPane::reconnect)));
+        terminal.add(miCloseTab = actionItem(null, I18n.t("main.tab.close"), ShortcutAction.CLOSE_TAB,
                 () -> closeTab(tabs.getSelectedIndex())));
-        terminal.add(miSftp = menuItem(null, I18n.t("main.menu.terminal.sftp"), Shortcuts.menuShift(KeyEvent.VK_F),
-                () -> currentTab().ifPresent(TerminalTab::toggleSftp)));
+        terminal.add(miNextTab = actionItem(null, I18n.t("main.menu.terminal.nextTab"), ShortcutAction.NEXT_TAB,
+                () -> cycleTab(1)));
+        terminal.add(miPreviousTab = actionItem(null, I18n.t("main.menu.terminal.previousTab"), ShortcutAction.PREVIOUS_TAB,
+                () -> cycleTab(-1)));
+        terminal.add(miSftp = actionItem(null, I18n.t("main.menu.terminal.sftp"), ShortcutAction.SFTP,
+                () -> currentSsh().ifPresent(TerminalTab::toggleSftp)));
         sftpDualToggle.setSelected(AppConfig.SFTP_DUAL.equals(ctx.config().current().sftpLayout()));
         sftpDualToggle.setToolTipText(I18n.t("main.menu.terminal.sftpDual.tooltip"));
         sftpDualToggle.addActionListener(e -> {
             boolean on = sftpDualToggle.isSelected();
-            allPanes().forEach(t -> t.setSftpDualPane(on));
+            sshPanes().forEach(t -> t.setSftpDualPane(on));
             saveSftpLayout(on);
         });
         terminal.add(sftpDualToggle);
@@ -702,31 +747,30 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         terminal.add(sftpColumns);
         terminal.add(menuItem(AppIcon.BOLT, I18n.t("main.menu.terminal.snippets"), null, this::openSnippets));
         terminal.addSeparator();
-        terminal.add(miGroup = menuItem(null, I18n.t("main.menu.terminal.group"), Shortcuts.menu(KeyEvent.VK_G),
+        terminal.add(miGroup = actionItem(null, I18n.t("main.menu.terminal.group"), ShortcutAction.GROUP,
                 this::groupMarkedTabs));
-        miGroup.setToolTipText(splitGroupHint());
-        terminal.add(miUngroup = menuItem(null, I18n.t("main.menu.terminal.ungroup"), Shortcuts.menuShift(KeyEvent.VK_G),
+        terminal.add(miUngroup = actionItem(null, I18n.t("main.menu.terminal.ungroup"), ShortcutAction.UNGROUP,
                 this::ungroupCurrent));
         terminal.add(buildSplitModeMenu());
-        terminal.add(miNextPane = menuItem(null, I18n.t("main.menu.terminal.nextPane"), Shortcuts.menuShift(KeyEvent.VK_N),
-                () -> currentGroup().map(SplitPanes::next).ifPresent(TerminalTab::focusTerminal)));
-        terminal.add(miClosePane = menuItem(null, I18n.t("main.menu.terminal.closePane"), Shortcuts.menuShift(KeyEvent.VK_X),
+        terminal.add(miNextPane = actionItem(null, I18n.t("main.menu.terminal.nextPane"), ShortcutAction.NEXT_PANE,
+                () -> currentGroup().map(SplitPanes::next).ifPresent(TermPane::focusTerminal)));
+        terminal.add(miClosePane = actionItem(null, I18n.t("main.menu.terminal.closePane"), ShortcutAction.CLOSE_PANE,
                 this::closePane));
         terminal.addSeparator();
-        terminal.add(miZoomIn = menuItem(null, I18n.t("main.menu.terminal.zoomIn"), Shortcuts.menu(KeyEvent.VK_EQUALS),
+        terminal.add(miZoomIn = actionItem(null, I18n.t("main.menu.terminal.zoomIn"), ShortcutAction.ZOOM_IN,
                 () -> currentTab().ifPresent(t -> t.zoom(1))));
-        terminal.add(miZoomOut = menuItem(null, I18n.t("main.menu.terminal.zoomOut"), Shortcuts.menu(KeyEvent.VK_MINUS),
+        terminal.add(miZoomOut = actionItem(null, I18n.t("main.menu.terminal.zoomOut"), ShortcutAction.ZOOM_OUT,
                 () -> currentTab().ifPresent(t -> t.zoom(-1))));
-        terminal.add(miZoomReset = menuItem(null, I18n.t("main.menu.terminal.zoomReset"), Shortcuts.menu(KeyEvent.VK_0),
+        terminal.add(miZoomReset = actionItem(null, I18n.t("main.menu.terminal.zoomReset"), ShortcutAction.ZOOM_RESET,
                 () -> currentTab().ifPresent(t -> t.zoom(0))));
         terminal.addSeparator();
-        terminal.add(menuItem(null, I18n.t("main.menu.terminal.editTracker"), Shortcuts.menuShift(KeyEvent.VK_E),
+        terminal.add(actionItem(null, I18n.t("main.menu.terminal.editTracker"), ShortcutAction.EDIT_TRACKER,
                 this::showEditTracker));
         terminal.addSeparator();
-        terminal.add(miInjectSudo = menuItem(null, I18n.t("main.menu.terminal.injectSudo"), Shortcuts.menuShift(KeyEvent.VK_P),
-                () -> currentTab().ifPresent(t -> t.injectSecret(SecretType.SUDO_PASSWORD, ctx.vault()))));
-        terminal.add(miInjectRoot = menuItem(null, I18n.t("main.menu.terminal.injectRoot"), Shortcuts.menuShift(KeyEvent.VK_R),
-                () -> currentTab().ifPresent(t -> t.injectSecret(SecretType.ROOT_PASSWORD, ctx.vault()))));
+        terminal.add(miInjectSudo = actionItem(null, I18n.t("main.menu.terminal.injectSudo"), ShortcutAction.INJECT_SUDO,
+                () -> currentSsh().ifPresent(t -> t.injectSecret(SecretType.SUDO_PASSWORD, ctx.vault()))));
+        terminal.add(miInjectRoot = actionItem(null, I18n.t("main.menu.terminal.injectRoot"), ShortcutAction.INJECT_ROOT,
+                () -> currentSsh().ifPresent(t -> t.injectSecret(SecretType.ROOT_PASSWORD, ctx.vault()))));
         terminal.addMenuListener(new javax.swing.event.MenuListener() {
             @Override
             public void menuSelected(javax.swing.event.MenuEvent e) {
@@ -742,10 +786,14 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             }
         });
         updateTerminalMenu();
+        refreshShortcutTexts();
         bar.add(terminal);
         bar.add(buildVaultMenu());
 
         var settings = new JMenu(I18n.t("menu.settings"));
+        settings.add(menuItem(AppIcon.TERMINAL, I18n.t("main.menu.settings.localProfiles"), null, this::manageLocalProfiles));
+        settings.add(menuItem(null, I18n.t("main.menu.settings.highlight"), null, this::configureHighlight));
+        settings.add(menuItem(null, I18n.t("main.menu.settings.shortcuts"), null, this::configureShortcuts));
         settings.add(menuItem(null, I18n.t("main.menu.settings.editors"), null, this::configureEditors));
         settings.add(menuItem(null, I18n.t("main.menu.settings.validationHooks"), null, this::configureValidationHooks));
         // semua yang mengubah tampilan dikumpulkan di satu submenu
@@ -829,7 +877,8 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         updateModeToggle();
 
         var help = new JMenu(I18n.t("main.menu.help"));
-        showLog.setAccelerator(Shortcuts.menuShift(KeyEvent.VK_L));
+        showLog.setAccelerator(Shortcuts.get(ShortcutAction.SHOW_LOG));
+        actionItems.put(ShortcutAction.SHOW_LOG, showLog);
         showLog.setToolTipText(I18n.t("main.menu.help.showLog.tooltip"));
         showLog.addActionListener(e -> setLogVisible(showLog.isSelected()));
         help.add(showLog);
@@ -1059,7 +1108,15 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
     private static String splitGroupHint() {
         return I18n.t("main.splitGroup.hint", String.valueOf(SplitPanes.MAX_PANES), Shortcuts.menuKeyName(),
-                Shortcuts.text(Shortcuts.menu(KeyEvent.VK_G)));
+                Shortcuts.text(ShortcutAction.GROUP));
+    }
+
+    private String welcomeHint() {
+        return "<html><center>" + I18n.t("main.welcome.open") + "<br>"
+                + I18n.t("main.welcome.shortcuts", Shortcuts.text(ShortcutAction.NEW_HOST),
+                        Shortcuts.text(ShortcutAction.FIND_HOST))
+                + (floatingMode() ? "<br><br>" + I18n.t("main.welcome.floatingHint") : "")
+                + "</center></html>";
     }
 
     /** Ikon aplikasi (dibuat dengan {@code tools/MakeAppIcon.java}); ukuran yang tidak ada dilewati. */
@@ -1154,11 +1211,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             body.add(hostSplit, BorderLayout.CENTER);
             updateHostToggle();
         }
-        home.setHint("<html><center>" + I18n.t("main.welcome.open") + "<br>"
-                + I18n.t("main.welcome.shortcuts", Shortcuts.text(Shortcuts.menu(KeyEvent.VK_N)),
-                        Shortcuts.text(Shortcuts.menu(KeyEvent.VK_F)))
-                + (floatingMode() ? "<br><br>" + I18n.t("main.welcome.floatingHint") : "")
-                + "</center></html>");
+        home.setHint(welcomeHint());
         syncHostToggles();
         applyPanelCorners();
         body.revalidate();
@@ -1278,6 +1331,20 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         }
     }
 
+    /** Pindah ke tab berikutnya ({@code delta} 1) atau sebelumnya (-1), berputar di ujung. EDT. */
+    private void cycleTab(int delta) {
+        int count = tabs.getTabCount();
+        if (count > 1) {
+            selectTab(Math.floorMod(Math.max(tabs.getSelectedIndex(), 0) + delta, count));
+        }
+    }
+
+    /** Pilih tab dan fokus ke panel terminal aktifnya, supaya bisa langsung mengetik. EDT. */
+    private void selectTab(int index) {
+        tabs.setSelectedIndex(index);
+        SwingUtilities.invokeLater(() -> currentTab().ifPresent(TermPane::focusTerminal));
+    }
+
     /** Pastikan daftar host terlihat (untuk Ctrl+F): membuka laci atau panel di samping. */
     private void showHostList() {
         if (floatingMode()) {
@@ -1296,7 +1363,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             hostWidth = Math.max(160, hostSplit.getDividerLocation());
             var owner = KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
             if (owner != null && SwingUtilities.isDescendingFrom(owner, hostTree)) {
-                currentTab().ifPresent(TerminalTab::focusTerminal);
+                currentTab().ifPresent(TermPane::focusTerminal);
             }
         }
         hostTree.setVisible(visible);
@@ -1393,7 +1460,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
     private void applyCursor(AppConfig next) {
         ctx.terminalSettings().setCursorShape(TerminalSettings.cursorShapeOf(next.cursorShape(), next.cursorBlink()));
-        allPanes().forEach(TerminalTab::reloadCursor);
+        allPanes().forEach(TermPane::reloadCursor);
         mutate(I18n.t("error.saveSettings"), () -> ctx.config().save(next));
     }
 
@@ -1578,7 +1645,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     }
 
     private void reloadTerminalColors() {
-        allPanes().forEach(TerminalTab::reloadColors);
+        allPanes().forEach(TermPane::reloadColors);
     }
 
     /**
@@ -1672,7 +1739,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             }
             if (!java.util.Objects.equals(choice.terminalFamily(), config.terminalFontFamily())) {
                 ctx.terminalSettings().setFamily(choice.terminalFamily());
-                allPanes().forEach(TerminalTab::reloadFont);
+                allPanes().forEach(TermPane::reloadFont);
             }
             mutate(I18n.t("error.saveSettings"), () ->
                     ctx.config().save(ctx.config().current().withUiFontFamily(choice.uiFamily())
@@ -1746,7 +1813,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private JMenu buildIdleMenu() {
         var menu = new JMenu(I18n.t("main.menu.settings.idle"));
         menu.setToolTipText(I18n.t("main.menu.settings.idle.tooltip"));
-        menu.add(menuItem(null, I18n.t("main.menu.settings.idle.now"), Shortcuts.menuShift(KeyEvent.VK_I), this::showIdle));
+        menu.add(actionItem(null, I18n.t("main.menu.settings.idle.now"), ShortcutAction.IDLE_NOW, this::showIdle));
         menu.addSeparator();
         var group = new ButtonGroup();
         int current = ctx.config().current().idleMinutes();
@@ -1791,7 +1858,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         }
         logSplit.revalidate();
         if (!visible) {
-            currentTab().ifPresent(TerminalTab::focusTerminal);
+            currentTab().ifPresent(TermPane::focusTerminal);
         }
     }
 
@@ -1825,11 +1892,12 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         menu.add(menuItem(null, I18n.t("main.menu.vault.forgetPassword"), null,
                 () -> ctx.sshOps().execute(gate::forgetMasterPasswordInteractive)));
         if (!gate.vault().isRememberSupported()) {
-            return menu; // mis. macOS: belum ada proteksi key OS, vault hanya dibuka dengan master password
+            return menu; // mis. JAR portable di macOS atau Linux: vault hanya dibuka dengan master password
         }
         menu.addSeparator();
-        var remember = new JCheckBoxMenuItem(I18n.t("main.menu.vault.remember"));
-        remember.setToolTipText(I18n.t("main.menu.vault.remember.tooltip"));
+        String rememberKey = Os.current().isMac() ? "main.menu.vault.rememberMac" : "main.menu.vault.remember";
+        var remember = new JCheckBoxMenuItem(I18n.t(rememberKey));
+        remember.setToolTipText(I18n.t(rememberKey + ".tooltip"));
         remember.addActionListener(e -> {
             boolean wanted = remember.isSelected();
             UiAsync.run(ctx.sshOps(), () -> {
@@ -1922,11 +1990,39 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
     private void updateTabIcons(java.util.UUID profileId, OsInfo os) {
         for (int i = 0; i < tabs.getTabCount(); i++) {
-            if (groupAt(i).panes().getFirst().profile().id().equals(profileId)) { // ikon grup = host panel pertama
+            if (ssh(groupAt(i).panes().getFirst()).filter(t -> t.profile().id().equals(profileId)).isPresent()) { // ikon grup = host panel pertama
                 tabs.setIconAt(i, tabIcon(groupAt(i), OsIcons.of(os)));
             }
         }
     }
+
+    /** Tombol snippet di atas terminal (semua jenis tab): snippet global + grup host. EDT. */
+    private final TermPane.SnippetHost snippetHost = new TermPane.SnippetHost() {
+        @Override
+        public List<dev.egateza.termul.core.snippet.Snippet> snippetsFor(String hostGroup) {
+            return ctx.snippets().forGroup(hostGroup);
+        }
+
+        @Override
+        public boolean buttonVisible() {
+            return ctx.config().current().snippetButton();
+        }
+
+        @Override
+        public String corner() {
+            return ctx.config().current().snippetCorner();
+        }
+
+        @Override
+        public void cornerChanged(String corner) {
+            saveSnippetSettings(ctx.config().current().withSnippetCorner(corner));
+        }
+
+        @Override
+        public void manage() {
+            openSnippets();
+        }
+    };
 
     private EditTrackerDialog editTracker;
 
@@ -1940,23 +2036,37 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
     /** Isi tab ke-{@code index}: selalu {@link SplitPanes} berisi panel terminal (satu, atau beberapa kalau di-split). */
     @SuppressWarnings("unchecked")
-    private SplitPanes<TerminalTab> groupAt(int index) {
-        return (SplitPanes<TerminalTab>) tabs.getComponentAt(index);
+    private SplitPanes<TermPane> groupAt(int index) {
+        return (SplitPanes<TermPane>) tabs.getComponentAt(index);
     }
 
-    private Optional<SplitPanes<TerminalTab>> currentGroup() {
+    private Optional<SplitPanes<TermPane>> currentGroup() {
         int index = tabs.getSelectedIndex();
         return index < 0 ? Optional.empty() : Optional.of(groupAt(index));
     }
 
     /** Panel terminal aktif (yang terakhir difokus) di tab yang dipilih. */
-    private Optional<TerminalTab> currentTab() {
+    private Optional<TermPane> currentTab() {
         return currentGroup().map(SplitPanes::active);
     }
 
+    /** Panel aktif kalau panel SSH: SFTP, inject password, remote edit, dan profil host hanya ada di sana. */
+    private Optional<TerminalTab> currentSsh() {
+        return currentTab().flatMap(MainFrame::ssh);
+    }
+
+    private static Optional<TerminalTab> ssh(TermPane pane) {
+        return pane instanceof TerminalTab t ? Optional.of(t) : Optional.empty();
+    }
+
+    /** Semua panel SSH di semua tab. */
+    private List<TerminalTab> sshPanes() {
+        return allPanes().stream().flatMap(p -> ssh(p).stream()).toList();
+    }
+
     /** Semua panel terminal di semua tab. */
-    private List<TerminalTab> allPanes() {
-        var result = new ArrayList<TerminalTab>();
+    private List<TermPane> allPanes() {
+        var result = new ArrayList<TermPane>();
         for (int i = 0; i < tabs.getTabCount(); i++) {
             result.addAll(groupAt(i).panes());
         }
@@ -1981,37 +2091,41 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
      *
      * @param reveal dipanggil sebelum dialog, supaya yang akan ditutup terlihat
      */
-    private boolean confirmClose(List<TerminalTab> closing, String title, Runnable reveal) {
-        int transfers = closing.stream().mapToInt(TerminalTab::activeTransfers).sum();
+    private boolean confirmClose(List<TermPane> closing, String title, Runnable reveal) {
+        int transfers = closing.stream().mapToInt(TermPane::activeTransfers).sum();
         int edits = lastProfilesOf(closing).stream().mapToInt(id -> ctx.edits().openCount(id)).sum();
-        if (closing.stream().noneMatch(TerminalTab::isSessionActive) && transfers == 0 && edits == 0) {
+        if (closing.stream().noneMatch(TermPane::isSessionActive) && transfers == 0 && edits == 0) {
             return true;
         }
         String transferNote = transfers > 0 ? I18n.t("main.tab.close.transfers", String.valueOf(transfers)) : "";
         String editNote = edits > 0 ? I18n.t("main.tab.close.edits", String.valueOf(edits)) : "";
+        var running = closing.stream().flatMap(t -> t instanceof LocalTerminalTab l ? l.runningCommands().stream()
+                : java.util.stream.Stream.<String>empty()).distinct().toList();
+        String runningNote = running.isEmpty() ? "" : I18n.t("main.tab.close.running", String.join(", ", running));
         String question;
         if (closing.size() == 1) {
-            var p = closing.getFirst().profile();
-            question = I18n.t("main.tab.close.confirm", p.name(), p.address());
+            var p = closing.getFirst();
+            question = p instanceof LocalTerminalTab ? I18n.t("main.tab.close.confirmLocal", p.displayName())
+                    : I18n.t("main.tab.close.confirm", p.displayName(), p.displayAddress());
         } else {
             question = I18n.t("main.tab.close.confirmGroup", String.valueOf(closing.size()), closing.stream()
-                    .map(t -> t.profile().name() + " (" + t.profile().address() + ")")
+                    .map(t -> t.displayName() + " (" + t.displayAddress() + ")")
                     .collect(Collectors.joining(", ")));
         }
         reveal.run();
-        boolean yes = JOptionPane.showConfirmDialog(this, question + transferNote + editNote,
+        boolean yes = JOptionPane.showConfirmDialog(this, question + runningNote + transferNote + editNote,
                 title, JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE) == JOptionPane.YES_OPTION;
         if (!yes) {
-            currentTab().ifPresent(TerminalTab::focusTerminal);
+            currentTab().ifPresent(TermPane::focusTerminal);
         }
         return yes;
     }
 
     /** Profil yang tidak punya panel terminal lagi (di luar {@code closing}) setelah panel-panel ini ditutup. */
-    private Set<java.util.UUID> lastProfilesOf(List<TerminalTab> closing) {
+    private Set<java.util.UUID> lastProfilesOf(List<TermPane> closing) {
         var ids = new java.util.LinkedHashSet<java.util.UUID>();
-        closing.forEach(t -> ids.add(t.profile().id()));
-        for (var other : allPanes()) {
+        closing.forEach(t -> ssh(t).ifPresent(s -> ids.add(s.profile().id())));
+        for (var other : sshPanes()) {
             if (!closing.contains(other)) {
                 ids.remove(other.profile().id());
             }
@@ -2026,11 +2140,143 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         if (closeEdits) {
             lastProfilesOf(panes).forEach(id -> ctx.edits().closeProfile(id));
         }
-        panes.forEach(TerminalTab::dispose);
+        panes.forEach(TermPane::dispose);
         marked.remove(group);
+        customTitles.remove(group);
         tabs.removeTabAt(index);
         updateCenter();
         updateTerminalMenu();
+    }
+
+    /** Tutup beberapa tab sekaligus (Tutup tab lain / di kanan) dengan satu konfirmasi untuk semuanya. EDT. */
+    private void closeTabs(List<Integer> indexes, String title) {
+        var groups = indexes.stream().map(this::groupAt).toList();
+        var panes = groups.stream().flatMap(g -> g.panes().stream()).toList();
+        if (panes.isEmpty() || !confirmClose(panes, title, () -> { })) {
+            return;
+        }
+        for (var group : groups) { // satu per satu: sesi edit host ditutup saat panel terakhirnya ikut tertutup
+            int index = tabs.indexOfComponent(group);
+            if (index >= 0) {
+                removeTab(index, true);
+            }
+        }
+        currentTab().ifPresent(TermPane::focusTerminal);
+    }
+
+    /** Duplikat tab: buka sesi baru dengan sumber yang sama (host SSH, atau "SFTP saja"). */
+    private void duplicate(TermPane pane) {
+        switch (pane) {
+            case TerminalTab t -> openTab(t.profile(), t.isSftpOnly());
+            case LocalTerminalTab l -> openLocalProfile(l.profileId());
+        }
+    }
+
+    /** Pindahkan tab (hasil drag) tanpa mengubah judul/ikon/tooltip-nya, lalu pilih tab itu. EDT. */
+    private void moveTab(int from, int to) {
+        var group = groupAt(from);
+        String title = tabs.getTitleAt(from);
+        var icon = tabs.getIconAt(from);
+        String tooltip = tabs.getToolTipTextAt(from);
+        tabs.removeTabAt(from);
+        tabs.insertTab(title, icon, group, tooltip, to);
+        selectTab(to);
+    }
+
+    private void toggleMark(java.awt.Component tab) {
+        if (!marked.remove(tab)) {
+            marked.add(tab);
+        }
+        refreshTitles();
+        updateTerminalMenu();
+    }
+
+    /** @return true kalau event ini pemicu menu klik kanan tab (menu ditampilkan kalau mengenai tab) */
+    private boolean maybeTabMenu(java.awt.event.MouseEvent e) {
+        if (!e.isPopupTrigger()) {
+            return false;
+        }
+        int index = tabs.indexAtLocation(e.getX(), e.getY());
+        if (index >= 0) {
+            showTabMenu(index, e.getX(), e.getY());
+        }
+        return true;
+    }
+
+    /**
+     * Menu klik kanan tab. Tab dipilih dulu, jadi aksi menu Terminal (yang bekerja pada tab terpilih) dipakai lewat
+     * {@link #popupItem}, lengkap dengan status aktif dan shortcut-nya. EDT.
+     */
+    private void showTabMenu(int index, int x, int y) {
+        tabs.setSelectedIndex(index);
+        updateTerminalMenu();
+        var group = groupAt(index);
+        int count = tabs.getTabCount();
+        var profile = currentSsh().flatMap(t -> store.snapshot().find(t.profile().id())); // profil terbaru; tab SSH saja
+        var menu = new javax.swing.JPopupMenu();
+        menu.add(popupItem(miDuplicate));
+        menu.add(popupItem(miReconnect));
+        menu.add(popupItem(miSftp));
+        menu.add(menuItem(null, I18n.t("main.tabMenu.rename"), null, () -> renameTab(group)));
+        menu.addSeparator();
+        menu.add(menuItem(null, I18n.t(marked.contains(group) ? "main.tabMenu.unmark" : "main.tabMenu.mark"), null,
+                () -> toggleMark(group)));
+        menu.add(popupItem(miGroup));
+        menu.add(popupItem(miUngroup));
+        menu.addSeparator();
+        menu.add(popupItem(miInjectSudo));
+        menu.add(popupItem(miInjectRoot));
+        menu.addSeparator();
+        var edit = menuItem(null, I18n.t("main.tabMenu.editHost"), null, () -> profile.ifPresent(this::edit));
+        edit.setEnabled(profile.isPresent());
+        menu.add(edit);
+        var reveal = menuItem(null, I18n.t("main.tabMenu.reveal"), null, () -> profile.ifPresent(p -> {
+            showHostList();
+            SwingUtilities.invokeLater(() -> hostTree.reveal(p.id())); // laci/panel baru terlihat setelah layout
+        }));
+        reveal.setEnabled(profile.isPresent());
+        menu.add(reveal);
+        menu.addSeparator();
+        menu.add(popupItem(miCloseTab));
+        var others = menuItem(null, I18n.t("main.tabMenu.closeOthers"), null, () -> closeTabs(
+                java.util.stream.IntStream.range(0, tabs.getTabCount()).filter(i -> i != tabs.indexOfComponent(group))
+                        .boxed().toList(), I18n.t("main.tabMenu.closeOthers")));
+        others.setEnabled(count > 1);
+        menu.add(others);
+        var right = menuItem(null, I18n.t("main.tabMenu.closeRight"), null, () -> closeTabs(
+                java.util.stream.IntStream.range(tabs.indexOfComponent(group) + 1, tabs.getTabCount())
+                        .boxed().toList(), I18n.t("main.tabMenu.closeRight")));
+        right.setEnabled(index < count - 1);
+        menu.add(right);
+        menu.show(tabs, x, y);
+    }
+
+    /** Salinan item menu Terminal untuk menu tab: teks, shortcut, dan status aktif sama, aksinya item aslinya. */
+    private static JMenuItem popupItem(JMenuItem source) {
+        var item = new JMenuItem(source.getText(), source.getIcon());
+        item.setAccelerator(source.getAccelerator());
+        item.setToolTipText(source.getToolTipText());
+        item.setEnabled(source.isEnabled());
+        item.addActionListener(e -> source.doClick(0));
+        return item;
+    }
+
+    /** Ganti nama tab; nama kosong = kembali ke nama host. Hanya selama aplikasi berjalan. EDT. */
+    private void renameTab(SplitPanes<TermPane> group) {
+        String current = customTitles.getOrDefault(group, group.panes().stream()
+                .map(TermPane::displayName).collect(Collectors.joining(" | ")));
+        Object input = JOptionPane.showInputDialog(this, I18n.t("main.tabMenu.rename.prompt"),
+                I18n.t("main.tabMenu.rename.title"), JOptionPane.PLAIN_MESSAGE, null, null, current);
+        if (input != null) {
+            String name = input.toString().strip();
+            if (name.isEmpty()) {
+                customTitles.remove(group);
+            } else {
+                customTitles.put(group, name);
+            }
+            refreshTitles();
+        }
+        currentTab().ifPresent(TermPane::focusTerminal);
     }
 
     /** Arah split menurut pengaturan: menyamping (default) atau atas-bawah. */
@@ -2050,7 +2296,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             return;
         }
         var indexes = marked.stream().mapToInt(tabs::indexOfComponent).sorted().toArray();
-        var panes = new ArrayList<TerminalTab>();
+        var panes = new ArrayList<TermPane>();
         for (int i : indexes) {
             panes.addAll(groupAt(i).panes());
         }
@@ -2065,7 +2311,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             groupAt(indexes[k]).detachAll();
             tabs.removeTabAt(indexes[k]);
         }
-        var group = new SplitPanes<>(TerminalTab.class, panes, splitOrientation());
+        var group = new SplitPanes<>(TermPane.class, panes, splitOrientation());
         insertGroupTab(group, indexes[0]);
         group.setActive(focus);
         refreshTitles();
@@ -2083,9 +2329,9 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         var panes = group.detachAll();
         marked.remove(group);
         tabs.removeTabAt(index);
-        SplitPanes<TerminalTab> selected = null;
+        SplitPanes<TermPane> selected = null;
         for (int k = 0; k < panes.size(); k++) {
-            var single = new SplitPanes<>(TerminalTab.class, panes.get(k));
+            var single = new SplitPanes<>(TermPane.class, panes.get(k));
             insertGroupTab(single, index + k);
             if (panes.get(k) == focus) {
                 selected = single;
@@ -2096,10 +2342,9 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     }
 
     /** Pasang tab (tunggal atau grup) di posisi {@code index} dan pilih tab itu. */
-    private void insertGroupTab(SplitPanes<TerminalTab> group, int index) {
+    private void insertGroupTab(SplitPanes<TermPane> group, int index) {
         group.setActiveListener(this::updateTerminalMenu);
-        var first = group.panes().getFirst().profile();
-        tabs.insertTab(tabTitle(group), tabIcon(group, OsIcons.of(first.os())), group, tabTooltip(group), index);
+        tabs.insertTab(tabTitle(group), tabIcon(group, osIcon(group.panes().getFirst())), group, tabTooltip(group), index);
         tabs.setSelectedIndex(index);
         updateCenter();
         updateTerminalMenu();
@@ -2132,11 +2377,13 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private List<String> activeWork() {
         var items = new ArrayList<String>();
         for (var tab : allPanes()) {
-            if (tab.isSessionActive()) {
-                items.add(I18n.t("main.active.session", tab.profile().name(), tab.profile().address()));
+            if (tab instanceof LocalTerminalTab local && tab.isSessionActive()) {
+                items.add(I18n.t("main.active.local", tab.displayName(), String.join(", ", local.runningCommands())));
+            } else if (tab.isSessionActive()) {
+                items.add(I18n.t("main.active.session", tab.displayName(), tab.displayAddress()));
             }
             if (tab.activeTransfers() > 0) {
-                items.add(I18n.t("main.active.transfers", tab.profile().name(), String.valueOf(tab.activeTransfers())));
+                items.add(I18n.t("main.active.transfers", tab.displayName(), String.valueOf(tab.activeTransfers())));
             }
         }
         for (var edit : ctx.edits().entries()) {
@@ -2157,36 +2404,51 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         return -1;
     }
 
-    /** Judul tab: nama host (titik warna environment), digabung "|" untuk grup, tanda centang kalau dipilih. */
-    private String tabTitle(SplitPanes<TerminalTab> group) {
+    /**
+     * Judul tab: nama host (titik warna environment), digabung "|" untuk grup, tanda centang kalau dipilih. Nama dari
+     * user (Ganti nama tab) menggantikan nama host, dengan titik warna panel pertama.
+     */
+    private String tabTitle(SplitPanes<TermPane> group) {
         var panes = group.panes();
         boolean isMarked = marked.contains(group);
+        String custom = customTitles.get(group);
+        if (custom != null) {
+            Color color = panes.getFirst().environmentColor();
+            return "<html>" + (isMarked ? "<b>&#10004;</b> " : "")
+                    + (color == null ? "" : "<font color='#%06x'>&#9679;</font> ".formatted(color.getRGB() & 0xFFFFFF))
+                    + custom.replace("&", "&amp;").replace("<", "&lt;") + "</html>";
+        }
         var parts = new ArrayList<String>();
         boolean html = isMarked || panes.size() > 1;
         for (var pane : panes) {
-            var p = pane.profile();
-            String name = (p.name() + (pane.isSftpOnly() ? " (SFTP)" : "")).replace("&", "&amp;").replace("<", "&lt;");
-            Color color = EnvColors.of(p.environment());
+            String name = pane.displayName().replace("&", "&amp;").replace("<", "&lt;");
+            Color color = pane.environmentColor();
             html |= color != null;
             parts.add(color == null ? name
                     : "<font color='#%06x'>&#9679;</font> %s".formatted(color.getRGB() & 0xFFFFFF, name));
         }
         if (!html) {
-            var only = panes.getFirst();
-            return only.profile().name() + (only.isSftpOnly() ? " (SFTP)" : "");
+            return panes.getFirst().displayName();
         }
         return "<html>" + (isMarked ? "<b>&#10004;</b> " : "") + String.join(" &nbsp;|&nbsp; ", parts) + "</html>";
     }
 
-    private static String tabTooltip(SplitPanes<TerminalTab> group) {
-        return group.panes().stream().map(t -> t.profile().address()).collect(Collectors.joining(" | "));
+    private static String tabTooltip(SplitPanes<TermPane> group) {
+        return group.panes().stream().map(TermPane::displayAddress).collect(Collectors.joining(" | "));
     }
 
     /** Ikon tab: logo OS host panel pertama + ikon terminal/SFTP yang sedang dipakai panel-panel di tab itu. */
-    private static TabIcon tabIcon(SplitPanes<TerminalTab> group, javax.swing.Icon os) {
+    private static TabIcon tabIcon(SplitPanes<TermPane> group, javax.swing.Icon os) {
         var panes = group.panes();
-        return new TabIcon(os, panes.stream().anyMatch(t -> !t.isSftpOnly()),
-                panes.stream().anyMatch(t -> t.isSftpOnly() || t.isSftpOpen()));
+        return new TabIcon(os, panes.stream().anyMatch(TermPane::hasTerminal), panes.stream().anyMatch(TermPane::showsSftp));
+    }
+
+    /** Logo OS untuk ikon tab: OS host SSH (hasil deteksi tersimpan di profil), ikon terminal untuk tab lokal. */
+    private static javax.swing.Icon osIcon(TermPane pane) {
+        return switch (pane) {
+            case TerminalTab t -> OsIcons.of(t.profile().os());
+            case LocalTerminalTab l -> OsIcons.local();
+        };
     }
 
     /** Perbarui ikon terminal/SFTP semua tab (logo OS yang sudah tampil dipertahankan). EDT. */
@@ -2194,7 +2456,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         for (int i = 0; i < tabs.getTabCount(); i++) {
             var group = groupAt(i);
             var os = tabs.getIconAt(i) instanceof TabIcon current ? current.os()
-                    : OsIcons.of(group.panes().getFirst().profile().os());
+                    : osIcon(group.panes().getFirst());
             var icon = tabIcon(group, os);
             if (!icon.equals(tabs.getIconAt(i))) {
                 tabs.setIconAt(i, icon);
@@ -2204,6 +2466,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
     /** Perbarui judul semua tab (tanda pilih, isi grup). EDT. */
     private void refreshTitles() {
+        customTitles.keySet().removeIf(c -> tabs.indexOfComponent(c) < 0); // tab yang dilebur/dipisah/ditutup
         for (int i = 0; i < tabs.getTabCount(); i++) {
             tabs.setTitleAt(i, tabTitle(groupAt(i)));
             tabs.setToolTipTextAt(i, tabTooltip(groupAt(i)));
@@ -2235,6 +2498,38 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     }
 
     /** @param icon null = tanpa ikon (ikon hanya untuk item utama: host/grup baru, Tentang) */
+    /** Item menu untuk aksi yang shortcut-nya bisa diganti user; shortcut-nya diperbarui oleh {@link #applyShortcuts}. */
+    private JMenuItem actionItem(AppIcon icon, String label, ShortcutAction shortcut, Runnable action) {
+        var item = menuItem(icon, label, Shortcuts.get(shortcut), action);
+        actionItems.put(shortcut, item);
+        return item;
+    }
+
+    /** Pasang shortcut baru ke menu dan teks bantuan, langsung tanpa restart. EDT. */
+    private void applyShortcuts(KeyBindings bindings) {
+        Shortcuts.use(bindings);
+        actionItems.forEach((action, item) -> item.setAccelerator(Shortcuts.get(action)));
+        refreshShortcutTexts();
+        if (newHostFab != null) {
+            newHostFab.setToolTipText(I18n.t("fab.newHost", Shortcuts.text(ShortcutAction.NEW_HOST)));
+        }
+        home.setHint(welcomeHint());
+    }
+
+    private void refreshShortcutTexts() {
+        miNextTab.setToolTipText(I18n.t("main.menu.terminal.tabNumber.tooltip",
+                Shortcuts.text(ShortcutAction.TAB_1), Shortcuts.text(ShortcutAction.TAB_9)));
+        miPreviousTab.setToolTipText(miNextTab.getToolTipText());
+        miGroup.setToolTipText(splitGroupHint());
+    }
+
+    /** Pengaturan → Shortcut…: draft di dialog, disimpan di executor I/O, lalu diterapkan lewat listener store. */
+    private void configureShortcuts() {
+        new ShortcutsDialog(this, Shortcuts.bindings(), overrides -> UiAsync.run(io,
+                () -> ctx.shortcuts().save(overrides),
+                err -> Dialogs.error(this, I18n.t("shortcut.title"), err))).setVisible(true);
+    }
+
     private static JMenuItem menuItem(AppIcon icon, String label, KeyStroke key, Runnable action) {
         var item = icon == null ? new JMenuItem(label) : new JMenuItem(label, icon.icon());
         if (key != null) {
@@ -2422,7 +2717,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
     /** Terminal → Snippet: kelola snippet; snippet baru default ke grup host tab yang aktif. EDT. */
     private void openSnippets() {
-        String group = currentTab().map(t -> t.profile().group()).orElse("");
+        String group = currentSsh().map(t -> t.profile().group()).orElse("");
         new SnippetDialog(this, ctx.snippets(), io, store.snapshot().allGroups(), group).setVisible(true);
     }
 
@@ -2433,7 +2728,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             return next;
         }, saved -> {
             snippetToggle.setSelected(saved.snippetButton());
-            allPanes().forEach(TerminalTab::refreshSnippetButton);
+            allPanes().forEach(TermPane::refreshSnippetButton);
         }, err -> Dialogs.error(this, I18n.t("error.saveSettings"), err));
     }
 
@@ -2539,7 +2834,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         drawer.setOpen(false); // mode tombol melayang: beri ruang penuh untuk terminal
         mutate(I18n.t("main.error.recent"), () -> store.markUsed(profile.id()));
         var tab = createPane(profile, sftpOnly);
-        insertGroupTab(new SplitPanes<>(TerminalTab.class, tab), tabs.getTabCount());
+        insertGroupTab(new SplitPanes<>(TermPane.class, tab), tabs.getTabCount());
         if (sftpOnly && profile.wslDistro() != null && wsl.enabled()) {
             // tab "SFTP saja" tidak lewat hook connect terminal: siapkan distro WSL dulu
             UiAsync.run(ctx.sshOps(), () -> {
@@ -2556,6 +2851,108 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         } else {
             tab.connect();
         }
+    }
+
+    /** Popup Tab baru: pilih host atau terminal lokal tanpa membuka sidebar. EDT. */
+    private void showQuickOpen() {
+        QuickOpenPopup.show(this, store.snapshot(), wsl.enabled(), localChoices(), new QuickOpenPopup.Actions() {
+            @Override
+            public void openLocalProfile(java.util.UUID id) {
+                MainFrame.this.openLocalProfile(id);
+            }
+
+            @Override
+            public void open(HostProfile profile) {
+                MainFrame.this.open(profile);
+            }
+
+            @Override
+            public void openSftp(HostProfile profile) {
+                MainFrame.this.openSftp(profile);
+            }
+
+            @Override
+            public void cancelled() {
+                currentTab().ifPresent(TermPane::focusTerminal);
+            }
+        });
+    }
+
+    /** Pilihan terminal lokal (shell terdeteksi + profil, default dulu); tanpa I/O. EDT. */
+    private List<dev.egateza.termul.app.terminal.LocalProfiles.Choice> localChoices() {
+        return ctx.locals().choices(wsl == null ? List.of() : wsl.installedNames());
+    }
+
+    private void refreshLocalChoices() {
+        hostTree.setLocalChoices(localChoices());
+    }
+
+    /** Tab terminal lokal baru dengan profil default (ADR 0005). EDT. */
+    @Override
+    public void openLocalTerminal() {
+        localChoices().stream().findFirst().ifPresent(this::openLocal);
+    }
+
+    /** Tab terminal lokal dengan profil/shell tertentu; profil yang sudah dihapus = default. EDT. */
+    @Override
+    public void openLocalProfile(java.util.UUID id) {
+        var choices = localChoices();
+        choices.stream().filter(c -> c.id().equals(id)).findFirst().or(() -> choices.stream().findFirst())
+                .ifPresent(this::openLocal);
+    }
+
+    @Override
+    public void setDefaultLocalProfile(java.util.UUID id) {
+        mutate(I18n.t("localProfiles.saveFailed", ""), () -> ctx.locals().store().setDefault(id));
+    }
+
+    @Override
+    public void manageLocalProfiles() {
+        new LocalProfilesDialog(this, ctx.locals().store(), this::localChoices,
+                HostTerminalColors.choices(customThemes), io).setVisible(true);
+    }
+
+    private void openLocal(dev.egateza.termul.app.terminal.LocalProfiles.Choice choice) {
+        drawer.setOpen(false); // mode tombol melayang: beri ruang penuh untuk terminal
+        var tab = new LocalTerminalTab(choice, localTerminals, io, ctx.terminalSettings());
+        tab.setPalettes(id -> HostTerminalColors.palette(id, customThemes));
+        tab.setStateListener(() -> {
+            updateTerminalMenu();
+            refreshTabIcons();
+        });
+        tab.setSnippetHost(snippetHost);
+        applyHighlight(tab);
+        insertGroupTab(new SplitPanes<>(TermPane.class, tab), tabs.getTabCount());
+        tab.start();
+    }
+
+    private dev.egateza.termul.core.highlight.HighlightSettings highlightSettings; // EDT
+    /** Profil highlight yang sudah dikompilasi, per id profil; dikosongkan saat pengaturan berubah. EDT. */
+    private final java.util.Map<String, dev.egateza.termul.app.terminal.TextHighlighter.Rules> highlightRules =
+            new java.util.HashMap<>();
+
+    private void highlightChanged(dev.egateza.termul.core.highlight.HighlightSettings settings) {
+        highlightSettings = settings;
+        highlightRules.clear();
+        allPanes().forEach(this::applyHighlight);
+    }
+
+    /** Pilih profil highlight untuk panel: host/profil lokal → grup/semua lokal → global. EDT. */
+    private void applyHighlight(TermPane pane) {
+        var s = highlightSettings;
+        var profile = switch (pane) {
+            case TerminalTab t -> s.forHost(t.profile().id(), t.latestHostProfile().group());
+            case LocalTerminalTab l -> s.forLocal(l.profileId());
+        };
+        pane.setHighlight(profile.map(p -> highlightRules.computeIfAbsent(p.id(), id ->
+                dev.egateza.termul.app.terminal.TextHighlighter.Rules.of(
+                        dev.egateza.termul.core.highlight.HighlightMatcher.compile(p), s.alternateDisable())))
+                .orElse(null));
+    }
+
+    private void configureHighlight() {
+        new dev.egateza.termul.app.ui.highlight.HighlightDialog(this, ctx.highlights(), store::snapshot,
+                this::localChoices, ctx.terminalSettings(), io).setVisible(true);
     }
 
     /** Panel terminal baru (belum connect) untuk tab baru atau split. */
@@ -2606,33 +3003,9 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         tab.setAutoSudoVault(ctx.vault());
         tab.setSecretInjector(type -> tab.injectSecret(type, ctx.vault())); // tombol toolbar = hotkey Ctrl+Shift+P
         tab.setEditActivity(sink -> ctx.edits().addActivityListener(profile.id(), sink), this::showEditTracker);
-        tab.setSnippetHost(new TerminalTab.SnippetHost() {
-            @Override
-            public List<dev.egateza.termul.core.snippet.Snippet> snippetsFor(HostProfile p) {
-                return ctx.snippets().forGroup(p.group());
-            }
-
-            @Override
-            public boolean buttonVisible() {
-                return ctx.config().current().snippetButton();
-            }
-
-            @Override
-            public String corner() {
-                return ctx.config().current().snippetCorner();
-            }
-
-            @Override
-            public void cornerChanged(String corner) {
-                saveSnippetSettings(ctx.config().current().withSnippetCorner(corner));
-            }
-
-            @Override
-            public void manage() {
-                openSnippets();
-            }
-        });
+        tab.setSnippetHost(snippetHost);
         tab.setHostPalette(id -> HostTerminalColors.palette(id, customThemes));
+        applyHighlight(tab);
         return tab;
     }
 

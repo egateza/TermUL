@@ -23,10 +23,16 @@ import java.util.concurrent.ExecutorService;
  * @param knownHosts known_hosts aplikasi (instance yang sama dengan verifier di {@code sessions})
  * @param wsl        start/stop distro WSL; hanya dipakai kalau manajemen WSL aktif di Windows
  * @param snippets   snippet perintah untuk tombol snippet di terminal
+ * @param locals     shell terdeteksi + profil terminal lokal (ADR 0005)
+ * @param highlights profil highlight teks dan penugasannya ke host/grup/terminal lokal
+ * @param shortcuts  shortcut yang diganti user (sisanya default)
  */
 public record AppContext(AppPaths paths, ConfigStore config, ProfileStore profiles, ExecutorService io,
                          ExecutorService sshOps,
                          SessionManager sessions, SshTerminalFactory terminals, TerminalSettings terminalSettings,
                          VaultGate vault, EditManager edits, SftpLinks sftpLinks, ThemeStore themes,
-                         KnownHostsStore knownHosts, WslManager wsl, SnippetStore snippets) {
+                         KnownHostsStore knownHosts, WslManager wsl, SnippetStore snippets,
+                         dev.egateza.termul.app.terminal.LocalProfiles locals,
+                         dev.egateza.termul.core.highlight.HighlightStore highlights,
+                         dev.egateza.termul.core.shortcut.ShortcutStore shortcuts) {
 }

@@ -75,13 +75,13 @@ public final class FileCredentialVault implements CredentialVault {
     /**
      * @param file           {@code vault.bin}
      * @param newVaultParams parameter Argon2 untuk vault baru / ganti password
-     * @param protector      DPAPI (atau {@link KeyProtector#UNAVAILABLE})
+     * @param protector      DPAPI / Keychain (atau {@link KeyProtector#UNAVAILABLE})
      */
     public FileCredentialVault(Path file, Argon2Params newVaultParams, KeyProtector protector) {
         this.file = Objects.requireNonNull(file);
-        this.osKeyFile = file.resolveSibling(file.getFileName() + ".dpapi");
+        this.osKeyFile = file.resolveSibling(file.getFileName() + Objects.requireNonNull(protector).blobSuffix());
         this.newVaultParams = Objects.requireNonNull(newVaultParams);
-        this.protector = Objects.requireNonNull(protector);
+        this.protector = protector;
     }
 
     @Override
@@ -154,7 +154,7 @@ public final class FileCredentialVault implements CredentialVault {
                 verifyKey(vf, key);
             } catch (VaultException e) {
                 Secrets.zero(key);
-                log.warn("Key DPAPI tidak cocok dengan vault; opsi 'ingat di PC ini' diabaikan");
+                log.warn("Key OS tidak cocok dengan vault; opsi 'ingat di PC ini' diabaikan");
                 return false;
             }
             lockInternal();
@@ -162,7 +162,7 @@ public final class FileCredentialVault implements CredentialVault {
             dek = key;
             return true;
         } catch (IOException | RuntimeException e) {
-            log.warn("Unlock via DPAPI gagal: {}", e.getClass().getSimpleName());
+            log.warn("Unlock via key OS gagal: {}", e.getClass().getSimpleName());
             return false;
         }
     }
@@ -281,8 +281,8 @@ public final class FileCredentialVault implements CredentialVault {
         lockInternal();
         data = null;
         try {
-            // Key DPAPI membuka vault lama tanpa password: jangan disisakan bersama backup
-            Files.deleteIfExists(osKeyFile);
+            // Key OS membuka vault lama tanpa password: jangan disisakan bersama backup
+            discardOsKey();
             if (!Files.exists(file)) {
                 return null;
             }
@@ -324,12 +324,12 @@ public final class FileCredentialVault implements CredentialVault {
     public synchronized void setRememberOnThisPc(boolean remember) {
         try {
             if (!remember) {
-                Files.deleteIfExists(osKeyFile);
+                discardOsKey();
                 return;
             }
             requireUnlocked();
             if (!protector.isAvailable()) {
-                throw new VaultException("Opsi 'ingat di PC ini' hanya tersedia di Windows.");
+                throw new VaultException("Opsi 'ingat di PC ini' tidak tersedia di sistem ini.");
             }
             AtomicFiles.write(osKeyFile, protector.protect(dek));
         } catch (IOException e) {
@@ -338,6 +338,18 @@ public final class FileCredentialVault implements CredentialVault {
     }
 
     // ---------------------------------------------------------------- internal
+
+    /** File blob dihapus dulu: kalau hapus material key OS gagal, vault tetap tidak terbuka tanpa password. */
+    private void discardOsKey() throws IOException {
+        Files.deleteIfExists(osKeyFile);
+        if (protector.isAvailable()) {
+            try {
+                protector.discard();
+            } catch (RuntimeException e) {
+                log.warn("Material key OS tidak terhapus: {}", e.getMessage());
+            }
+        }
+    }
 
     private void lockInternal() {
         Secrets.zero(dek);

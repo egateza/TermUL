@@ -41,6 +41,23 @@ class ZoomShortcutTest {
     }
 
     @Test
+    void zoomMengikutiShortcutCustom() {
+        var mac = Shortcuts.bindings().mac();
+        var custom = dev.egateza.termul.app.ui.KeyBindings.defaults(mac)
+                .with(dev.egateza.termul.app.ui.ShortcutAction.ZOOM_IN,
+                        javax.swing.KeyStroke.getKeyStroke(KeyEvent.VK_UP, MENU | InputEvent.SHIFT_DOWN_MASK));
+        assertThat(TerminalTab.zoomDirection(event(KeyEvent.VK_UP, MENU | InputEvent.SHIFT_DOWN_MASK), custom)).isEqualTo(1);
+        // varian bawaan perbesar tidak berlaku lagi; perkecil masih bawaan
+        assertThat(TerminalTab.zoomDirection(event(KeyEvent.VK_EQUALS, MENU), custom)).isNull();
+        assertThat(TerminalTab.zoomDirection(event(KeyEvent.VK_ADD, MENU), custom)).isNull();
+        assertThat(TerminalTab.zoomDirection(event(KeyEvent.VK_SUBTRACT, MENU), custom)).isEqualTo(-1);
+    }
+
+    private static KeyEvent event(int keyCode, int mods) {
+        return new KeyEvent(SOURCE, KeyEvent.KEY_PRESSED, 0, mods, keyCode, KeyEvent.CHAR_UNDEFINED);
+    }
+
+    @Test
     void ukuranFontDibatasi() {
         var s = new TerminalSettings(14f).copy();
         assertThat(s.setFontSize(100f)).isEqualTo(TerminalSettings.MAX_SIZE);

@@ -107,7 +107,7 @@ public final class VaultGate implements AutoCloseable {
     }
 
     /**
-     * Buka vault atas permintaan user (menu "Buka vault"): key DPAPI boleh dipakai lagi walaupun vault sebelumnya
+     * Buka vault atas permintaan user (menu "Buka vault"): key OS (DPAPI/Keychain) boleh dipakai lagi walaupun vault sebelumnya
      * dikunci manual. Panggil di luar EDT.
      *
      * @return false kalau user membatalkan
@@ -117,7 +117,7 @@ public final class VaultGate implements AutoCloseable {
             if (lockedByUser && !vault.isUnlocked() && vault.exists() && vault.unlockWithOsKey()) {
                 lockedByUser = false;
                 touch();
-                log.info("Vault dibuka dengan key DPAPI");
+                log.info("Vault dibuka dengan key OS (DPAPI/Keychain)");
                 return true;
             }
             return ensureUnlocked();
@@ -129,13 +129,13 @@ public final class VaultGate implements AutoCloseable {
         return lockedByUser && !vault.isUnlocked();
     }
 
-    /** Unlock dengan key DPAPI tanpa dialog, kecuali vault sedang dikunci manual. */
+    /** Unlock dengan key OS (DPAPI/Keychain) tanpa dialog, kecuali vault sedang dikunci manual. */
     boolean tryOsKey() {
         synchronized (unlockLock) {
             if (lockedByUser || !vault.unlockWithOsKey()) {
                 return false;
             }
-            log.info("Vault dibuka dengan key DPAPI");
+            log.info("Vault dibuka dengan key OS (DPAPI/Keychain)");
             return true;
         }
     }

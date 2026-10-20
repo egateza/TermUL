@@ -41,6 +41,13 @@ class TerminalMenuStateTest {
     }
 
     @Test
+    void localTabKeepsTabActionsButNeverSftpOrInject() {
+        assertThat(TerminalMenuState.LOCAL.tabActions()).isTrue();
+        assertThat(TerminalMenuState.LOCAL.sftp()).isFalse();
+        assertThat(TerminalMenuState.LOCAL.inject()).isFalse();
+    }
+
+    @Test
     void openSftpPanelCanStillBeClosedAfterSessionEnds() {
         var s = TerminalMenuState.of(true, false, true);
 

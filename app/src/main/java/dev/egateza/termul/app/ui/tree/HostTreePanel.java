@@ -6,6 +6,8 @@ import dev.egateza.termul.app.ui.EnvColors;
 import dev.egateza.termul.app.ui.OsIcons;
 import dev.egateza.termul.app.ui.tree.HostTreeModelBuilder.BuiltinGroup;
 import dev.egateza.termul.app.ui.tree.HostTreeModelBuilder.GroupNode;
+import dev.egateza.termul.app.ui.tree.HostTreeModelBuilder.LocalProfileNode;
+import dev.egateza.termul.app.ui.tree.HostTreeModelBuilder.LocalTerminalNode;
 import dev.egateza.termul.app.ui.tree.HostTreeModelBuilder.WslDistroNode;
 import dev.egateza.termul.core.profile.HostProfile;
 import dev.egateza.termul.core.profile.OsInfo;
@@ -45,6 +47,18 @@ public final class HostTreePanel extends JPanel {
     /** Aksi yang di-trigger dari tree; diimplementasikan oleh MainFrame. */
     public interface Actions {
         void open(HostProfile profile);
+
+        /** Buka tab terminal lokal baru dengan profil default. */
+        void openLocalTerminal();
+
+        /** Buka tab terminal lokal dengan profil/shell tertentu. */
+        void openLocalProfile(java.util.UUID id);
+
+        /** Jadikan profil/shell ini default untuk Terminal lokal baru. */
+        void setDefaultLocalProfile(java.util.UUID id);
+
+        /** Buka dialog kelola profil terminal lokal. */
+        void manageLocalProfiles();
 
         /** Buka tab yang hanya berisi panel SFTP (tanpa terminal). */
         void openSftp(HostProfile profile);
@@ -87,6 +101,7 @@ public final class HostTreePanel extends JPanel {
     private final JTree tree = new JTree(model);
     private ProfileSnapshot snapshot = ProfileSnapshot.empty();
     private List<String> wslRunning; // null = manajemen WSL mati
+    private List<dev.egateza.termul.app.terminal.LocalProfiles.Choice> localChoices = List.of(); // default dulu
 
     public HostTreePanel(Actions actions) {
         super(new BorderLayout());
@@ -124,6 +139,10 @@ public final class HostTreePanel extends JPanel {
                     TreePath path = tree.getPathForLocation(e.getX(), e.getY());
                     if (path != null && userObject(path) instanceof HostProfile p) {
                         actions.open(p);
+                    } else if (path != null && userObject(path) instanceof LocalTerminalNode) {
+                        actions.openLocalTerminal(); // grup khusus: double-click = buka default
+                    } else if (path != null && userObject(path) instanceof LocalProfileNode n) {
+                        actions.openLocalProfile(n.choice().id());
                     } else if (path != null && userObject(path) instanceof WslDistroNode d) {
                         actions.newWslProfile(d.name());
                     } else if (path != null) {
@@ -145,6 +164,8 @@ public final class HostTreePanel extends JPanel {
         bindKey(KeyEvent.VK_ENTER, "open", () -> {
             switch (selectedObject()) {
                 case HostProfile p -> actions.open(p);
+                case LocalTerminalNode n -> actions.openLocalTerminal();
+                case LocalProfileNode n -> actions.openLocalProfile(n.choice().id());
                 case WslDistroNode d -> actions.newWslProfile(d.name());
                 case null, default -> { }
             }
@@ -182,6 +203,15 @@ public final class HostTreePanel extends JPanel {
     }
 
     /** @param running nama distro WSL yang berjalan; null = manajemen WSL mati (grup WSL tidak tampil) */
+    /** Isi grup Terminal lokal (default dulu); dipanggil saat profil/deteksi/WSL berubah. */
+    public void setLocalChoices(List<dev.egateza.termul.app.terminal.LocalProfiles.Choice> choices) {
+        var next = List.copyOf(choices);
+        if (!next.equals(localChoices)) {
+            localChoices = next;
+            rebuild();
+        }
+    }
+
     public void setWslRunning(List<String> running) {
         var next = running == null ? null : List.copyOf(running);
         if (!java.util.Objects.equals(next, wslRunning)) {
@@ -203,6 +233,45 @@ public final class HostTreePanel extends JPanel {
         return selectedObject() instanceof HostProfile p ? Optional.of(p) : Optional.empty();
     }
 
+    /**
+     * Pilih host di grup aslinya (bukan Favorites/Last used), buka grupnya, gulir ke sana, dan fokus ke tree. Filter
+     * pencarian dikosongkan kalau menyembunyikan host itu.
+     *
+     * @return false kalau profil tidak ada lagi di tree (mis. sudah dihapus)
+     */
+    public boolean reveal(java.util.UUID profileId) {
+        TreePath path = hostPath(profileId);
+        if (path == null && !search.getText().isEmpty()) {
+            search.setText(""); // rebuild sinkron lewat DocumentListener
+            path = hostPath(profileId);
+        }
+        if (path == null) {
+            return false;
+        }
+        tree.expandPath(path.getParentPath());
+        tree.setSelectionPath(path);
+        tree.scrollPathToVisible(path);
+        tree.requestFocusInWindow();
+        return true;
+    }
+
+    /** Node host di grup aslinya; node di grup bawaan hanya dipakai kalau tidak ada yang lain. */
+    private TreePath hostPath(java.util.UUID profileId) {
+        TreePath fallback = null;
+        var root = (DefaultMutableTreeNode) model.getRoot();
+        for (var node : Collections.list(root.depthFirstEnumeration())) {
+            var n = (DefaultMutableTreeNode) node;
+            if (n.getUserObject() instanceof HostProfile p && p.id().equals(profileId)) {
+                var path = new TreePath(n.getPath());
+                if (!(((DefaultMutableTreeNode) n.getParent()).getUserObject() instanceof BuiltinGroup)) {
+                    return path;
+                }
+                fallback = fallback == null ? path : fallback;
+            }
+        }
+        return fallback;
+    }
+
     public void focusSearch() {
         search.requestFocusInWindow();
         search.selectAll();
@@ -222,14 +291,14 @@ public final class HostTreePanel extends JPanel {
         boolean filtering = !search.getText().isBlank();
         boolean hadWsl = hasChild((DefaultMutableTreeNode) model.getRoot(), BuiltinGroup.WSL);
 
-        var root = HostTreeModelBuilder.build(snapshot, search.getText(), wslRunning);
+        var root = HostTreeModelBuilder.build(snapshot, search.getText(), wslRunning, localChoices);
         model.setRoot(root);
 
         for (var node : Collections.list(root.depthFirstEnumeration())) {
             var n = (DefaultMutableTreeNode) node;
             var path = new TreePath(n.getPath());
             Object uo = n.getUserObject();
-            if ((uo instanceof GroupNode || uo instanceof BuiltinGroup)
+            if ((uo instanceof GroupNode || uo instanceof BuiltinGroup || uo instanceof LocalTerminalNode)
                     && (filtering || expanded.contains(uo) || expanded.isEmpty() || (uo == BuiltinGroup.WSL && !hadWsl))) {
                 tree.expandPath(path);
             }
@@ -264,7 +333,7 @@ public final class HostTreePanel extends JPanel {
         if (e != null) {
             for (var p : Collections.list(e)) {
                 Object uo = userObject(p);
-                if (uo instanceof GroupNode || uo instanceof BuiltinGroup) {
+                if (uo instanceof GroupNode || uo instanceof BuiltinGroup || uo instanceof LocalTerminalNode) {
                     result.add(uo);
                 }
             }
@@ -278,6 +347,8 @@ public final class HostTreePanel extends JPanel {
             case GroupNode g when b instanceof GroupNode h -> g.path().equals(h.path());
             case BuiltinGroup g -> g == b;
             case WslDistroNode d -> d.equals(b);
+            case LocalTerminalNode n -> n == b;
+            case LocalProfileNode n -> b instanceof LocalProfileNode m && n.choice().id().equals(m.choice().id());
             case null, default -> false;
         };
     }
@@ -335,6 +406,21 @@ public final class HostTreePanel extends JPanel {
                 menu.add(clear);
             }
             case BuiltinGroup.WSL -> menu.add(item(AppIcon.TERMINAL, I18n.t("tree.menu.wslManager"), actions::openWslManager));
+            case LocalTerminalNode n -> {
+                menu.add(item(AppIcon.TERMINAL, I18n.t("tree.menu.openLocal"), actions::openLocalTerminal));
+                menu.addSeparator();
+                menu.add(item(null, I18n.t("tree.menu.manageLocal"), actions::manageLocalProfiles));
+            }
+            case LocalProfileNode n -> {
+                menu.add(item(AppIcon.TERMINAL, I18n.t("tree.menu.openTerminal"),
+                        () -> actions.openLocalProfile(n.choice().id())));
+                var makeDefault = item(null, I18n.t("tree.menu.localDefault"),
+                        () -> actions.setDefaultLocalProfile(n.choice().id()));
+                makeDefault.setEnabled(!n.choice().isDefault());
+                menu.add(makeDefault);
+                menu.addSeparator();
+                menu.add(item(null, I18n.t("tree.menu.manageLocal"), actions::manageLocalProfiles));
+            }
             case WslDistroNode d -> {
                 menu.add(item(AppIcon.SERVER, I18n.t("tree.menu.newWslProfile"), () -> actions.newWslProfile(d.name())));
                 menu.addSeparator();
@@ -395,7 +481,8 @@ public final class HostTreePanel extends JPanel {
         public Component getTreeCellRendererComponent(JTree tree, Object value, boolean sel, boolean expanded,
                                                       boolean leaf, int row, boolean hasFocus) {
             Object uo = ((DefaultMutableTreeNode) value).getUserObject();
-            boolean isGroup = uo instanceof GroupNode || uo instanceof BuiltinGroup;
+            boolean isGroup = uo instanceof GroupNode || uo instanceof BuiltinGroup
+                    || uo instanceof LocalTerminalNode && ((DefaultMutableTreeNode) value).getAllowsChildren();
             super.getTreeCellRendererComponent(tree, value, sel, expanded, !isGroup, row, hasFocus);
             if (uo instanceof HostProfile p) {
                 var color = EnvColors.of(p.environment());
@@ -422,6 +509,16 @@ public final class HostTreePanel extends JPanel {
                     case RECENT -> I18n.t("tree.group.recent.tooltip", ProfileSnapshot.RECENT_LIMIT);
                     case WSL -> I18n.t("tree.group.wsl.tooltip");
                 });
+            } else if (uo instanceof LocalProfileNode(var c)) {
+                String def = c.isDefault() ? " &middot; " + escape(I18n.t("tree.local.default")) : "";
+                setText("<html>" + escape(c.name()) + " <font color='gray'>" + escape(c.commandLine()) + def
+                        + "</font></html>");
+                setIcon(WSL);
+                setToolTipText(escape(c.commandLine()));
+            } else if (uo instanceof LocalTerminalNode) {
+                setText(I18n.t("tree.local"));
+                setIcon(WSL);
+                setToolTipText(I18n.t("tree.local.tooltip"));
             } else if (uo instanceof WslDistroNode d) {
                 setText("<html>" + escape(d.name()) + " <font color='gray'>" + escape(I18n.t("tree.wsl.noProfile"))
                         + "</font></html>");

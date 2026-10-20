@@ -11,7 +11,7 @@ import java.util.Objects;
 import java.util.stream.Stream;
 
 /**
- * Upload/download satu direktori beserta isinya di atas {@link RemoteFileService}. Isi direktori dibaca dulu
+ * Upload/download/salin antar-server satu direktori beserta isinya di atas {@link RemoteFileService}. Isi direktori dibaca dulu
  * (rencana), baru disalin, supaya progress menunjukkan total seluruh direktori. Dipanggil dari thread transfer.
  *
  * <p>Symlink ke direktori tidak diikuti (bisa membentuk loop) dan dilaporkan sebagai dilewati; symlink remote ke
@@ -121,6 +121,88 @@ public final class TreeTransfer {
         }
         listener.progress(total, total);
         return new Result(files.size(), dirs.size(), total, skipped);
+    }
+
+    /** File dan direktori yang disalin antar-server: sumber → tujuan. */
+    private record CopyJob(String from, String to, long size, int mode) {
+    }
+
+    /**
+     * Salin {@code fromDir} di {@code from} ke {@code toParent/<nama fromDir>} di {@code to} (server lain atau server
+     * yang sama), file per file langsung dari stream ke stream lewat {@link RemoteFileService#copyFrom}. Direktori yang
+     * baru dibuat mendapat mode direktori sumber setelah isinya selesai disalin (mode read-only tidak menghalangi
+     * penyalinan isinya).
+     *
+     * @return null kalau user memilih tidak menggabungkan ke direktori yang sudah ada
+     */
+    public static Result copy(RemoteFileService from, String fromDir, RemoteFileService to, String toParent,
+                              Conflict conflict, TransferListener listener) throws RemoteFileException {
+        Objects.requireNonNull(listener);
+        String target = RemotePaths.join(toParent, safeRemoteName(RemotePaths.name(fromDir)));
+        if (to.exists(target) && !conflict.merge(target)) {
+            return null;
+        }
+        var dirs = new ArrayList<CopyJob>();
+        var files = new ArrayList<CopyJob>();
+        var skipped = new ArrayList<String>();
+        planCopy(from, from.stat(fromDir), target, dirs, files, skipped, listener);
+        var created = new ArrayList<CopyJob>();
+        for (CopyJob dir : dirs) { // induk selalu sebelum isinya
+            checkCancelled(listener);
+            if (!to.exists(dir.to())) {
+                to.mkdir(dir.to());
+                created.add(dir);
+            }
+        }
+        long total = files.stream().mapToLong(CopyJob::size).sum();
+        long done = 0;
+        for (CopyJob f : files) {
+            checkCancelled(listener);
+            to.copyFrom(from, f.from(), f.to(), offset(listener, done, total));
+            done += f.size();
+        }
+        for (CopyJob dir : created.reversed()) { // terdalam dulu
+            to.chmod(dir.to(), dir.mode());
+        }
+        listener.progress(total, total);
+        return new Result(files.size(), dirs.size(), total, skipped);
+    }
+
+    private static void planCopy(RemoteFileService svc, RemoteEntry dir, String targetDir, List<CopyJob> dirs,
+                                 List<CopyJob> files, List<String> skipped, TransferListener listener)
+            throws RemoteFileException {
+        checkCancelled(listener);
+        dirs.add(new CopyJob(dir.path(), targetDir, 0, dir.mode()));
+        for (RemoteEntry e : svc.list(dir.path())) {
+            String to;
+            try {
+                to = RemotePaths.join(targetDir, safeRemoteName(e.name()));
+            } catch (RemoteFileException ex) {
+                skipped.add(e.path());
+                continue;
+            }
+            switch (e.type()) {
+                case DIRECTORY -> planCopy(svc, e, to, dirs, files, skipped, listener);
+                case FILE -> files.add(new CopyJob(e.path(), to, e.size(), e.mode()));
+                case SYMLINK -> {
+                    RemoteEntry target = svc.stat(e.path());
+                    if (target.type() == RemoteEntry.Type.FILE) {
+                        files.add(new CopyJob(e.path(), to, target.size(), target.mode()));
+                    } else {
+                        skipped.add(e.path()); // symlink ke direktori: tidak diikuti (bisa loop)
+                    }
+                }
+                case OTHER -> skipped.add(e.path());
+            }
+        }
+    }
+
+    /** Nama entri remote sebagai nama di server tujuan: menolak nama yang bisa keluar dari folder tujuan. */
+    static String safeRemoteName(String name) throws RemoteFileException {
+        if (name.isEmpty() || name.equals(".") || name.equals("..") || name.contains("/")) {
+            throw new RemoteFileException("Nama file remote tidak aman untuk disalin: " + name);
+        }
+        return name;
     }
 
     private static void plan(RemoteFileService svc, String remoteDir, Path localDir, List<Path> dirs,

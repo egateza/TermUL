@@ -25,3 +25,5 @@ JDK: **25 (LTS)**. Ini LTS terbaru, dengan fitur yang relevan: virtual threads t
 - (−) Startup JVM & ukuran installer (~60–90 MB dengan runtime yang di-trim via jlink). Bisa diterima untuk aplikasi desktop pribadi.
 - Semua library (MINA SSHD, JediTerm, FlatLaf, JNA, Bouncy Castle) harus diverifikasi berjalan di JDK 25 saat Fase 1 (smoke test: connect, render terminal, DPAPI).
 - Evaluasi ulang kalau kebutuhan bergeser ke terminal lokal dengan rendering GPU (lihat opsi C).
+- Catatan 2026-10-19: tab terminal lokal ditambahkan lewat pty4j (ADR 0005). Stack tidak berubah; PTY kini bisa di
+  server remote atau lokal.

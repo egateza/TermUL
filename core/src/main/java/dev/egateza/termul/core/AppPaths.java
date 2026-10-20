@@ -140,6 +140,21 @@ public record AppPaths(Path configDir, Path cacheDir) {
         return configDir.resolve("snippets.json");
     }
 
+    /** Profil terminal lokal buatan user + pilihan default (ADR 0005). Tanpa secret. */
+    public Path localProfilesFile() {
+        return configDir.resolve("local-profiles.json");
+    }
+
+    /** Pengaturan highlight teks (profil keyword dan penugasannya); tanpa secret. */
+    public Path highlightFile() {
+        return configDir.resolve("highlight.json");
+    }
+
+    /** Shortcut yang diganti user (hanya override; sisanya default aplikasi); tanpa secret. */
+    public Path shortcutsFile() {
+        return configDir.resolve("shortcuts.json");
+    }
+
     /** Streak harian (berapa hari berturut-turut aplikasi dibuka); bukan tempat secret. */
     public Path streakFile() {
         return configDir.resolve("streak.json");

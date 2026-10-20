@@ -17,6 +17,7 @@
         <module>vault</module>
         <module>ssh</module>
         <module>terminal</module>
+        <module>localterm</module>
         <module>sftp</module>
         <module>update</module>
         <module>app</module>
@@ -34,7 +35,9 @@
         <!-- Library -->
         <sshd.version>2.20.0</sshd.version>
         <jediterm.version>3.76</jediterm.version>
-        <kotlin.version>2.4.0</kotlin.version>
+        <!-- PTY lokal (ADR 0005); dependensinya: JNA (sama), kotlin-stdlib 2.4.20 -->
+        <pty4j.version>0.14.0</pty4j.version>
+        <kotlin.version>2.4.20</kotlin.version>
         <jetbrains-annotations.version>26.1.0</jetbrains-annotations.version>
         <flatlaf.version>3.7.2</flatlaf.version>
         <jackson.version>2.22.3</jackson.version>
@@ -109,6 +112,11 @@
             </dependency>
             <dependency>
                 <groupId>dev.egateza.termul</groupId>
+                <artifactId>termul-localterm</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.egateza.termul</groupId>
                 <artifactId>termul-update</artifactId>
                 <version>${project.version}</version>
             </dependency>
@@ -152,6 +160,11 @@
                 <groupId>org.jetbrains.jediterm</groupId>
                 <artifactId>jediterm-ui</artifactId>
                 <version>${jediterm.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jetbrains.pty4j</groupId>
+                <artifactId>pty4j</artifactId>
+                <version>${pty4j.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.jetbrains.kotlin</groupId>
