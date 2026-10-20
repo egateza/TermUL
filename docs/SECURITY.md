@@ -33,6 +33,11 @@ Dua opsi di bawah. **Diputuskan: kombinasi**, lihat `docs/adr/0002-vault-design.
 
 Kombinasi yang disarankan: Opsi 2, dengan opsi menyimpan master key yang dibungkus DPAPI ("remember on this PC").
 
+Di macOS padanannya **"Ingat di Mac ini"** (ADR 0006): kunci pembungkus acak 256-bit disimpan di login keychain (item
+generic password, layanan `TermUL`, tidak ikut iCloud), DEK terbungkus AES-GCM di `vault.bin.keychain`. Hanya tersedia
+di `.app` hasil instalasi, tidak di JAR portable (izin Keychain untuk `java` berlaku ke semua program Java). Mematikan
+opsi atau lupa master password menghapus file dan item Keychain. Akses lewat JNA `SecItem*`, bukan CLI `security`.
+
 Kunci manual (menu **Vault → Kunci vault**) berlaku sampai user sendiri membuka vault lagi. Selama itu key DPAPI tidak
 dipakai untuk unlock on-demand: inject dan connect meminta master password, dan auto-inject sudo/su dilewati dengan
 pemberitahuan. Hanya **Vault → Buka vault** yang boleh memakai DPAPI lagi. Auto-lock idle tidak lengket: dengan
@@ -43,6 +48,9 @@ Tipe secret per profil: `LOGIN_PASSWORD`, `KEY_PASSPHRASE`, `SUDO_PASSWORD`, `RO
 ## Aturan auto-sudo / inject password
 
 **Default: hotkey** (`Ctrl+Shift+P`). Dengan hotkey, user yang memutuskan kapan password dikirim, sehingga tidak ada yang bisa di-spoof.
+Hotkey inject bisa diganti (Pengaturan → Shortcut), tapi wajib memakai modifier utama (Ctrl / ⌘): kombinasi tanpa
+modifier, dengan Alt/Option, atau hanya ⌃ di Mac ditolak, supaya password tidak terkirim karena tombol yang tidak sengaja
+tertekan saat mengetik.
 
 **Auto-trigger** (opsional per host, default OFF untuk tag `prod`) hanya boleh mengirim password kalau **semua** kondisi berikut terpenuhi:
 
@@ -75,6 +83,15 @@ Rekomendasi operasional (di luar aplikasi): untuk server prod, pertimbangkan aks
 - `-k` memaksa sudo selalu membaca password dari stdin (tidak memakai cache), supaya password tidak pernah sampai ke script. Tanpa password tersimpan dicoba `sudo -n` dulu (NOPASSWD), baru user diminta (tidak disimpan). Password salah tidak diulang.
 - Hook validasi (`config.json` → `validationHooks`) adalah command milik user sendiri yang dijalankan sebagai root; hanya bisa diubah lewat config lokal.
 
+## Upload antar-server (SFTP ke SFTP)
+
+- Isi file mengalir langsung dari stream SFTP sumber ke stream SFTP tujuan lewat TermUL: **tidak ada salinan di disk
+  lokal**, dan server sumber tidak pernah diberi akses ke server tujuan (tanpa `scp` antar-server, tanpa agent forwarding).
+- Tulis di tujuan memakai aturan upload biasa: file temp lalu rename, file milik user lain / tidak bisa ditulis ditolak,
+  mode file lama dipertahankan (file baru memakai mode sumber; folder baru mendapat mode sumber setelah isinya disalin).
+- Selalu ada konfirmasi yang menyebut folder dan host tujuan, dengan tombol default Batal; host bertag PROD diberi
+  peringatan. Di server yang sama, salin ke lokasinya sendiri atau folder ke dalam dirinya sendiri ditolak.
+
 ## Single instance & run at startup
 
 - Hanya satu proses TermUL per folder data (`core.instance.SingleInstance`): `FileLock` di `instance.lock`, supaya vault, `known_hosts`, dan profil tidak ditulis dua proses sekaligus.
@@ -104,6 +121,29 @@ Detail di `docs/adr/0003-self-update.md`.
 - ProxyJump memakai local forward `127.0.0.1:<port acak>` selama koneksi tujuan hidup. Proses lain di PC yang sama bisa memakai port itu untuk menjangkau port SSH host tujuan lewat jump host (tetap harus lolos auth SSH tujuan). Listener hanya di loopback dan ditutup bersama koneksi. Host key tujuan diverifikasi dengan alamat aslinya, bukan alamat tunnel.
 - Paste multi-baris ke host `PROD` selalu dikonfirmasi (preview + jumlah baris); host non-prod tidak.
 - **Password login & passphrase key di MINA berupa `String`.** API Apache MINA SSHD (`UserInteraction`, `FilePasswordProvider`) hanya menerima `String`. Konversi `char[] → String` dibatasi di satu tempat (`ssh/.../auth/AuthSetup.java`), dilakukan tepat saat MINA memintanya, dan `char[]` asal langsung di-zero. String itu tidak disimpan di field, tidak di-log, dan menjadi garbage setelah paket auth terkirim. Password sudo/su (inject ke terminal) tetap `char[]`/`byte[]` penuh.
+
+## Terminal lokal (ADR 0005)
+
+- Shell lokal berjalan sebagai user yang sama dengan TermUL, tanpa elevasi. TermUL tidak menyuntikkan apa pun ke
+  shell selain environment terminal (`TERM`, `COLORTERM`, `TERM_PROGRAM`, `LANG` kalau kosong).
+- **Tidak ada secret ke proses lokal.** Tab lokal tidak punya inject password (menu, hotkey, tombol toolbar) maupun
+  auto-sudo; `PromptResponder` tidak dipasang dan vault tidak pernah diakses dari tab lokal. Ini dijaga di tipe
+  (`TermPane` sealed; inject hanya ada di `TerminalTab`) dan di `TerminalMenuState.LOCAL`.
+- Profil terminal lokal (`local-profiles.json`) tersimpan sebagai **teks biasa**, termasuk environment-nya. Dialog
+  memperingatkan agar tidak mengisi password/token; nilai divalidasi satu baris tanpa karakter kontrol. Profil tidak
+  ikut ekspor profil (mobile).
+- Dialog tutup/keluar hanya menampilkan **nama** proses yang masih berjalan, tanpa argumen (argumen bisa berisi
+  secret, mis. `mysql -p...`).
+- Library native pty4j diekstrak ke folder temp pengguna dan dimuat lewat JNA. Kalau `.app` nanti di-notarize,
+  library itu harus dikirim sebagai file yang ditandatangani (lihat ADR 0005).
+
+## Highlight teks
+
+- `highlight.json` hanya berisi keyword dan warna (teks biasa, tanpa secret); ekspor JSON tidak membawa penugasan
+  host/grup. Isi terminal tidak pernah ditulis ke log oleh highlight (error hanya dicatat sekali, tanpa isi baris).
+- Regex dari user atau file import bisa sangat lambat (ReDoS). Pencocokan berjalan di thread terpisah, dengan batas
+  waktu per baris dan panjang baris maksimum, jadi terminal dan UI tetap responsif. Keyword JavaScript dari Tabby tidak
+  pernah dijalankan.
 
 ## WSL (opsional)
 

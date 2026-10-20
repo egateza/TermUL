@@ -24,6 +24,7 @@
 | FlatLaf | `com.formdev:flatlaf` (+ `flatlaf-extras` untuk SVG icon) | app |
 | Jackson | `com.fasterxml.jackson.core:jackson-databind` | core |
 | JNA | `net.java.dev.jna:jna-platform` (DPAPI `Crypt32Util`) | vault |
+| pty4j | `org.jetbrains.pty4j:pty4j` (PTY lokal: ConPTY/forkpty; EPL-1.0) | localterm |
 | Bouncy Castle | `org.bouncycastle:bcprov-jdk18on` (Argon2id) | vault |
 | SLF4J + Logback | `org.slf4j:slf4j-api`, `ch.qos.logback:logback-classic` | semua / app |
 | JUnit 5, AssertJ | test | semua |
@@ -114,13 +115,19 @@ mvnw.cmd install -DskipTests && mvnw.cmd -pl app -Ppackage-jar -DskipTests packa
   `$JAVA_HOME`, `/usr/libexec/java_home -v 25+`, lalu `PATH`, dan menampilkan dialog kalau tidak ada.
 - Zip yang diunduh/dikirim lewat chat kena Gatekeeper: klik kanan `TermUL.command` → Open, atau
   `xattr -dr com.apple.quarantine <folder>`.
-- `.app`/`.dmg` dengan runtime bawaan butuh `jpackage` di Mac (tidak bisa cross-build dari Windows) — belum ada profile-nya.
+- `.app`/`.dmg` dengan runtime bawaan butuh `jpackage` di Mac (tidak bisa cross-build dari Windows): di Mac jalankan
+  `./mvnw install -DskipTests && ./mvnw -pl app -Ppackage-win -DskipTests package -Djpackage.type=dmg`
+  → `app/target/dist/TermUL-1.0.<build>.dmg` (tanpa `-Djpackage.type` → `TermUL.app`). Profile `package-mac` aktif
+  otomatis di macOS dan menimpa ikon (`termul.icns`, dibuat `tools/MakeAppIcon.java`), identifier bundle, dan versi
+  (macOS menolak versi bundle berawalan 0, jadi `1.0.<build>`; versi di aplikasi tetap `0.1.<build>`). Belum
+  ditandatangani/notarized: buka pertama kali lewat klik kanan → Open.
 
 ## Perbedaan perilaku di macOS
 
 - Shortcut aplikasi memakai **Cmd** (`Shortcuts`): Cmd+Shift+… menggantikan Ctrl+Shift+…, Cmd+R sambung ulang,
-  Cmd+W tutup tab, Cmd+Q keluar (lewat menu aplikasi macOS), Cmd+klik tab untuk digabung. Ctrl tetap dikirim ke
-  terminal. Copy/paste/find terminal Cmd+C/V/F (bawaan JediTerm).
+  Cmd+W tutup tab, Cmd+Q keluar (lewat menu aplikasi macOS), Cmd+klik tab untuk digabung, ⇧⌘B tampil/sembunyi
+  daftar host, ⌘1…9 ke tab ke-n, ⇧⌘O terminal lokal baru, ⌘T tab baru (popup pilih host/terminal lokal), ⇧⌘D duplikat tab. Ctrl tetap dikirim ke terminal, kecuali ⌃Tab / ⌃⇧Tab (pindah tab, sama seperti
+  Windows). Copy/paste/find terminal Cmd+C/V/F (bawaan JediTerm).
 - Menu bar tetap di dalam window (berisi tombol mode terang/gelap yang tidak didukung menu bar layar macOS);
   About/Quit juga ada di menu aplikasi, ikon Dock dipasang saat start.
 - Editor: aplikasi dari Finder hanya mendapat PATH minimal, jadi command editor dicari juga di `/opt/homebrew/bin`,

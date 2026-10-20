@@ -206,7 +206,7 @@ public final class ProfileDialog extends JDialog {
         boolean prod = environment.getSelectedItem() == EnvironmentTag.PROD;
         autoSudo.setToolTipText(prod
                 ? I18n.t("profile.autoSudo.tooltip.prod",
-                        Shortcuts.text(Shortcuts.menuShift(java.awt.event.KeyEvent.VK_P)))
+                        Shortcuts.text(ShortcutAction.INJECT_SUDO))
                 : I18n.t("profile.autoSudo.tooltip"));
     }
 

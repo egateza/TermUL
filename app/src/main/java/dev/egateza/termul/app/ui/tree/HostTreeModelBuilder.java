@@ -34,6 +34,19 @@ public final class HostTreeModelBuilder {
         WSL
     }
 
+    /** Node tetap paling atas: terminal lokal (ADR 0005); berisi {@link LocalProfileNode} kalau daftarnya diberikan. */
+    public enum LocalTerminalNode {
+        INSTANCE
+    }
+
+    /** Satu shell terdeteksi atau profil terminal lokal di bawah {@link LocalTerminalNode}. */
+    public record LocalProfileNode(dev.egateza.termul.app.terminal.LocalProfiles.Choice choice) {
+        @Override
+        public String toString() {
+            return choice.name();
+        }
+    }
+
     /** User object distro WSL yang sedang berjalan tapi belum punya profil SSH (lihat {@link HostProfile#wslDistro()}). */
     public record WslDistroNode(String name) {
         @Override
@@ -60,6 +73,14 @@ public final class HostTreeModelBuilder {
      * @param wslRunning nama distro WSL yang sedang berjalan; null = manajemen WSL mati (grup WSL tidak tampil)
      */
     public static DefaultMutableTreeNode build(ProfileSnapshot snapshot, String filter, List<String> wslRunning) {
+        return build(snapshot, filter, wslRunning, null);
+    }
+
+    /**
+     * @param localChoices isi grup Terminal lokal (default dulu); null = node tunggal tanpa isi
+     */
+    public static DefaultMutableTreeNode build(ProfileSnapshot snapshot, String filter, List<String> wslRunning,
+                                               List<dev.egateza.termul.app.terminal.LocalProfiles.Choice> localChoices) {
         String q = filter == null ? "" : filter.strip().toLowerCase(Locale.ROOT);
         boolean wslOn = wslRunning != null;
         var root = new DefaultMutableTreeNode(new GroupNode(""));
@@ -98,7 +119,28 @@ public final class HostTreeModelBuilder {
                 root.insert(node, index++);
             }
         }
+        var local = new DefaultMutableTreeNode(LocalTerminalNode.INSTANCE, localChoices != null);
+        boolean groupMatches = q.isEmpty() || matchesLocal(q);
+        if (localChoices != null) {
+            localChoices.stream().filter(c -> groupMatches || matchesLocal(c, q))
+                    .forEach(c -> local.add(new DefaultMutableTreeNode(new LocalProfileNode(c), false)));
+        }
+        if (groupMatches || local.getChildCount() > 0) {
+            root.insert(local, 0);
+        }
         return root;
+    }
+
+    /** Pencarian pada nama dan perintah profil terminal lokal ({@code q} sudah lowercase). */
+    public static boolean matchesLocal(dev.egateza.termul.app.terminal.LocalProfiles.Choice c, String q) {
+        return q.isEmpty() || c.name().toLowerCase(Locale.ROOT).contains(q)
+                || c.commandLine().toLowerCase(Locale.ROOT).contains(q);
+    }
+
+    /** Pencarian "lokal", "local", "terminal", "shell", dst. tetap menampilkan node terminal lokal. */
+    public static boolean matchesLocal(String q) {
+        return dev.egateza.termul.app.i18n.I18n.t("tree.local").toLowerCase(Locale.ROOT).contains(q)
+                || "local terminal shell".contains(q);
     }
 
     private static boolean isWsl(HostProfile p) {
@@ -129,7 +171,7 @@ public final class HostTreeModelBuilder {
         }
     }
 
-    static boolean matches(HostProfile p, String q) {
+    public static boolean matches(HostProfile p, String q) {
         if (q.isEmpty()) {
             return true;
         }

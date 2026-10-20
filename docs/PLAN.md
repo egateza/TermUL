@@ -78,6 +78,36 @@ Catatan implementasi: satu `sudo sh -c` per upload (backup ke `/var/backups/term
 - [x] Tray icon + run at startup + single instance (Pengaturan → Tray & startup)
 - [ ] (backlog) port forwarding, snippet library, session log dengan masking, follow cwd (OSC 7)
 
+## Fase 7: Terminal lokal (ADR 0005)
+- [x] Tahap 0–1: tab terminal lokal dengan shell default (modul `localterm`, pty4j). Rincian dan progres di
+  [`local-terminal-plan.md`](local-terminal-plan.md)
+- [ ] Acceptance manual macOS + Windows (ConPTY)
+- [x] Tahap 2: profil terminal lokal (deteksi PowerShell/cmd/Git Bash/WSL/`/etc/shells`, profil custom, default)
+- [ ] Acceptance manual tahap 2 (Windows: PowerShell 7, cmd, Git Bash, WSL)
+
+## Fase 8: Highlight teks
+- [x] Profil keyword (teks/regex, warna Tabby 0–255/#RRGGBB/nama, gaya), penugasan host/grup/terminal lokal/global,
+  import/export JSON Tabby, dialog Pengaturan → Highlight teks
+- [x] Highlight di buffer JediTerm (`TextHighlighter`): baris soft-wrap digabung, karakter lebar, alternate screen opsional
+- [ ] Acceptance manual (SSH + lokal, log besar `tail -f`, vim dengan/ tanpa "matikan di alternate screen")
+
+## Fase 9: Ingat di Mac ini (Keychain, ADR 0006)
+- [x] `KeychainKeyProtector` (JNA `SecItem*`), blob `vault.bin.keychain`, item dihapus saat opsi dimatikan / lupa password
+- [x] Hanya di `.app` (bukan JAR portable); menu Vault → Ingat di Mac ini
+- [ ] Acceptance manual: nyalakan opsi, restart app (vault terbuka tanpa password), instal ulang DMG (dialog izin
+  Keychain), matikan opsi (item hilang di Keychain Access)
+
+## Fase 10: Shortcut bisa diganti
+- [x] Daftar aksi + default per OS, `shortcuts.json` (hanya override), dialog Pengaturan → Shortcut (rekam tombol,
+  kosongkan, reset, reset semua, konfirmasi bentrok), langsung berlaku tanpa restart
+- [ ] Acceptance manual: ganti shortcut saat fokus di terminal (SSH + lokal), zoom custom, ⌘1..9 custom, Windows
+- [ ] Menyusul: copy/paste/find milik JediTerm, dua shortcut per aksi
+
+## Fase 11: Upload antar-panel SFTP
+- [x] Klik kanan → Upload ke ▸ (grup sendiri, lalu tab lain), drag & drop antar-panel, konfirmasi folder/host tujuan
+  (+ peringatan PROD), stream langsung tanpa file lokal, folder rekursif, cegah salin ke dirinya sendiri
+- [ ] Acceptance manual: dua server sungguhan, file besar (progress/batal), tujuan PROD, Windows
+
 ## Keputusan terbuka
 | # | Keputusan | Opsi | Status |
 |---|---|---|---|

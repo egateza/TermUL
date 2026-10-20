@@ -12,7 +12,8 @@
 - Browser remote directory (SFTP) dan edit file remote dengan editor lokal Windows (VS Code, Notepad++, dll.), lalu auto-upload saat file disimpan
 - Opsional (Windows): WSL Manager untuk start/stop distro WSL; distro dimasuki lewat SSH ke sshd di `localhost` (ADR 0004)
 
-Ini **bukan** terminal emulator lokal. PTY berada di server remote, sedangkan aplikasi merender stream dari SSH channel.
+Fokus utamanya SSH: PTY berada di server remote dan aplikasi merender stream dari SSH channel. Sejak ADR 0005 ada juga
+tab **terminal lokal** (shell di mesin sendiri lewat pty4j), tanpa fitur khusus SSH (SFTP, inject password, vault).
 
 ## Pemilik & konteks pemakaian
 
@@ -29,7 +30,7 @@ Ini **bukan** terminal emulator lokal. PTY berada di server remote, sedangkan ap
 | SSH/SFTP | Apache MINA SSHD (`sshd-core`, `sshd-sftp`) |
 | Terminal widget | JediTerm (`jediterm-core`, `jediterm-ui`) dengan custom `TtyConnector` di atas `ChannelShell` |
 | UI | Swing + FlatLaf (JediTerm berbasis Swing, jadi jangan pakai JavaFX) |
-| Credential | Windows DPAPI via JNA, atau vault AES-256-GCM + Argon2id (keputusan terbuka, lihat `docs/SECURITY.md`) |
+| Credential | Vault AES-256-GCM + Argon2id; opsi "ingat" lewat Windows DPAPI / macOS Keychain via JNA (ADR 0002, 0006) |
 | Storage profil | JSON (Jackson) di `%APPDATA%\TermUL\` (macOS: `~/Library/Application Support/TermUL/`); profil tidak boleh berisi secret |
 | Logging | SLF4J + Logback |
 | Test | JUnit 5, AssertJ, Testcontainers (container `openssh-server` untuk integration test) |
@@ -43,12 +44,13 @@ termul/
 ├─ vault/      CredentialVault API + implementasi (DPAPI / AES-GCM)
 ├─ ssh/        SessionManager, koneksi MINA, known_hosts, auth (key/agent/password), jump host
 ├─ terminal/   JediTerm TtyConnector, PromptResponder (sudo inject)
+├─ localterm/  terminal lokal: shell default per OS, PTY lokal (pty4j), LocalTtyConnector (ADR 0005)
 ├─ sftp/       RemoteFileService, RemoteEditSession (download → watch → upload atomic)
 ├─ update/     update via GitHub Releases: manifest Ed25519, delta jar, Bootstrap (main class distribusi), ReleaseTool
 └─ app/        Swing UI (host tree, tabs, SFTP panel, dialogs), wiring, main()
 ```
 
-Arah dependensi: `app → terminal, sftp → ssh → core`, `vault → core`, dan `app → update → core`. **`core` tidak boleh bergantung pada Swing atau MINA.**
+Arah dependensi: `app → terminal, sftp → ssh → core`, `vault → core`, `app → localterm → core`, dan `app → update → core`. **`core` tidak boleh bergantung pada Swing atau MINA.**
 
 ### Konvensi Maven
 - Parent `pom.xml` (packaging `pom`) memegang semua versi library di `<properties>` + `<dependencyManagement>`, dan versi plugin di `<pluginManagement>`. POM modul **tidak boleh** menulis versi sendiri.
@@ -74,7 +76,7 @@ Arah dependensi: `app → terminal, sftp → ssh → core`, `vault → core`, da
 
 ### Lintas OS (Windows & macOS)
 - Cek OS lewat `dev.egateza.termul.core.Os`, jangan parsing `os.name` sendiri.
-- Shortcut aplikasi lewat `app.ui.Shortcuts` (Ctrl di Windows, Cmd di Mac), jangan hardcode `CTRL_DOWN_MASK`. Teks shortcut di pesan i18n memakai placeholder + `Shortcuts.text(...)`. Di Mac, Ctrl selalu milik terminal.
+- Shortcut aplikasi lewat `app.ui.Shortcuts` (Ctrl di Windows, Cmd di Mac), jangan hardcode `CTRL_DOWN_MASK`. Aksi baru yang punya shortcut didaftarkan di `ShortcutAction` (bisa diganti user, Pengaturan → Shortcut) dan dipakai lewat `Shortcuts.get(...)`. Teks shortcut di pesan i18n memakai placeholder + `Shortcuts.text(...)`. Di Mac, Ctrl selalu milik terminal, kecuali ⌃Tab / ⌃⇧Tab untuk pindah tab (di terminal sama dengan Tab biasa).
 - Fitur khusus Windows (DPAPI, wallpaper, ikon association, suara) wajib punya guard OS dan fallback yang aman.
 
 ### Gaya
@@ -115,4 +117,5 @@ Arah dependensi: `app → terminal, sftp → ssh → core`, `vault → core`, da
 | `docs/PLAN.md` | Roadmap per fase + checklist + acceptance criteria |
 | `docs/SETUP.md` | Tools, dependensi, environment dev & test |
 | `docs/RELEASE.md` | Menerbitkan rilis baru ke GitHub Releases (update lewat menu) |
-| `docs/adr/` | Architecture Decision Records (0003: update via GitHub Releases, 0004: WSL lewat SSH + WSL Manager) |
+| `docs/adr/` | Architecture Decision Records (0003: update via GitHub Releases, 0004: WSL lewat SSH + WSL Manager, 0005: terminal lokal lewat pty4j, 0006: Ingat di Mac ini via Keychain) |
+| `docs/local-terminal-plan.md` | Rencana & progres terminal lokal (ADR 0005) |

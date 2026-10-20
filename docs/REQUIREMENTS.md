@@ -23,6 +23,9 @@ Pekerjaan harian melibatkan banyak server Linux (produksi & staging). Masalah ya
 - F2.4 Font, tema, dan ukuran scrollback bisa dikonfigurasi.
 - F2.5 Keep-alive dan deteksi koneksi putus, disertai tombol reconnect.
 - F2.6 (nice to have) Duplicate session, broadcast input ke beberapa tab.
+- F2.7 Highlight teks: keyword/regex diwarnai saat tampil (latar, huruf, bold/italic/underline/dim/inverse), per profil
+  highlight. Profil dipilih per tab: host / profil terminal lokal → grup terdekat / semua terminal lokal → global.
+  Import/export JSON format plugin Tabby (`tabby-highlight`). Default mati.
 
 ### F3. Password sudo/su
 - F3.1 Vault menyimpan per profil: password login (opsional), password sudo (user), dan password root (untuk `su`).
@@ -34,6 +37,8 @@ Pekerjaan harian melibatkan banyak server Linux (produksi & staging). Masalah ya
 - F4.1 Panel SFTP di samping terminal yang memakai koneksi yang sama. Opsi "follow terminal cwd" (nice to have, via OSC 7).
 - F4.2 Browse, upload/download (drag & drop dari Explorer), rename, mkdir, delete (dengan konfirmasi), chmod, dan tampilan owner/mode/size/mtime.
 - F4.3 Progress transfer + cancel.
+- F4.4 Upload antar-server: klik kanan → Upload ke ▸ panel SFTP lain yang terbuka (grup sendiri dulu, lalu tab lain), atau
+  drag & drop antar-panel. Selalu dengan konfirmasi folder & host tujuan (peringatan ekstra untuk PROD).
 
 ### F5. Edit file remote dengan editor lokal
 - F5.1 Open file remote dengan editor pilihan. Mapping per ekstensi bisa dikonfigurasi (default: VS Code `code --wait`).
@@ -49,6 +54,8 @@ Pekerjaan harian melibatkan banyak server Linux (produksi & staging). Masalah ya
 - Port forwarding (local/remote/dynamic), X11 tidak diperlukan.
 - Snippet/command library per host.
 - Session logging ke file (dengan masking prompt password).
+- Shortcut bisa diganti per aksi (selesai, Fase 10; Pengaturan → Shortcut): default per OS, hanya override yang disimpan
+  (`shortcuts.json`), validasi bentrok / tombol shell / shortcut sistem, inject password wajib modifier utama.
 
 ## Kebutuhan non-fungsional
 
@@ -62,12 +69,14 @@ Pekerjaan harian melibatkan banyak server Linux (produksi & staging). Masalah ya
 | N6 | Distribusi berupa installer Windows dengan runtime bawaan (tanpa perlu install JDK) |
 | N7 | Konfigurasi & data di `%APPDATA%\TermUL`, cache edit di `%LOCALAPPDATA%\TermUL` (macOS: `~/Library/Application Support/TermUL` dan `~/Library/Caches/TermUL`) |
 | N8 | Bisa dipakai di macOS: shortcut memakai Cmd, editor/aplikasi default macOS, distribusi JAR portable (butuh JDK 25) |
+| N9 | Terminal lokal (ADR 0005): tab shell di mesin sendiri lewat PTY lokal, berdampingan dengan tab SSH; tanpa SFTP, inject password, atau vault |
 
 ## Out of scope (untuk sekarang)
 
-- Terminal lokal (cmd/PowerShell, atau WSL tanpa sshd). Bisa ditambah nanti via pty4j. Distro WSL bisa dimasuki lewat
-  SSH ke `localhost`, dengan WSL Manager opsional untuk start/stop distro (ADR 0004).
+- (Sudah tidak out of scope) Terminal lokal dengan profil (PowerShell, cmd, Git Bash, WSL tanpa sshd, shell
+  `/etc/shells`, profil custom): ADR 0005. Distro WSL tetap juga bisa dimasuki lewat SSH ke `localhost`, dengan
+  WSL Manager opsional untuk start/stop distro (ADR 0004).
 - RDP, VNC, X11 server, protokol serial/telnet.
 - Sinkronisasi profil ke cloud / multi-user.
-- Linux sebagai target. macOS didukung (N8), tapi "ingat di PC ini" (DPAPI) masih khusus Windows; padanan Keychain
-  macOS dan `.app`/`.dmg` (jpackage, harus di-build di Mac) belum dikerjakan.
+- Linux sebagai target. macOS didukung (N8), termasuk `.app`/`.dmg` dan "Ingat di Mac ini" lewat Keychain (ADR 0006,
+  hanya di `.app`, tidak di JAR portable).

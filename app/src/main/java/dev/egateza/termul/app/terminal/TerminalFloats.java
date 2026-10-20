@@ -72,8 +72,10 @@ final class TerminalFloats {
         }
     };
     private boolean sessionEnded; // EDT
+    /** false tanpa injector (tab lokal): tombol password tidak pernah tampil, termasuk di prompt sudo lokal. */
+    private final boolean canInject;
 
-    /** @param inject inject password manual (sama dengan hotkey); null = tanpa tombol password */
+    /** @param inject inject password manual (sama dengan hotkey); null = tanpa tombol password (tab lokal) */
     TerminalFloats(ZoomableTermWidget widget, FloatingOverlay overlay, Runnable onReconnect,
                    Consumer<SecretType> inject) {
         this.widget = widget;
@@ -102,8 +104,7 @@ final class TerminalFloats {
                 () -> injectAndRefresh(inject, SecretType.SUDO_PASSWORD));
         root = toolbar.addAction(AppIcon.PERMISSION, I18n.t("fab.root"), I18n.t("fab.root.tooltip"),
                 () -> injectAndRefresh(inject, SecretType.ROOT_PASSWORD));
-        sudo.setEnabled(inject != null);
-        root.setEnabled(inject != null);
+        canInject = inject != null;
         toolbar.setVisible(false);
         overlay.addFloating(reconnect, FloatingOverlay.Anchor.BOTTOM_RIGHT);
         overlay.addFloating(toolbar, FloatingOverlay.Anchor.BOTTOM_CENTER); // paling bawah; "Ke bawah" di atasnya
@@ -153,8 +154,8 @@ final class TerminalFloats {
         boolean selected = widget.hasSelection();
         find.setVisible(selected);
         copy.setVisible(selected);
-        sudo.setVisible(prompt == PromptResponder.Kind.SUDO);
-        root.setVisible(prompt == PromptResponder.Kind.SU);
+        sudo.setVisible(canInject && prompt == PromptResponder.Kind.SUDO);
+        root.setVisible(canInject && prompt == PromptResponder.Kind.SU);
         boolean show = toolbar.hasVisibleActions();
         if (toolbar.isVisible() != show) {
             toolbar.setVisible(show);

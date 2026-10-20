@@ -18,7 +18,13 @@
          │                   └─ AuthProvider (key / agent / password)
          │                         │
    CredentialVault (vault) ◄───────┘
+
+   LocalTerminalTab (app) ── LocalTtyConnector (localterm) ── pty4j (PTY lokal, ADR 0005)
 ```
+
+Tab di `MainFrame` berisi `SplitPanes<TermPane>`. `TermPane` adalah `sealed` (`TerminalTab` untuk SSH,
+`LocalTerminalTab` untuk shell lokal). Fitur khusus SSH (SFTP, inject password, remote edit, profil host) hanya
+diakses lewat pattern matching ke `TerminalTab`, sehingga compiler menandai `switch` yang lupa menangani tab lokal.
 
 ## Konsep utama
 
@@ -79,6 +85,10 @@ File watching:
 | `ssh-ops` executor (bounded) | Connect, auth, exec, operasi SFTP dari UI (mengembalikan `CompletableFuture`) |
 | `edit-watcher` | WatchService + scheduler debounce |
 | `transfer` executor | Upload/download besar, dengan progress callback ke EDT |
+| `io` executor (tab lokal) | Menjalankan shell lokal (start proses + memuat library native pty4j saat pertama kali) |
+| `local-writer-<id>` (virtual) | Write + resize ke PTY lokal secara berurutan (write bisa blocking) |
+| `local-wait-<id>` / `local-close-<id>` (virtual) | Menunggu shell lokal berakhir (kode keluar); mematikan pohon proses saat tab ditutup |
+| `termul-highlight` (satu, bersama) | Highlight teks: mencocokkan keyword baris yang berubah (tanpa lock) lalu menulis style ke buffer JediTerm (memegang lock buffer sebentar) |
 
 Aturan: callback ke UI selalu lewat `invokeLater`. `CompletableFuture` dari operasi SSH tidak boleh di-`join()` di EDT.
 
@@ -93,7 +103,12 @@ Lokasi per OS (`AppPaths`): Windows `%APPDATA%` / `%LOCALAPPDATA%`; macOS `~/Lib
   profiles.json       host tree + profil (TANPA secret)
   known_hosts         host key terverifikasi (format OpenSSH)
   vault.bin           secret terenkripsi
+  vault.bin.dpapi     (Windows, opsional) DEK dibungkus DPAPI untuk "Ingat di PC ini"
+  vault.bin.keychain  (macOS .app, opsional) DEK dibungkus kunci di Keychain untuk "Ingat di Mac ini" (ADR 0006)
   update-history.json 5 update terakhir yang sudah berjalan + catatan rilisnya (Bantuan → Yang baru)
+  local-profiles.json profil terminal lokal + pilihan default (ADR 0005; teks biasa, tanpa secret); file rusak disisihkan ke .corrupt-<waktu>
+  highlight.json      profil highlight teks (keyword format Tabby) + penugasan host/grup/lokal/global; file rusak disisihkan ke .corrupt-<waktu>
+  shortcuts.json      shortcut yang diganti user (id aksi → "mod+shift+T", kosong = tanpa shortcut); sisanya default; file rusak disisihkan ke .corrupt-<waktu>
   snippets.json       snippet perintah (teks biasa, satu baris, tanpa secret); file rusak disisihkan ke .corrupt-<waktu>
   streak.json         streak api harian (jumlah hari + tanggal terakhir dihitung); file rusak disisihkan ke .corrupt-<waktu>
   instance.lock       FileLock single instance (dipegang selama TermUL berjalan)
@@ -127,6 +142,32 @@ thread scheduler sendiri) lewat `Updater.newerVersion()` (tanpa hash jar lokal) 
 Badge tidak pernah memasang apa pun; setelah pemasangan lewat dialog, badge menjadi tombol "Restart untuk update".
 Bisa dimatikan lewat `AppConfig.autoUpdateCheck`.
 
+## Terminal lokal (ADR 0005)
+
+- Modul `localterm` (`localterm → core`, tanpa Swing): `LocalShells` (shell default per OS), `LocalTerminalFactory`
+  (pty4j; ConPTY di Windows), `LocalTtyConnector` (TtyConnector JediTerm). `PtyHandle` membungkus `PtyProcess`
+  supaya connector bisa di-unit test tanpa native.
+- Siklus hidup: tab ditutup → `closeByUser()` → pohon proses dicatat (`ProcessHandle.of(pid)`; `toHandle()` pty4j
+  tidak didukung) → PTY ditutup (SIGHUP; shell interaktif mengabaikan SIGTERM) → setelah 2 dtk sisa proses dimatikan
+  paksa. Kalau JVM keluar/crash, OS menutup master PTY sehingga shell tetap mendapat SIGHUP.
+- Di macOS, shell yang keluar menunggu output-nya di PTY dibaca; JediTerm selalu membaca, jadi ini hanya relevan
+  untuk test (lihat `LocalTtyConnectorIT`).
+- Library native pty4j ikut jar dan diekstrak ke folder temp saat dipakai.
+
+## Highlight teks
+
+- `core.highlight`: `HighlightKeyword`/`HighlightProfile` (field JSON sama dengan plugin Tabby), `HighlightSettings`
+  (saklar, profil, penugasan target → profil; resolusi host → grup terdekat → global, lokal → semua lokal → global),
+  `HighlightMatcher` (keyword dikompilasi; keyword di atas menang; batas waktu 25 ms dan 8192 karakter per baris supaya
+  regex lambat tidak menggantung), `HighlightStore` (`highlight.json`), `TabbyHighlightJson` (import/export).
+- `app.terminal.TextHighlighter`: satu per widget terminal. Listener buffer hanya menjadwalkan; di thread
+  `termul-highlight` baris logis (soft-wrap digabung, penanda karakter lebar dibuang) dicocokkan, lalu style karakter
+  diganti dengan `HighlightStyle` yang menyimpan style asli. Teks buffer tidak berubah. Baris yang sudah diproses
+  diingat (teks + generasi pengaturan) dan dilewati; pengaturan baru memproses ulang seluruh scrollback.
+  API `addCustomHighlighting` JediTerm tidak dipakai karena hanya merender satu highlight per baris tanpa bold/italic.
+- `MainFrame` mengompilasi profil sekali per perubahan pengaturan dan memilih profil per `TermPane` (pattern matching
+  `TerminalTab`/`LocalTerminalTab`); dipanggil ulang saat host diedit (pindah grup).
+
 ## WSL (opsional, ADR 0004)
 
 Aktif hanya kalau `AppConfig.wslManager` dinyalakan dan OS-nya Windows. Distro WSL dimasuki lewat SSH biasa ke sshd di
@@ -145,3 +186,25 @@ distro (`localhost:<port>`). Profilnya `HostProfile` dengan field `wslDistro`, j
 1. **Connect**: double-click host, lalu `ssh-ops` menjalankan `acquire()`: TCP connect, verifikasi host key (dialog TOFU di EDT kalau host baru), dan auth (agent, key, lalu password dari vault/prompt). Setelah itu buka `ChannelShell` + PTY, pasang connector ke JediTerm, dan tab aktif.
 2. **Sudo inject (hotkey)**: EDT → vault.get → write bytes ke channel (di `ssh-ops`) → zero buffer.
 3. **Edit file**: double-click di SFTP panel, download ke cache + stat baseline, jalankan editor (`ProcessBuilder`), watcher mendeteksi perubahan, debounce, lalu upload (normal/sudo) dan status di EditTracker diperbarui.
+
+## Upload antar-panel SFTP
+
+- `SftpPanel` mendaftar dirinya di registry statis (EDT) dan keluar saat `dispose()`. Menu "Upload ke ▸" memuat panel lain
+  yang tersambung dan tampil di tab, panel dalam satu grup split dulu (komponen tab yang sama), lalu urut posisi tab.
+- Drag dari tabel SFTP membawa `RemoteSelection` (objek lokal JVM); panel SFTP lain menerimanya sebagai upload antar-server.
+- Transfer berjalan di antrean panel **tujuan**: `link.execute` tujuan → `source.link.ensureLive()` → file:
+  `RemoteFileService.copyFrom(source, path, target)`, folder: `TreeTransfer.copy(...)`. Upload biasa dan salin antar-server
+  memakai jalur tulis yang sama (`write`: temp → chmod → rename atomic).
+
+## Shortcut yang bisa diganti
+
+- `ShortcutAction` (app.ui) mendaftar semua aksi: id stabil (disimpan di file), kategori, default Windows/Mac dalam notasi
+  `mod+shift+T` (`mod` = Ctrl / ⌘). `KeyBindings` = default + override (immutable); `Shortcuts.use/get/bindings` memegang
+  binding aktif (ditulis di EDT, `volatile`).
+- `ShortcutStore` (core, `shortcuts.json`) hanya menyimpan override, jadi default baru di versi berikutnya ikut terpakai.
+  Listener store → `MainFrame.applyShortcuts`: accelerator menu, tooltip, dan teks sambutan diperbarui tanpa restart.
+- Pengambilan sebelum terminal (`Shortcuts.isAppCombo`): hanya kombinasi yang dipakai suatu aksi, dan salah satu dari
+  modifier utama + Shift, aksi yang default-nya memang diambil tanpa Shift (Ctrl+F5/⌘R, ⌘W, ⌘T, Ctrl+Tab, Ctrl/⌘+1..9),
+  atau shortcut yang diganti user. Default tanpa Shift lain (Ctrl+N, Ctrl+F, Ctrl+G, zoom) tetap milik shell di Windows.
+- `ShortcutRules`: tolak tanpa Ctrl/⌘, Alt/Option, tombol Windows, shortcut sistem (⌘Q, ⌘Space, ⌘⇧4, Ctrl+Esc, Cmd+Ctrl),
+  dan inject password tanpa modifier utama; peringatkan kombinasi milik shell / copy-paste terminal.

@@ -10,6 +10,8 @@ import dev.egateza.termul.app.ui.Dialogs;
 import dev.egateza.termul.app.ui.anim.AnimationKind;
 import dev.egateza.termul.app.ui.anim.LoadingPanel;
 import dev.egateza.termul.app.ui.Shortcuts;
+import dev.egateza.termul.app.ui.ShortcutAction;
+import dev.egateza.termul.app.ui.KeyBindings;
 import dev.egateza.termul.app.ui.UiAsync;
 import dev.egateza.termul.app.vault.VaultGate;
 import dev.egateza.termul.core.profile.HostProfile;
@@ -34,6 +36,7 @@ import java.awt.event.KeyEvent;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.Function;
+import javax.swing.KeyStroke;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JLabel;
@@ -54,7 +57,7 @@ import org.slf4j.LoggerFactory;
  * +30 dtk). Satu percobaan baru dianggap berhasil kalau shell <b>dan</b> SFTP (bila sedang dipakai) sama-sama
  * tersambung. Panel SFTP hanya mengikuti status tab ini lewat {@link SftpLinks}.
  */
-public final class TerminalTab extends JPanel {
+public final class TerminalTab extends TermPane {
 
     private static final Logger log = LoggerFactory.getLogger(TerminalTab.class);
 
@@ -89,7 +92,6 @@ public final class TerminalTab extends JPanel {
 
     public TerminalTab(HostProfile profile, SshTerminalFactory factory, Executor sshOps, TerminalSettings settings,
                        SftpLinks links, boolean sftpOnly, Function<HostProfile, SftpPanel> sftpFactory) {
-        super(new BorderLayout());
         this.sftpOnly = sftpOnly;
         this.links = links;
         this.gate = links.registerTerminal(profile);
@@ -114,26 +116,34 @@ public final class TerminalTab extends JPanel {
         return sftpOnly;
     }
 
+    @Override
+    public String displayName() {
+        return profile.name() + (sftpOnly ? " (SFTP)" : "");
+    }
+
+    @Override
+    public String displayAddress() {
+        return profile.address();
+    }
+
+    @Override
+    public Color environmentColor() {
+        return dev.egateza.termul.app.ui.EnvColors.of(profile.environment());
+    }
+
+    @Override
+    public boolean hasTerminal() {
+        return !sftpOnly;
+    }
+
+    @Override
+    public boolean showsSftp() {
+        return sftpOnly || isSftpOpen();
+    }
+
     private java.util.function.Consumer<SshTtyConnector> connectedListener; // EDT
     private Runnable stateListener = () -> { }; // EDT
     private volatile BeforeConnect beforeConnect = (p, automatic) -> { };
-
-    /** Sumber snippet dan pengaturan tombol snippet (dari MainFrame). Semua method dipanggil di EDT. */
-    public interface SnippetHost {
-        /** Snippet untuk host ini (global + grup host). */
-        java.util.List<Snippet> snippetsFor(HostProfile profile);
-
-        boolean buttonVisible();
-
-        /** Sudut tombol, nilai {@code AppConfig.SNIPPET_*}. */
-        String corner();
-
-        /** Tombol diseret ke sudut lain; simpan untuk semua tab. */
-        void cornerChanged(String corner);
-
-        /** Buka dialog kelola snippet. */
-        void manage();
-    }
 
     /** Pasang tombol snippet di atas terminal tab ini. */
     public void setSnippetHost(SnippetHost host) {
@@ -144,7 +154,7 @@ public final class TerminalTab extends JPanel {
         if (snippetButton != null) {
             snippetButton.dispose();
         }
-        snippetButton = new SnippetButton(center, host.corner(), () -> host.snippetsFor(latestProfile()),
+        snippetButton = new SnippetButton(center, host.corner(), () -> host.snippetsFor(latestProfile().group()),
                 this::typeText, host::manage, host::cornerChanged);
         refreshSnippetButton();
     }
@@ -330,6 +340,11 @@ public final class TerminalTab extends JPanel {
         return profile;
     }
 
+    /** Profil host terbaru (setelah diedit, mis. pindah grup); profil saat tab dibuka kalau host sudah dihapus. */
+    public HostProfile latestHostProfile() {
+        return latestProfile();
+    }
+
     /** true kalau terminal sedang tersambung ke server (bukan sekadar sedang connect). */
     public boolean isConnected() {
         return connector != null && connector.isConnected();
@@ -502,6 +517,7 @@ public final class TerminalTab extends JPanel {
         settings.setPaletteOverride(hostPalette.apply(latestProfile().terminalTheme()));
         widget = new ZoomableTermWidget(settings);
         widget.getTerminalPanel().setDefaultCursorShape(settings.cursorShape());
+        attachHighlighter(widget);
         floats = new TerminalFloats(widget, center, this::reconnect, secretInjector);
         if (snippetButton != null) {
             snippetButton.setShown(snippetHost.buttonVisible());
@@ -763,13 +779,31 @@ public final class TerminalTab extends JPanel {
     /**
      * Arah zoom dari shortcut: Ctrl + (+, =, numpad +) → 1, Ctrl + (-, numpad -) → -1, Ctrl+0 → 0 (reset).
      * Di Mac memakai Cmd ({@link Shortcuts#MENU}). Shift boleh (di keyboard US, '+' = Shift+'='); Alt tidak.
+     * Kalau user mengganti shortcut zoom, hanya kombinasi barunya yang berlaku (varian di atas tidak lagi).
      */
     static Integer zoomDirection(KeyEvent e) {
-        int mods = e.getModifiersEx() & ~InputEvent.SHIFT_DOWN_MASK;
-        if (mods != Shortcuts.MENU) {
+        return zoomDirection(e, Shortcuts.bindings());
+    }
+
+    static Integer zoomDirection(KeyEvent e, KeyBindings b) {
+        if ((e.getModifiersEx() & InputEvent.ALT_DOWN_MASK) != 0) {
             return null;
         }
-        return switch (e.getKeyCode()) {
+        var action = b.actionFor(KeyStroke.getKeyStrokeForEvent(e)).orElse(null);
+        if (action == ShortcutAction.ZOOM_IN) {
+            return 1;
+        }
+        if (action == ShortcutAction.ZOOM_OUT) {
+            return -1;
+        }
+        if (action == ShortcutAction.ZOOM_RESET) {
+            return 0;
+        }
+        int mods = e.getModifiersEx() & ~InputEvent.SHIFT_DOWN_MASK;
+        if (mods != (b.mac() ? InputEvent.META_DOWN_MASK : InputEvent.CTRL_DOWN_MASK) || action != null) {
+            return null;
+        }
+        Integer direction = switch (e.getKeyCode()) {
             case KeyEvent.VK_EQUALS, KeyEvent.VK_PLUS, KeyEvent.VK_ADD -> 1;
             case KeyEvent.VK_MINUS, KeyEvent.VK_SUBTRACT -> e.isShiftDown() && e.getKeyCode() == KeyEvent.VK_MINUS
                     ? null // Ctrl+Shift+- = Ctrl+_ (undo readline), biarkan ke terminal
@@ -777,6 +811,12 @@ public final class TerminalTab extends JPanel {
             case KeyEvent.VK_0, KeyEvent.VK_NUMPAD0 -> e.isShiftDown() ? null : 0;
             default -> null;
         };
+        if (direction == null) {
+            return null;
+        }
+        var owner = direction > 0 ? ShortcutAction.ZOOM_IN : direction < 0 ? ShortcutAction.ZOOM_OUT
+                : ShortcutAction.ZOOM_RESET;
+        return b.isOverridden(owner) ? null : direction; // varian bawaan hanya selama shortcut-nya belum diganti
     }
 
     /** @param direction 1 = perbesar, -1 = perkecil, 0 = ukuran default */
@@ -1013,6 +1053,7 @@ public final class TerminalTab extends JPanel {
             floats = null;
         }
         if (widget != null) {
+            detachHighlighter();
             widget.close();
             widget = null;
         }

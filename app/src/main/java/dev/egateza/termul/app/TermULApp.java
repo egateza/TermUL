@@ -23,6 +23,7 @@ import dev.egateza.termul.app.ui.UiFont;
 import dev.egateza.termul.app.ui.UiThemes;
 import dev.egateza.termul.app.ui.anim.AnimationChoice;
 import dev.egateza.termul.app.ui.anim.LoadingPanel;
+import dev.egateza.termul.app.vault.OsKeyProtectors;
 import dev.egateza.termul.app.vault.VaultCredentialProvider;
 import dev.egateza.termul.app.vault.VaultGate;
 import dev.egateza.termul.app.vault.VaultSudoPassword;
@@ -43,7 +44,6 @@ import dev.egateza.termul.sftp.edit.EditCache;
 import dev.egateza.termul.ssh.hostkey.KnownHostsStore;
 import dev.egateza.termul.terminal.SshTerminalFactory;
 import dev.egateza.termul.vault.Argon2Params;
-import dev.egateza.termul.vault.DpapiKeyProtector;
 import dev.egateza.termul.vault.FileCredentialVault;
 import java.awt.Component;
 import java.io.IOException;
@@ -91,6 +91,15 @@ public final class TermULApp {
         var themes = new ThemeStore(paths.themesDir());
         var snippets = new SnippetStore(paths.snippetsFile());
         snippets.load();
+        var localStore = new dev.egateza.termul.core.localshell.LocalProfileStore(paths.localProfilesFile());
+        localStore.load();
+        var locals = new dev.egateza.termul.app.terminal.LocalProfiles(localStore);
+        locals.detect(); // baca /etc/shells & cek file di sini, bukan di EDT
+        var highlights = new dev.egateza.termul.core.highlight.HighlightStore(paths.highlightFile());
+        highlights.load();
+        var shortcuts = new dev.egateza.termul.core.shortcut.ShortcutStore(paths.shortcutsFile());
+        dev.egateza.termul.app.ui.Shortcuts.use(dev.egateza.termul.app.ui.KeyBindings.of(shortcuts.load(),
+                dev.egateza.termul.core.Os.current().isMac())); // sebelum menu dibuat
         try {
             int installed = themes.installBundled(BundledThemes.load());
             if (installed > 0) {
@@ -110,7 +119,8 @@ public final class TermULApp {
 
         var frameRef = new AtomicReference<Component>();
         var vault = new VaultGate(
-                new FileCredentialVault(paths.vaultFile(), Argon2Params.defaults(), new DpapiKeyProtector()),
+                new FileCredentialVault(paths.vaultFile(), Argon2Params.defaults(),
+                        OsKeyProtectors.forCurrentOs(paths.vaultFile())),
                 frameRef::get, Duration.ofMinutes(15));
         var knownHosts = new KnownHostsStore(paths.knownHostsFile());
         var sessions = new SessionManager(
@@ -146,7 +156,8 @@ public final class TermULApp {
             terminalSettings.setCursorShape(TerminalSettings.cursorShapeOf(config.current().cursorShape(),
                     config.current().cursorBlink()));
             var ctx = new AppContext(paths, config, store, io, sshOps, sessions, new SshTerminalFactory(sessions),
-                    terminalSettings, vault, edits, sftpLinks, themes, knownHosts, wsl, snippets);
+                    terminalSettings, vault, edits, sftpLinks, themes, knownHosts, wsl, snippets, locals, highlights,
+                    shortcuts);
             var frame = new MainFrame(ctx, customThemes,
                     () -> shutdown(io, sshOps, sessions, vault, edits, wsl, instance, log));
             frameRef.set(frame);

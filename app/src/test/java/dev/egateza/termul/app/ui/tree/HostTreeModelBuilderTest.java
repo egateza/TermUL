@@ -24,8 +24,8 @@ class HostTreeModelBuilderTest {
     void grupDitampilkanSebelumHostDanTerurut() {
         var root = HostTreeModelBuilder.build(snapshot, "");
 
-        assertThat(labels(root)).containsExactly("FAVORITES", "RECENT", "Produksi", "Staging", "lab");
-        var produksi = (DefaultMutableTreeNode) root.getChildAt(2);
+        assertThat(labels(root)).containsExactly("INSTANCE", "FAVORITES", "RECENT", "Produksi", "Staging", "lab");
+        var produksi = (DefaultMutableTreeNode) root.getChildAt(3);
         assertThat(labels(produksi)).containsExactly("Backend", "db-1");
     }
 
@@ -52,8 +52,8 @@ class HostTreeModelBuilderTest {
 
         var root = HostTreeModelBuilder.build(s, "");
 
-        var favorites = (DefaultMutableTreeNode) root.getChildAt(0);
-        var recent = (DefaultMutableTreeNode) root.getChildAt(1);
+        var favorites = (DefaultMutableTreeNode) root.getChildAt(1);
+        var recent = (DefaultMutableTreeNode) root.getChildAt(2);
         assertThat(favorites.getUserObject()).isEqualTo(BuiltinGroup.FAVORITES);
         assertThat(labels(favorites)).containsExactly("lab", "web-1");
         assertThat(recent.getUserObject()).isEqualTo(BuiltinGroup.RECENT);
@@ -83,8 +83,8 @@ class HostTreeModelBuilderTest {
 
         var root = HostTreeModelBuilder.build(s, "", List.of("ubuntu-22.04", "Debian"));
 
-        assertThat(labels(root)).containsExactly("FAVORITES", "RECENT", "WSL", "Produksi");
-        var wsl = (DefaultMutableTreeNode) root.getChildAt(2);
+        assertThat(labels(root)).containsExactly("INSTANCE", "FAVORITES", "RECENT", "WSL", "Produksi");
+        var wsl = (DefaultMutableTreeNode) root.getChildAt(3);
         assertThat(wsl.getUserObject()).isEqualTo(BuiltinGroup.WSL);
         assertThat(labels(wsl)).containsExactly("Ubuntu dev", "Debian");
         assertThat(((DefaultMutableTreeNode) wsl.getChildAt(1)).getUserObject())
@@ -98,13 +98,13 @@ class HostTreeModelBuilderTest {
         var s = new ProfileSnapshot(1, List.of("Kosong"), List.of(web, ubuntu), List.of(ubuntu.id()), List.of(ubuntu.id()));
 
         var on = HostTreeModelBuilder.build(s, "", List.of());
-        assertThat(labels(on)).containsExactly("FAVORITES", "RECENT", "WSL", "Kosong", "Produksi");
-        assertThat(labels((DefaultMutableTreeNode) on.getChildAt(2))).containsExactly("Ubuntu-ega"); // distro berhenti tetap tampil
+        assertThat(labels(on)).containsExactly("INSTANCE", "FAVORITES", "RECENT", "WSL", "Kosong", "Produksi");
+        assertThat(labels((DefaultMutableTreeNode) on.getChildAt(3))).containsExactly("Ubuntu-ega"); // distro berhenti tetap tampil
 
         var off = HostTreeModelBuilder.build(s, "", null);
-        assertThat(labels(off)).containsExactly("FAVORITES", "RECENT", "Kosong", "Produksi");
-        assertThat(labels((DefaultMutableTreeNode) off.getChildAt(0))).isEmpty();
+        assertThat(labels(off)).containsExactly("INSTANCE", "FAVORITES", "RECENT", "Kosong", "Produksi");
         assertThat(labels((DefaultMutableTreeNode) off.getChildAt(1))).isEmpty();
+        assertThat(labels((DefaultMutableTreeNode) off.getChildAt(2))).isEmpty();
         assertThat(labels(HostTreeModelBuilder.build(s, "ubuntu", null))).isEmpty();
     }
 
@@ -118,6 +118,37 @@ class HostTreeModelBuilderTest {
         assertThat(labels(HostTreeModelBuilder.build(s, "debian", List.of("Ubuntu-22.04", "Debian"))))
                 .containsExactly("WSL");
         assertThat(labels(HostTreeModelBuilder.build(s, "tidak-ada", List.of("Ubuntu-22.04", "Debian")))).isEmpty();
+    }
+
+    @Test
+    void nodeTerminalLokalPalingAtasDanIkutPencarian() {
+        var root = HostTreeModelBuilder.build(snapshot, "");
+        assertThat(((DefaultMutableTreeNode) root.getChildAt(0)).getUserObject())
+                .isEqualTo(HostTreeModelBuilder.LocalTerminalNode.INSTANCE);
+        assertThat(((DefaultMutableTreeNode) root.getChildAt(0)).getAllowsChildren()).isFalse();
+
+        assertThat(labels(HostTreeModelBuilder.build(snapshot, "shell"))).containsExactly("INSTANCE");
+        assertThat(labels(HostTreeModelBuilder.build(snapshot, "LOCAL"))).containsExactly("INSTANCE");
+        assertThat(labels(HostTreeModelBuilder.build(snapshot, "10.0.0.1"))).doesNotContain("INSTANCE");
+    }
+
+    @Test
+    void grupTerminalLokalBerisiProfilDanIkutPencarian() {
+        var zsh = new dev.egateza.termul.app.terminal.LocalProfiles.Choice(java.util.UUID.randomUUID(), "zsh",
+                List.of("/bin/zsh", "-l"), "", java.util.Map.of(), null, true, true);
+        var proyek = new dev.egateza.termul.app.terminal.LocalProfiles.Choice(java.util.UUID.randomUUID(), "Proyek API",
+                List.of("/bin/zsh", "-l"), "~/api", java.util.Map.of(), null, false, false);
+
+        var root = HostTreeModelBuilder.build(snapshot, "", null, List.of(zsh, proyek));
+        var local = (DefaultMutableTreeNode) root.getChildAt(0);
+        assertThat(local.getAllowsChildren()).isTrue();
+        assertThat(labels(local)).containsExactly("zsh", "Proyek API");
+
+        var filtered = HostTreeModelBuilder.build(snapshot, "api", null, List.of(zsh, proyek));
+        assertThat(labels(filtered)).containsExactly("INSTANCE");
+        assertThat(labels((DefaultMutableTreeNode) filtered.getChildAt(0))).containsExactly("Proyek API");
+        assertThat(labels(HostTreeModelBuilder.build(snapshot, "10.0.0.1", null, List.of(zsh, proyek))))
+                .doesNotContain("INSTANCE");
     }
 
     private static List<String> labels(DefaultMutableTreeNode node) {

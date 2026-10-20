@@ -66,6 +66,13 @@ public final class OsIcons {
     private OsIcons() {
     }
 
+    /** Ikon tab terminal lokal (ADR 0005). */
+    public static Icon local() {
+        return LOCAL;
+    }
+
+    private static final Icon LOCAL = AppIcon.TERMINAL.icon(SIZE);
+
     /** Ikon untuk OS (null = belum terdeteksi). */
     public static Icon of(OsInfo os) {
         if (os == null) {

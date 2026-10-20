@@ -10,6 +10,8 @@ package dev.egateza.termul.app.ui;
 record TerminalMenuState(boolean tabActions, boolean sftp, boolean inject) {
 
     static final TerminalMenuState NO_TAB = new TerminalMenuState(false, false, false);
+    /** Tab terminal lokal: aksi tab saja; tanpa SFTP dan tanpa inject password (tidak ada secret ke proses lokal). */
+    static final TerminalMenuState LOCAL = new TerminalMenuState(true, false, false);
 
     static TerminalMenuState of(boolean hasTab, boolean connected, boolean sftpOpen) {
         return of(hasTab, connected, sftpOpen, true);
