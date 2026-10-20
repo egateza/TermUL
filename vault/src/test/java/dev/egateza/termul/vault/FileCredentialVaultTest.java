@@ -245,6 +245,58 @@ class FileCredentialVaultTest {
         assertThat(vault(FAKE_OS).unlockWithOsKey()).isFalse();
     }
 
+    /** Seperti Keychain: material key di luar file blob, dengan akhiran file sendiri. */
+    private static final class StoredKeyProtector implements KeyProtector {
+        int discarded;
+
+        @Override
+        public boolean isAvailable() {
+            return true;
+        }
+
+        @Override
+        public String blobSuffix() {
+            return ".keychain";
+        }
+
+        @Override
+        public byte[] protect(byte[] data) {
+            return FAKE_OS.protect(data);
+        }
+
+        @Override
+        public byte[] unprotect(byte[] blob) {
+            return FAKE_OS.unprotect(blob);
+        }
+
+        @Override
+        public void discard() {
+            discarded++;
+        }
+    }
+
+    @Test
+    void protectorDenganItemOsMemakaiFileSendiriDanDibuangSaatDimatikan() {
+        var os = new StoredKeyProtector();
+        var v = vault(os);
+        v.create(pw("master-123"));
+        v.setRememberOnThisPc(true);
+
+        assertThat(dir.resolve("vault.bin.keychain")).exists();
+        assertThat(dir.resolve("vault.bin.dpapi")).doesNotExist();
+        assertThat(vault(os).unlockWithOsKey()).isTrue();
+        assertThat(vault(FAKE_OS).unlockWithOsKey()).isFalse(); // blob .keychain tidak dibaca protector DPAPI
+
+        v.setRememberOnThisPc(false);
+        assertThat(os.discarded).isEqualTo(1);
+        assertThat(dir.resolve("vault.bin.keychain")).doesNotExist();
+
+        v.unlock(pw("master-123"));
+        v.setRememberOnThisPc(true);
+        v.forgetMasterPassword(true);
+        assertThat(os.discarded).isEqualTo(2);
+    }
+
     @Test
     void keyOsDariVaultLainDitolak() throws Exception {
         var v = vault(FAKE_OS);
@@ -262,7 +314,7 @@ class FileCredentialVaultTest {
     void tanpaProtectorOpsiIngatTidakBisaDiaktifkan() {
         var v = vault(KeyProtector.UNAVAILABLE);
         v.create(pw("master-123"));
-        assertThatThrownBy(() -> v.setRememberOnThisPc(true)).hasMessageContaining("Windows");
+        assertThatThrownBy(() -> v.setRememberOnThisPc(true)).hasMessageContaining("tidak tersedia");
         assertThat(v.unlockWithOsKey()).isFalse();
     }
 
