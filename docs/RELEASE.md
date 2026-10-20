@@ -91,6 +91,29 @@ Selesai: v0.1.130
 3. Dari TermUL versi sebelumnya: **Bantuan → Periksa update** harus menampilkan versi baru, lalu
    **Unduh & pasang** → **Restart sekarang**. Setelah restart, **Bantuan → Tentang TermUL** menunjukkan versi baru.
 
+## Rilis dari macOS
+
+`tools/release-mac.sh` adalah padanan `release.ps1` untuk MacBook (bash, tanpa PowerShell).
+
+```bash
+git checkout master && git pull
+tools/release-mac.sh --notes docs/release-notes/v0.2.md --draft   # rilis penuh dari Mac
+tools/release-mac.sh --dmg-only                                    # lampirkan DMG ke rilis yang diterbitkan dari Windows
+tools/release-mac.sh --notes notes.md --dry-run                    # build + tanda tangan, tanpa mengunggah
+```
+
+- **Rilis penuh** berisi jar + `manifest.json` + `.sig`, `TermUL-<versi>-jar.zip`, dan `TermUL-<versi>-macos.dmg`. Jar sama
+  persis di semua OS, jadi pengguna Windows dan Mac sama-sama bisa update lewat menu. Yang **tidak ada**: zip app-image
+  dan `.msi` Windows (`jpackage` tidak bisa cross-build). Instalasi baru di Windows memakai rilis Windows terakhir lalu
+  update lewat menu.
+- Skrip menolak rilis yang menaikkan `UpdateProtocol.GENERATION` (dibanding rilis Latest), karena pengguna Windows
+  butuh installer baru. Rilis seperti itu diterbitkan dari Windows dengan `release.ps1`, lalu DMG dilampirkan dengan
+  `--dmg-only`.
+- Private key di `~/.termul-release/update-signing.key` (atau `TERMUL_UPDATE_KEY`) wajib mode `600`; skrip menolak file
+  yang bisa dibaca user lain. Pindahkan key dari mesin rilis lewat jalur aman (bukan chat/email, bukan iCloud Drive),
+  lalu `chmod 600`.
+- Butuh JDK 25, `gh` (`brew install gh`, `gh auth login`, akses tulis ke repo). `--dmg-only` tidak butuh private key.
+
 ## Aset yang diterbitkan
 
 | Aset | Untuk |
@@ -100,6 +123,7 @@ Selesai: v0.1.130
 | `TermUL-<versi>-windows.zip` | Instalasi baru di Windows: ekstrak, jalankan `TermUL\TermUL.exe` (runtime Java sudah termasuk) |
 | `TermUL-<versi>-jar.zip` | Instalasi baru di macOS/Linux: butuh JDK 25 terpasang |
 | `TermUL-<versi>.msi` | Instalasi baru di Windows lewat installer (hanya dengan `-Msi`) |
+| `TermUL-<versi>-macos.dmg` | Instalasi baru di macOS (`.app` dengan runtime Java sendiri); dari `tools/release-mac.sh` |
 
 ## Penomoran versi
 

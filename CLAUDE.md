@@ -116,6 +116,6 @@ Arah dependensi: `app → terminal, sftp → ssh → core`, `vault → core`, `a
 | `docs/SECURITY.md` | Threat model, desain vault, guard auto-sudo, risiko remote edit |
 | `docs/PLAN.md` | Roadmap per fase + checklist + acceptance criteria |
 | `docs/SETUP.md` | Tools, dependensi, environment dev & test |
-| `docs/RELEASE.md` | Menerbitkan rilis baru ke GitHub Releases (update lewat menu) |
+| `docs/RELEASE.md` | Menerbitkan rilis baru ke GitHub Releases (update lewat menu); Windows: `tools/release.ps1`, Mac: `tools/release-mac.sh` |
 | `docs/adr/` | Architecture Decision Records (0003: update via GitHub Releases, 0004: WSL lewat SSH + WSL Manager, 0005: terminal lokal lewat pty4j, 0006: Ingat di Mac ini via Keychain) |
 | `docs/local-terminal-plan.md` | Rencana & progres terminal lokal (ADR 0005) |
