@@ -32,6 +32,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
@@ -73,10 +74,21 @@ public class SftpPanel extends JPanel {
     private static final Logger log = LoggerFactory.getLogger(SftpPanel.class);
 
     protected final HostProfile profile;
+    /** Semua panel SFTP yang belum ditutup, untuk menu "Upload ke" dan drag & drop antar-panel. EDT. */
+    private static final List<SftpPanel> OPEN_PANELS = new ArrayList<>();
     private final SftpLinks links;
     protected final ExecutorService sshOps;
     protected final SftpTableModel model = new SftpTableModel();
-    protected final JTable table = new JTable(model);
+    protected final JTable table = new JTable(model) {
+        @Override
+        protected void processMouseEvent(MouseEvent e) {
+            if (e.getID() == MouseEvent.MOUSE_PRESSED) {
+                // diputuskan sebelum UI tabel memproses tekan: drag = transfer kalau ada tujuan, selain itu pilih baris
+                setDragEnabled(dragTargetAvailable());
+            }
+            super.processMouseEvent(e);
+        }
+    };
     protected final JTextField pathField = new JTextField();
     /** Filter nama untuk folder yang sedang dibuka (client-side, tanpa request ke server). */
     private final JTextField filterField = new JTextField();
@@ -141,6 +153,7 @@ public class SftpPanel extends JPanel {
     public SftpPanel(HostProfile profile, SftpLinks links, ExecutorService sshOps, EditActions editActions,
                      SystemFileIcons fileIcons, boolean dual, Consumer<Boolean> layoutChanged) {
         super(new BorderLayout());
+        OPEN_PANELS.add(this);
         this.profile = profile;
         this.links = links;
         this.sshOps = sshOps;
@@ -272,7 +285,6 @@ public class SftpPanel extends JPanel {
     /** Menampilkan/menyembunyikan panel file lokal di kiri (ala WinSCP). Panel lokal dibuat saat pertama dibutuhkan. */
     public void setDualPane(boolean on) {
         dualToggle.setSelected(on);
-        table.setDragEnabled(on); // drag ke panel lokal = download; satu panel: drag tetap untuk memilih baris
         uploadButton.setVisible(!on);
         downloadButton.setText(on ? null : I18n.t("sftp.toolbar.download"));
         downloadButton.setToolTipText(I18n.t(on ? "sftp.toolbar.download.dualTip" : "sftp.toolbar.download.tip"));
@@ -454,6 +466,23 @@ public class SftpPanel extends JPanel {
         });
         menu.add(menuItem(I18n.t("sftp.menu.download"), this::downloadSelected));
         menu.add(menuItem(I18n.t("sftp.menu.uploadHere"), this::chooseUpload));
+        var uploadTo = new javax.swing.JMenu(I18n.t("sftp.menu.uploadTo"));
+        uploadTo.setToolTipText(I18n.t("sftp.menu.uploadTo.tip"));
+        menu.add(uploadTo);
+        menu.addPopupMenuListener(new javax.swing.event.PopupMenuListener() {
+            @Override
+            public void popupMenuWillBecomeVisible(javax.swing.event.PopupMenuEvent e) {
+                rebuildUploadTo(uploadTo);
+            }
+
+            @Override
+            public void popupMenuWillBecomeInvisible(javax.swing.event.PopupMenuEvent e) {
+            }
+
+            @Override
+            public void popupMenuCanceled(javax.swing.event.PopupMenuEvent e) {
+            }
+        });
         menu.addSeparator();
         menu.add(menuItem(I18n.t("sftp.menu.rename"), this::renameSelected));
         menu.add(menuItem(I18n.t("sftp.menu.chmod"), this::chmodSelected));
@@ -579,6 +608,192 @@ public class SftpPanel extends JPanel {
             activity.report(Level.WARN, I18n.t("sftp.upload.cancelled", label));
             refreshIfShowing(dir);
         });
+    }
+
+    // ------------------------------------------------------------------ upload ke panel SFTP lain
+
+    /**
+     * Drag baris memulai transfer kalau ada yang bisa menerimanya: panel lokal (dua panel = download) atau panel SFTP
+     * lain yang terbuka (upload antar-server). Tanpa itu, drag dipakai untuk memilih beberapa baris.
+     */
+    private boolean dragTargetAvailable() {
+        return isDualPane() || !uploadTargets().isEmpty();
+    }
+
+    /** Panel ini bisa menerima upload dari panel lain: tersambung, sudah membuka folder, dan tampil di tab. */
+    private boolean isOpenTarget() {
+        return !disposed && link != null && currentDir != null
+                && SwingUtilities.getAncestorOfClass(javax.swing.JTabbedPane.class, this) != null;
+    }
+
+    /** Komponen tab tempat panel ini berada (panel dalam satu grup split berbagi komponen tab yang sama). */
+    private Component tabComponent() {
+        Component c = this;
+        while (c != null && !(c.getParent() instanceof javax.swing.JTabbedPane)) {
+            c = c.getParent();
+        }
+        return c;
+    }
+
+    private int tabIndex() {
+        Component tab = tabComponent();
+        return tab != null && tab.getParent() instanceof javax.swing.JTabbedPane tabs ? tabs.indexOfComponent(tab) : -1;
+    }
+
+    /** Panel tujuan "Upload ke": satu grup split dengan panel ini dulu, lalu panel di tab lain urut posisi tab. */
+    List<SftpPanel> uploadTargets() {
+        Component myTab = tabComponent();
+        return OPEN_PANELS.stream()
+                .filter(p -> p != this && p.isOpenTarget())
+                .sorted(java.util.Comparator.comparing((SftpPanel p) -> p.tabComponent() != myTab)
+                        .thenComparingInt(SftpPanel::tabIndex))
+                .toList();
+    }
+
+    private void rebuildUploadTo(javax.swing.JMenu menu) {
+        menu.removeAll();
+        var selected = selectedEntries();
+        var targets = uploadTargets();
+        menu.setEnabled(link != null && !selected.isEmpty());
+        if (targets.isEmpty()) {
+            var none = new JMenuItem(I18n.t("sftp.uploadTo.none"));
+            none.setEnabled(false);
+            menu.add(none);
+            return;
+        }
+        Component myTab = tabComponent();
+        Boolean section = null;
+        for (SftpPanel target : targets) {
+            boolean sameGroup = target.tabComponent() == myTab;
+            if (!Boolean.valueOf(sameGroup).equals(section)) {
+                if (section != null) {
+                    menu.addSeparator();
+                }
+                var header = new JMenuItem(I18n.t(sameGroup ? "sftp.uploadTo.sameGroup" : "sftp.uploadTo.otherTabs"));
+                header.setEnabled(false);
+                menu.add(header);
+                section = sameGroup;
+            }
+            var item = menuItem(I18n.t("sftp.uploadTo.item", target.profile.name(), shortDir(target.currentDir)),
+                    () -> target.copyFrom(this, selectedEntries()));
+            item.setToolTipText(target.profile.name() + ": " + target.currentDir);
+            menu.add(item);
+        }
+    }
+
+    /** Path panjang dipotong di depan supaya menu tidak terlalu lebar: …/var/www/app. */
+    static String shortDir(String dir) {
+        return dir.length() <= 40 ? dir : "…" + dir.substring(dir.length() - 39);
+    }
+
+    /**
+     * Salin {@code entries} dari panel {@code source} (server lain atau server yang sama) ke folder yang sedang dibuka
+     * di panel ini, setelah konfirmasi. Transfer berjalan di antrean panel ini; isi file langsung dari stream SFTP
+     * sumber ke stream SFTP tujuan tanpa file sementara di disk lokal. EDT.
+     */
+    void copyFrom(SftpPanel source, List<RemoteEntry> entries) {
+        if (link == null || currentDir == null || entries.isEmpty() || source == this) {
+            return;
+        }
+        String dir = currentDir;
+        if (!confirmCopy(source, entries, dir)) {
+            return;
+        }
+        boolean sameHost = source.profile.id().equals(profile.id());
+        for (RemoteEntry entry : entries) {
+            String label = entry.isDirectory() ? entry.name() + "/" : entry.name();
+            String problem = copyProblem(sameHost, entry.path(), entry.isDirectory(), dir);
+            if (problem != null) {
+                activity.report(Level.WARN, I18n.t(problem, label));
+                continue;
+            }
+            String from = source.profile.name();
+            var skipped = new AtomicBoolean();
+            var folder = new AtomicReference<TreeTransfer.Result>();
+            activity.report(Level.INFO, I18n.t("sftp.copy.queued", label, from, dir));
+            transfers.submit(I18n.t("sftp.copy.title", label, from), listener -> {
+                activity.report(Level.INFO, I18n.t("sftp.copy.running", label, from, dir));
+                link.execute(() -> {
+                    var sourceLink = source.link;
+                    if (sourceLink == null) {
+                        throw new dev.egateza.termul.sftp.RemoteFileException(I18n.t("sftp.copy.sourceClosed", from));
+                    }
+                    var in = sourceLink.ensureLive();
+                    boolean isDir = entry.isDirectory() || (entry.type() == RemoteEntry.Type.SYMLINK
+                            && in.stat(entry.path()).isDirectory());
+                    if (isDir) {
+                        var r = TreeTransfer.copy(in, entry.path(), svc(), dir, this::confirmMerge, listener);
+                        skipped.set(r == null);
+                        folder.set(r);
+                        return null;
+                    }
+                    String target = RemotePaths.join(dir, entry.name());
+                    if (svc().exists(target) && !confirmOverwrite(target)) {
+                        skipped.set(true);
+                        return null;
+                    }
+                    svc().copyFrom(in, entry.path(), target, listener);
+                    return null;
+                });
+            }, () -> {
+                var r = folder.get();
+                if (skipped.get()) {
+                    activity.report(Level.WARN, I18n.t("sftp.upload.skipped", label));
+                } else if (r != null) {
+                    activity.report(Level.SUCCESS, I18n.t("sftp.upload.folderDone", entry.name(),
+                            String.valueOf(r.files()), dir));
+                    reportSkipped(I18n.t("sftp.upload.infoTitle"), r.skipped());
+                } else {
+                    activity.report(Level.SUCCESS, I18n.t("sftp.upload.done", entry.name(), dir));
+                }
+                refreshIfShowing(dir);
+            }, err -> {
+                activity.report(Level.ERROR, I18n.t("sftp.upload.failed", label, err.getMessage()));
+                Dialogs.error(this, I18n.t("sftp.upload.failedTitle"), err);
+                refreshIfShowing(dir);
+            }, () -> {
+                activity.report(Level.WARN, I18n.t("sftp.upload.cancelled", label));
+                refreshIfShowing(dir);
+            });
+        }
+    }
+
+    /**
+     * Salinan yang tidak masuk akal di server yang sama: ke lokasinya sendiri, atau folder ke dalam dirinya sendiri.
+     *
+     * @return kunci pesan i18n, atau null kalau boleh
+     */
+    static String copyProblem(boolean sameHost, String sourcePath, boolean directory, String targetDir) {
+        if (!sameHost) {
+            return null;
+        }
+        if (RemotePaths.join(targetDir, RemotePaths.name(sourcePath)).equals(sourcePath)) {
+            return "sftp.copy.sameLocation";
+        }
+        if (directory && (targetDir.equals(sourcePath) || targetDir.startsWith(sourcePath + "/"))) {
+            return "sftp.copy.intoItself";
+        }
+        return null;
+    }
+
+    /** Konfirmasi sebelum upload antar-panel: dari mana, item apa, ke host dan folder mana. Peringatan untuk PROD. */
+    private boolean confirmCopy(SftpPanel source, List<RemoteEntry> entries, String dir) {
+        var names = entries.stream().limit(8)
+                .map(e -> "  • " + (e.isDirectory() ? e.name() + "/" : e.name())).toList();
+        String more = entries.size() > names.size()
+                ? "\n  " + I18n.t("sftp.copy.confirm.more", String.valueOf(entries.size() - names.size())) : "";
+        String message = I18n.t("sftp.copy.confirm.message", String.valueOf(entries.size()), source.profile.name(),
+                source.currentDir == null ? "" : source.currentDir, String.join("\n", names) + more,
+                profile.name(), profile.address(), dir);
+        boolean prod = profile.environment().isProduction();
+        if (prod) {
+            message += "\n\n" + I18n.t("sftp.copy.confirm.prod", profile.name());
+        }
+        Object[] options = {I18n.t("sftp.copy.confirm.ok"), I18n.t("sftp.copy.confirm.cancel")};
+        return javax.swing.JOptionPane.showOptionDialog(this, message, I18n.t("sftp.copy.confirm.title", profile.name()),
+                javax.swing.JOptionPane.OK_CANCEL_OPTION,
+                prod ? javax.swing.JOptionPane.WARNING_MESSAGE : javax.swing.JOptionPane.QUESTION_MESSAGE,
+                null, options, options[1]) == 0;
     }
 
     private void refreshIfShowing(String dir) {
@@ -768,8 +983,9 @@ public class SftpPanel extends JPanel {
     }
 
     /**
-     * Drag & drop file dari Windows Explorer atau panel lokal → upload ke direktori saat ini. Drag keluar dari tabel
-     * hanya bisa di-drop ke panel lokal (download).
+     * Drag & drop file dari Windows Explorer atau panel lokal → upload ke direktori saat ini; dari panel SFTP lain →
+     * upload antar-server (dengan konfirmasi). Drag keluar dari tabel bisa di-drop ke panel lokal (download) atau ke
+     * panel SFTP lain.
      */
     private final class FileDropHandler extends TransferHandler {
         @Override
@@ -785,13 +1001,35 @@ public class SftpPanel extends JPanel {
 
         @Override
         public boolean canImport(TransferSupport support) {
-            return link != null && support.isDataFlavorSupported(DataFlavor.javaFileListFlavor);
+            if (link == null) {
+                return false;
+            }
+            if (support.isDataFlavorSupported(RemoteSelection.FLAVOR)) {
+                // sebagian platform belum memberi isi transferable selama drag: terima dulu, dicek lagi saat drop
+                return remoteSelection(support).map(sel -> sel.source() != SftpPanel.this).orElse(true);
+            }
+            return support.isDataFlavorSupported(DataFlavor.javaFileListFlavor);
+        }
+
+        private Optional<RemoteSelection> remoteSelection(TransferSupport support) {
+            try {
+                return Optional.of((RemoteSelection) support.getTransferable().getTransferData(RemoteSelection.FLAVOR));
+            } catch (UnsupportedFlavorException | IOException | java.awt.dnd.InvalidDnDOperationException e) {
+                return Optional.empty();
+            }
         }
 
         @Override
         public boolean importData(TransferSupport support) {
             if (!canImport(support)) {
                 return false;
+            }
+            if (support.isDataFlavorSupported(RemoteSelection.FLAVOR)) {
+                var sel = remoteSelection(support);
+                // dialog konfirmasi setelah drop selesai, bukan di tengah operasi drag
+                sel = sel.filter(r -> r.source() != SftpPanel.this);
+                sel.ifPresent(r -> SwingUtilities.invokeLater(() -> copyFrom(r.source(), r.entries())));
+                return sel.isPresent();
             }
             try {
                 @SuppressWarnings("unchecked")
@@ -1036,6 +1274,7 @@ public class SftpPanel extends JPanel {
     /** Menutup SFTP (tab ditutup). Koneksi bersama baru ditutup kalau tidak dipakai lagi (mis. sesi edit). */
     public void dispose() {
         disposed = true;
+        OPEN_PANELS.remove(this);
         transferBadge.dispose();
         transfers.shutdown();
         unsubscribeLink.run();

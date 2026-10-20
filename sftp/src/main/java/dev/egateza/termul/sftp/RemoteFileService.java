@@ -296,6 +296,45 @@ public final class RemoteFileService implements AutoCloseable {
      */
     public void upload(Path local, String remoteOrLink, Integer newFileMode, TransferListener listener)
             throws RemoteFileException {
+        long total;
+        try {
+            total = Files.size(local);
+        } catch (IOException e) {
+            throw translate("Gagal upload", remoteOrLink, e);
+        }
+        write(() -> Files.newInputStream(local), total, remoteOrLink, newFileMode, listener);
+    }
+
+    /** Sumber isi file untuk {@link #write}: dibuka setelah file temp di tujuan siap. */
+    @FunctionalInterface
+    private interface Source {
+        InputStream open() throws IOException;
+    }
+
+    /**
+     * Salin file dari server lain (atau server yang sama) ke {@code targetOrLink} di server ini, langsung dari stream
+     * SFTP sumber ke stream SFTP tujuan: tidak ada salinan di disk lokal. Aturan tulisnya sama dengan
+     * {@link #upload(Path, String, Integer, TransferListener)} (temp lalu rename, mode file lama dipertahankan); file
+     * baru memakai mode file sumber.
+     *
+     * @param sourcePath file di {@code source}; symlink diikuti
+     */
+    public void copyFrom(RemoteFileService source, String sourcePath, String targetOrLink, TransferListener listener)
+            throws RemoteFileException {
+        RemoteEntry from = source.stat(sourcePath);
+        if (from.type() != RemoteEntry.Type.FILE) {
+            throw new RemoteFileException("Bukan file biasa, tidak bisa disalin: " + sourcePath);
+        }
+        write(() -> source.openRead(sourcePath), from.size(), targetOrLink, from.mode(), listener);
+    }
+
+    /** Stream baca file remote (kanal transfer); pemanggil wajib menutupnya. */
+    InputStream openRead(String remote) throws IOException {
+        return bulk().read(remote, BUFFER);
+    }
+
+    private void write(Source source, long total, String remoteOrLink, Integer newFileMode, TransferListener listener)
+            throws RemoteFileException {
         Objects.requireNonNull(listener);
         String remote = resolveLinks(remoteOrLink);
         String tmp = RemotePaths.join(RemotePaths.parent(remote),
@@ -307,14 +346,14 @@ public final class RemoteFileService implements AutoCloseable {
                 requireWritable(remote);
             }
             Integer mode = existing != null ? Integer.valueOf(existing.getPermissions() & 07777) : newFileMode;
-            long total = Files.size(local);
-            try (InputStream in = Files.newInputStream(local);
-                 OutputStream out = bulk().write(tmp, BUFFER, OpenMode.Write, OpenMode.Create, OpenMode.Exclusive)) {
+            try (OutputStream out = bulk().write(tmp, BUFFER, OpenMode.Write, OpenMode.Create, OpenMode.Exclusive)) {
                 tmpCreated = true;
                 if (existing != null) {
                     requireSameOwner(existing, tmp, remote); // temp dibuat user login: uid-nya = uid user login
                 }
-                copy(in, out, total, listener);
+                try (InputStream in = source.open()) {
+                    copy(in, out, total, listener);
+                }
             }
             if (mode != null) {
                 chmod(tmp, mode);
