@@ -43,7 +43,9 @@ yang belum ada di remote.
 
 ### 2. Tulis catatan rilis
 
-Buat file teks di luar repo, atau di dalam repo tapi jangan di-commit, misalnya `C:\tmp\notes.txt`:
+Buat file teks di luar repo, atau di dalam repo tapi jangan di-commit, misalnya `C:\tmp\notes.txt`. Catatan untuk
+kenaikan versi besar disimpan di `docs/release-notes/` (mis. `docs/release-notes/v0.2.md`) dan boleh dipakai langsung
+sebagai `-NotesFile`:
 
 ```text
 - Perbaikan: koneksi lewat jump host tidak lagi menggantung saat tujuan mati.

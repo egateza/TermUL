@@ -83,7 +83,7 @@
         <!-- main class distribusi (app-image, fat jar): memilih update terpasang atau versi bawaan (ADR 0003) -->
         <termul.bootstrapClass>dev.egateza.termul.update.Bootstrap</termul.bootstrapClass>
         <!-- major.minor versi aplikasi; build number (jumlah commit git) ditambahkan saat build → mis. 0.1.105 -->
-        <termul.versionBase>0.1</termul.versionBase>
+        <termul.versionBase>0.2</termul.versionBase>
     </properties>
 
     <build>
@@ -379,7 +379,7 @@
             <properties>
                 <jpackage.icon>${project.basedir}/src/main/packaging/termul.icns</jpackage.icon>
                 <!-- macOS menolak versi bundle berawalan 0; versi yang tampil di aplikasi tetap dari build.properties -->
-                <jpackage.appVersion>1.0.${git.total.commit.count}</jpackage.appVersion>
+                <jpackage.appVersion>1.1.${git.total.commit.count}</jpackage.appVersion>
                 <jpackage.installerArgs>--mac-package-identifier dev.egateza.termul --mac-package-name TermUL --mac-app-category public.app-category.developer-tools</jpackage.installerArgs>
             </properties>
         </profile>
