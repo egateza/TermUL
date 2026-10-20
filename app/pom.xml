@@ -33,6 +33,10 @@
         </dependency>
         <dependency>
             <groupId>dev.egateza.termul</groupId>
+            <artifactId>termul-localterm</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.egateza.termul</groupId>
             <artifactId>termul-sftp</artifactId>
         </dependency>
         <dependency>
@@ -251,6 +255,8 @@
                         <executions>
                             <execution>
                                 <id>jpackage</id>
+                                <!-- Jangan tambahkan strip-native-commands ke jlink-options: pty4j (terminal lokal, ADR 0005)
+                                     menjalankan runtime/bin/java untuk ConPTY di Windows. -->
                                 <phase>package</phase>
                                 <goals>
                                     <goal>exec</goal>
