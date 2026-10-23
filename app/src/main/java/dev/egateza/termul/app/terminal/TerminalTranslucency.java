@@ -30,6 +30,15 @@ public final class TerminalTranslucency {
         return percent;
     }
 
+    /**
+     * @return opasitas latar untuk panel {@code c}: {@link #percent()} kalau window-nya beralpha per piksel, selain itu
+     *         100 (mis. window tab terpisah yang berdekorasi native: latar beralpha di sana meninggalkan sisa gambar)
+     */
+    public static int percentFor(Component c) {
+        var window = SwingUtilities.getWindowAncestor(c);
+        return window != null && !window.isOpaque() ? percent : 100;
+    }
+
     /** @param value persen; 100 = solid (juga dipakai kalau window tidak beralpha per piksel) */
     public static void setPercent(int value) {
         percent = Math.clamp(value, 0, 100);

@@ -50,6 +50,7 @@ public final class SshTtyConnector implements TtyConnector {
     private final SshLease lease;
     private final ChannelShell channel;
     private final String name;
+    private final String shellToken;
     private final Reader reader;
     private final OutputStream stdin;
     private final ExecutorService writer;
@@ -72,6 +73,12 @@ public final class SshTtyConnector implements TtyConnector {
     private ScheduledFuture<?> resizeTask; // guarded by this
 
     public SshTtyConnector(SshLease lease, ChannelShell channel, String name) {
+        this(lease, channel, name, null);
+    }
+
+    /** @param shellToken penanda {@link ShellCwd#ENV_NAME} yang dikirim saat shell dibuka; null = tidak dikirim */
+    public SshTtyConnector(SshLease lease, ChannelShell channel, String name, String shellToken) {
+        this.shellToken = shellToken;
         this.lease = Objects.requireNonNull(lease, "lease");
         this.channel = Objects.requireNonNull(channel, "channel");
         this.name = Objects.requireNonNull(name, "name");
@@ -115,6 +122,11 @@ public final class SshTtyConnector implements TtyConnector {
 
     public SshLease lease() {
         return lease;
+    }
+
+    /** Penanda shell ini untuk {@link ShellCwd}; null kalau tidak dikirim saat shell dibuka. */
+    public String shellToken() {
+        return shellToken;
     }
 
     @Override

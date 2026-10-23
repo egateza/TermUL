@@ -109,6 +109,13 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     /** Tab yang dipilih dengan Ctrl+klik untuk digabung (Ctrl+G), urutan pilih. EDT. */
     private final java.util.Set<java.awt.Component> marked = new java.util.LinkedHashSet<>();
     private final LocalTerminalFactory localTerminals = new LocalTerminalFactory(Os.current());
+    /** Tab yang dilepas ke window sendiri (klik kanan tab → Lepas ke window baru, atau seret keluar baris tab). EDT. */
+    private final List<DetachedTabWindow> detached = new ArrayList<>();
+    /**
+     * Window tab terpisah yang terakhir aktif; null kalau yang terakhir aktif window utama. Aksi menu/shortcut Terminal
+     * bekerja pada tab di window ini. Dialog (konfirmasi, dsb.) tidak mengubahnya. EDT.
+     */
+    private DetachedTabWindow activeDetached;
     /** Nama tab yang diganti user (klik kanan → Ganti nama), per isi tab; hanya selama aplikasi berjalan. EDT. */
     private final java.util.Map<java.awt.Component, String> customTitles = new java.util.HashMap<>();
     private final RoundedPanel center = new RoundedPanel();
@@ -144,6 +151,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private JMenuItem miDuplicate;
     private JMenuItem miReconnect;
     private JMenuItem miCloseTab;
+    private JMenuItem miDetach; // lepas tab ke window baru / kembalikan ke window utama
     private JMenuItem miNextTab;
     private JMenuItem miPreviousTab;
     private JMenuItem miSftp;
@@ -328,6 +336,10 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
             @Override
             public void windowActivated(WindowEvent e) {
+                if (activeDetached != null) {
+                    activeDetached = null;
+                    updateTerminalMenu();
+                }
                 if (streakPending) {
                     streakPending = false;
                     streak.start();
@@ -377,7 +389,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                 maybeTabMenu(e);
             }
         });
-        TabDragSupport.install(tabs, this::moveTab);
+        TabDragSupport.install(tabs, this::moveTab, this::detachTab);
         var idleAnimation = AnimationChoice.fromId(ctx.config().current().idleAnimation());
         home.setAnimation(idleAnimation);
         homeView.setBase(home);
@@ -559,8 +571,11 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         if (tab.isPresent() && isExitKey(e)) {
             // Alt+F4 di terminal: JediTerm mengirimnya ke server sebagai escape sequence (bell, jendela tidak
             // tertutup) dan accelerator menu Keluar tidak pernah terpicu. Tutup seperti tombol X (ikut aturan tray).
+            // Di window tab terpisah, yang ditutup window itu saja, bukan aplikasi.
             e.consume();
-            SwingUtilities.invokeLater(() -> dispatchEvent(new WindowEvent(this, WindowEvent.WINDOW_CLOSING)));
+            var window = SwingUtilities.getWindowAncestor(e.getComponent());
+            var target = window instanceof DetachedTabWindow ? window : this;
+            SwingUtilities.invokeLater(() -> target.dispatchEvent(new WindowEvent(target, WindowEvent.WINDOW_CLOSING)));
             return true;
         }
         if (tab.isPresent() && tab.get().interceptKey(e)) {
@@ -572,7 +587,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         }
         var ks = KeyStroke.getKeyStrokeForEvent(e);
         var action = Shortcuts.bindings().actionFor(ks).orElse(null);
-        if (action == null || e.getComponent() == null || SwingUtilities.getWindowAncestor(e.getComponent()) != this) {
+        if (action == null || e.getComponent() == null || !isTabWindow(SwingUtilities.getWindowAncestor(e.getComponent()))) {
             return false;
         }
         // Gabung (Ctrl+G) diambil kalau ada tab yang dipilih untuk digabung; selain itu tetap ^G ke shell
@@ -585,7 +600,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             return false;
         }
         if (action.tabNumber() > 0) { // Ctrl/⌘+1..9, tanpa item menu
-            if (action.tabNumber() <= tabs.getTabCount()) {
+            if (activeDetached == null && action.tabNumber() <= tabs.getTabCount()) { // window terpisah: satu tab saja
                 selectTab(action.tabNumber() - 1);
             }
             e.consume(); // tab tidak ada: tetap tidak dikirim ke shell
@@ -616,15 +631,18 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         for (var item : new JMenuItem[] {miDuplicate, miReconnect, miCloseTab, miZoomIn, miZoomOut, miZoomReset}) {
             item.setEnabled(state.tabActions());
         }
-        miNextTab.setEnabled(tabs.getTabCount() > 1);
-        miPreviousTab.setEnabled(tabs.getTabCount() > 1);
+        boolean inDetached = activeDetached != null;
+        miNextTab.setEnabled(!inDetached && tabs.getTabCount() > 1);
+        miPreviousTab.setEnabled(!inDetached && tabs.getTabCount() > 1);
+        miDetach.setText(I18n.t(inDetached ? "main.menu.terminal.reattach" : "main.menu.terminal.detach"));
+        miDetach.setEnabled(tab.isPresent());
         miSftp.setEnabled(state.sftp());
         miInjectSudo.setEnabled(state.inject());
         miInjectRoot.setEnabled(state.inject());
         boolean grouped = currentGroup().map(g -> g.panes().size() > 1).orElse(false);
         marked.removeIf(c -> tabs.indexOfComponent(c) < 0); // tab yang sudah ditutup
         miGroup.setEnabled(marked.size() >= 2);
-        miUngroup.setEnabled(grouped);
+        miUngroup.setEnabled(grouped && !inDetached);
         miClosePane.setEnabled(grouped);
         miNextPane.setEnabled(grouped);
     }
@@ -759,7 +777,8 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         terminal.add(miReconnect = actionItem(null, I18n.t("main.menu.terminal.reconnect"), ShortcutAction.RECONNECT,
                 () -> currentTab().ifPresent(TermPane::reconnect)));
         terminal.add(miCloseTab = actionItem(null, I18n.t("main.tab.close"), ShortcutAction.CLOSE_TAB,
-                () -> closeTab(tabs.getSelectedIndex())));
+                this::closeCurrentTab));
+        terminal.add(miDetach = menuItem(null, I18n.t("main.menu.terminal.detach"), null, this::toggleDetachCurrent));
         terminal.add(miNextTab = actionItem(null, I18n.t("main.menu.terminal.nextTab"), ShortcutAction.NEXT_TAB,
                 () -> cycleTab(1)));
         terminal.add(miPreviousTab = actionItem(null, I18n.t("main.menu.terminal.previousTab"), ShortcutAction.PREVIOUS_TAB,
@@ -1367,6 +1386,9 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
     /** Pindah ke tab berikutnya ({@code delta} 1) atau sebelumnya (-1), berputar di ujung. EDT. */
     private void cycleTab(int delta) {
+        if (activeDetached != null) {
+            return; // window terpisah hanya berisi satu tab
+        }
         int count = tabs.getTabCount();
         if (count > 1) {
             selectTab(Math.floorMod(Math.max(tabs.getSelectedIndex(), 0) + delta, count));
@@ -2091,6 +2113,9 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     }
 
     private Optional<SplitPanes<TermPane>> currentGroup() {
+        if (activeDetached != null) {
+            return Optional.of(activeDetached.group());
+        }
         int index = tabs.getSelectedIndex();
         return index < 0 ? Optional.empty() : Optional.of(groupAt(index));
     }
@@ -2114,13 +2139,19 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         return allPanes().stream().flatMap(p -> ssh(p).stream()).toList();
     }
 
-    /** Semua panel terminal di semua tab. */
+    /** Semua panel terminal di semua tab, termasuk tab yang dilepas ke window sendiri. */
     private List<TermPane> allPanes() {
         var result = new ArrayList<TermPane>();
         for (int i = 0; i < tabs.getTabCount(); i++) {
             result.addAll(groupAt(i).panes());
         }
+        detached.forEach(w -> result.addAll(w.group().panes()));
         return result;
+    }
+
+    /** Window utama atau window tab terpisah: shortcut aplikasi berlaku di sana. */
+    private boolean isTabWindow(Window window) {
+        return window == this || (window instanceof DetachedTabWindow w && detached.contains(w));
     }
 
     /** Tutup tab dari tombol ✕ / menu (semua panel split-nya): konfirmasi dulu kalau ada sesi yang masih aktif. */
@@ -2133,6 +2164,162 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             return;
         }
         removeTab(index, true);
+    }
+
+    /** Tutup tab (Ctrl/⌘+W): tab terpilih di window utama, atau tab di window terpisah yang sedang aktif. */
+    private void closeCurrentTab() {
+        if (activeDetached != null) {
+            closeDetached(activeDetached);
+        } else {
+            closeTab(tabs.getSelectedIndex());
+        }
+    }
+
+    /** Menu Terminal → Lepas tab / Kembalikan ke window utama, untuk tab yang sedang aktif. */
+    private void toggleDetachCurrent() {
+        if (activeDetached != null) {
+            reattach(activeDetached);
+        } else if (tabs.getSelectedIndex() >= 0) {
+            detachTab(tabs.getSelectedIndex(), null);
+        }
+    }
+
+    /**
+     * Pindahkan tab ke window sendiri (sesi tetap berjalan, tanpa reconnect). EDT.
+     *
+     * @param screen titik layar tempat tab dilepas (hasil seret); null = sedikit bergeser dari window utama
+     */
+    private void detachTab(int index, java.awt.Point screen) {
+        if (index < 0 || index >= tabs.getTabCount()) {
+            return;
+        }
+        var group = groupAt(index);
+        Dimension size = group.getSize();
+        if (size.width < 400 || size.height < 250) {
+            size = new Dimension(900, 600);
+        }
+        String custom = customTitles.remove(group);
+        marked.remove(group);
+        tabs.removeTabAt(index); // panel tidak di-dispose: hanya pindah window
+        group.setActiveListener(this::updateTerminalMenu);
+        var window = new DetachedTabWindow(group, custom, buildDetachedMenu(), new DetachedTabWindow.Owner() {
+            @Override
+            public void closeRequested(DetachedTabWindow w) {
+                closeDetached(w);
+            }
+
+            @Override
+            public void activated(DetachedTabWindow w) {
+                activeDetached = w;
+                updateTerminalMenu();
+            }
+        });
+        detached.add(window);
+        window.getContentPane().setPreferredSize(size);
+        window.pack();
+        if (screen != null) {
+            window.setLocation(screen.x - 60, screen.y - 20); // judul window di bawah kursor
+        } else {
+            window.setLocation(getX() + 48, getY() + 48);
+        }
+        updateCenter();
+        refreshTitles();
+        window.setVisible(true);
+        window.toFront();
+    }
+
+    /** Kembalikan tab di window terpisah ke window utama (paling kanan). EDT. */
+    private void reattach(DetachedTabWindow window) {
+        if (!detached.remove(window)) {
+            return;
+        }
+        if (activeDetached == window) {
+            activeDetached = null;
+        }
+        String custom = window.customTitle();
+        var group = window.takeGroup();
+        window.dispose();
+        if (custom != null) {
+            customTitles.put(group, custom);
+        }
+        insertGroupTab(group, tabs.getTabCount());
+        refreshTitles();
+        showWindow();
+        SwingUtilities.invokeLater(() -> group.active().focusTerminal());
+    }
+
+    /** Tombol tutup / Ctrl+W di window terpisah: seperti menutup tab, dengan konfirmasi kalau masih ada sesi. EDT. */
+    private void closeDetached(DetachedTabWindow window) {
+        if (!detached.contains(window)) {
+            return;
+        }
+        activeDetached = window; // dialog konfirmasi tampil di depan window yang ditutup
+        if (!confirmClose(window.group().panes(), I18n.t("main.tab.close"), window::toFront)) {
+            return;
+        }
+        disposeDetached(window, true);
+    }
+
+    /** @param closeEdits true = host yang tidak punya panel lain ikut menutup sesi edit-nya (lihat {@link #removeTab}) */
+    private void disposeDetached(DetachedTabWindow window, boolean closeEdits) {
+        var panes = window.group().panes();
+        if (closeEdits) {
+            lastProfilesOf(panes).forEach(id -> ctx.edits().closeProfile(id));
+        }
+        detached.remove(window);
+        if (activeDetached == window) {
+            activeDetached = null;
+        }
+        panes.forEach(TermPane::dispose);
+        window.dispose();
+        updateTerminalMenu();
+    }
+
+    /**
+     * Menu window terpisah: aksi menu Terminal untuk tab di window itu. Item dibuat ulang setiap menu dibuka, supaya
+     * status aktif dan shortcut-nya mengikuti item aslinya di window utama.
+     */
+    private JMenuBar buildDetachedMenu() {
+        var bar = new JMenuBar();
+        var menu = new JMenu(I18n.t("main.menu.terminal"));
+        menu.addMenuListener(new javax.swing.event.MenuListener() {
+            @Override
+            public void menuSelected(javax.swing.event.MenuEvent e) {
+                updateTerminalMenu();
+                menu.removeAll();
+                menu.add(popupItem(miDetach));
+                menu.addSeparator();
+                for (var item : new JMenuItem[] {miDuplicate, miReconnect, miSftp}) {
+                    menu.add(popupItem(item));
+                }
+                menu.addSeparator();
+                menu.add(popupItem(miInjectSudo));
+                menu.add(popupItem(miInjectRoot));
+                menu.addSeparator();
+                for (var item : new JMenuItem[] {miZoomIn, miZoomOut, miZoomReset}) {
+                    menu.add(popupItem(item));
+                }
+                menu.addSeparator();
+                menu.add(popupItem(miNextPane));
+                menu.add(popupItem(miClosePane));
+                menu.add(popupItem(miCloseTab));
+            }
+
+            @Override
+            public void menuDeselected(javax.swing.event.MenuEvent e) {
+            }
+
+            @Override
+            public void menuCanceled(javax.swing.event.MenuEvent e) {
+            }
+        });
+        bar.add(menu);
+        return bar;
+    }
+
+    /** Induk dialog: window terpisah yang sedang aktif, supaya dialog muncul di depan window itu. */
+    private java.awt.Component dialogParent() {
+        return activeDetached != null ? activeDetached : this;
     }
 
     /**
@@ -2163,7 +2350,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                     .collect(Collectors.joining(", ")));
         }
         reveal.run();
-        boolean yes = JOptionPane.showConfirmDialog(this, question + runningNote + transferNote + editNote,
+        boolean yes = JOptionPane.showConfirmDialog(dialogParent(), question + runningNote + transferNote + editNote,
                 title, JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE) == JOptionPane.YES_OPTION;
         if (!yes) {
             currentTab().ifPresent(TermPane::focusTerminal);
@@ -2216,6 +2403,9 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
     /** Duplikat tab: buka sesi baru dengan sumber yang sama (host SSH, atau "SFTP saja"). */
     private void duplicate(TermPane pane) {
+        if (activeDetached != null) {
+            showWindow(); // tab baru selalu dibuka di window utama
+        }
         switch (pane) {
             case TerminalTab t -> openTab(t.profile(), t.isSftpOnly());
             case LocalTerminalTab l -> openLocalProfile(l.profileId());
@@ -2268,6 +2458,8 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         menu.add(popupItem(miReconnect));
         menu.add(popupItem(miSftp));
         menu.add(menuItem(null, I18n.t("main.tabMenu.rename"), null, () -> renameTab(group)));
+        menu.add(menuItem(null, I18n.t("main.menu.terminal.detach"), null,
+                () -> detachTab(tabs.indexOfComponent(group), null)));
         menu.addSeparator();
         menu.add(menuItem(null, I18n.t(marked.contains(group) ? "main.tabMenu.unmark" : "main.tabMenu.mark"), null,
                 () -> toggleMark(group)));
@@ -2402,13 +2594,13 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
     /** Tutup panel split yang aktif; panel terakhir = tutup tab. */
     private void closePane() {
-        int index = tabs.getSelectedIndex();
-        if (index < 0) {
+        var current = currentGroup();
+        if (current.isEmpty()) {
             return;
         }
-        var group = groupAt(index);
+        var group = current.get();
         if (group.panes().size() < 2) {
-            closeTab(index);
+            closeCurrentTab();
             return;
         }
         var pane = group.active();
@@ -2418,7 +2610,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         lastProfilesOf(List.of(pane)).forEach(id -> ctx.edits().closeProfile(id));
         pane.dispose();
         group.removePane(pane);
-        refreshTitles();
+        refreshTitles(); // termasuk judul window terpisah
         updateTerminalMenu();
         group.active().focusTerminal();
     }
@@ -2527,6 +2719,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             tabs.setTitleAt(i, tabTitle(groupAt(i)));
             tabs.setToolTipTextAt(i, tabTooltip(groupAt(i)));
         }
+        detached.forEach(DetachedTabWindow::refreshTitle);
         refreshTabIcons();
     }
 
@@ -2544,6 +2737,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                 for (int i = 0; i < tabs.getTabCount(); i++) {
                     groupAt(i).setOrientation(mode.orientation());
                 }
+                detached.forEach(w -> w.group().setOrientation(mode.orientation()));
                 mutate(I18n.t("error.saveSettings"), () ->
                         ctx.config().save(ctx.config().current().withSplitMode(mode.id())));
             });
@@ -2659,8 +2853,12 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             if (first >= 0 && isTabActive(tabs.getSelectedIndex())) {
                 return false; // tab yang sedang dipakai sudah menunjukkan sesi aktif: jangan dipindah
             }
+            var activeWindow = detached.stream().filter(w -> w.group().panes().stream()
+                    .anyMatch(t -> t.isSessionActive() || t.activeTransfers() > 0)).findFirst();
             if (first >= 0) {
                 tabs.setSelectedIndex(first);
+            } else if (activeWindow.isPresent()) {
+                activeWindow.get().toFront();
             } else if (!ctx.edits().entries().isEmpty()) {
                 showEditTracker();
             }
@@ -2672,6 +2870,9 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private void closeAndExit() {
         while (tabs.getTabCount() > 0) {
             removeTab(0, false);
+        }
+        for (var w : List.copyOf(detached)) {
+            disposeDetached(w, false);
         }
         updateNotifier.close();
         dispose();
@@ -3064,10 +3265,26 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         tab.setSecretInjector(type -> tab.injectSecret(type, ctx.vault())); // tombol toolbar = hotkey Ctrl+Shift+P
         tab.setEditActivity(sink -> ctx.edits().addActivityListener(profile.id(), sink), this::showEditTracker);
         tab.setSnippetHost(snippetHost);
+        tab.setFollowHost(followHost);
         tab.setHostPalette(id -> HostTerminalColors.palette(id, customThemes));
         applyHighlight(tab);
         return tab;
     }
+
+    /** "Ikuti folder terminal" (tombol di panel SFTP): satu pengaturan untuk semua tab, disimpan di config.json. */
+    private final TerminalTab.FollowHost followHost = new TerminalTab.FollowHost() {
+        @Override
+        public boolean following() {
+            return ctx.config().current().sftpFollowTerminal();
+        }
+
+        @Override
+        public void setFollowing(boolean on) {
+            sshPanes().forEach(t -> t.applyFollowing(on));
+            mutate(I18n.t("error.saveSettings"),
+                    () -> ctx.config().save(ctx.config().current().withSftpFollowTerminal(on)));
+        }
+    };
 
     @Override
     public void newHost(String group) {

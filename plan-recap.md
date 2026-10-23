@@ -180,6 +180,28 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] Windows: window utama selalu tanpa dekorasi + `WinCustomFrame` (Snap, Snap Layouts, resize tepi, maximize pas area kerja, animasi docking); tanpa kedip/ikon taskbar hilang saat ganti mode. Diuji manual user lewat prototipe dan build dev
 - [ ] Uji multi-monitor DPI berbeda, dan transparansi di macOS
 
+### Ikuti folder terminal & lepas tab (permintaan user 2026-10-20, branch `feat/follow-cwd-detach-tab`)
+- [x] `terminal.ShellCwd`: shell dibuka dengan env `LC_TERMUL_TTY=<token acak>` (request `env` tanpa want-reply, server
+  yang menolak cukup mengabaikan). Probe `sh -c` lewat exec: cari proses ber-token di `/proc/*/environ`, baca `tpgid`
+  dari `/proc/<pid>/stat`, `readlink /proc/<tpgid>/cwd` (folder program di depan; root lewat sudo = tidak terbaca)
+- [x] `terminal.Osc7Parser`: OSC 7 (`file://host/path`, BEL/ST) dari output shell; kalau ada, probe exec tidak dipakai
+- [x] `app.terminal.CwdFollower`: probe 400 ms setelah Enter (digabung, satu sekaligus), hanya saat fitur aktif, panel
+  SFTP terbuka, dan bukan layar alternatif (vim/htop/less). Tombol "Ikuti folder terminal" (ikon link) di toolbar SFTP,
+  global di `config.json` (`sftpFollowTerminal`, default mati). `SftpPanel.followTo` tanpa dialog error
+- [x] `app.ui.DetachedTabWindow`: lepas tab lewat klik kanan tab / Terminal → Lepas tab ke window baru / seret tab
+  > 40 px dari baris tab; menu Terminal sendiri (Kembalikan ke window utama, dst.). `MainFrame.currentGroup()` mengikuti
+  window tab terakhir aktif; `allPanes()` termasuk window terpisah (pengaturan, highlight, konfirmasi keluar)
+- [x] Unit test: `Osc7ParserTest`, `ShellCwdTest`, `AppConfigSftpFollowTest`, `TabDragSupportTest`; IT `ShellCwdIT`
+  (belum dijalankan: Docker tidak aktif di Mac saat implementasi). Skrip probe diuji manual dengan `/proc` tiruan
+- [x] `app.sftp.PathBar` (permintaan user 2026-10-21): breadcrumb menggantikan field path di `SftpPanel` dan
+  `LocalFilePane`. Mode edit lewat klik area kosong atau tombol pensil (shortcut keyboard sengaja belum, keputusan user).
+  Path ketikan yang gagal tidak memunculkan dialog; folder yang berganti dari luar (ikuti terminal) tidak menghapus
+  ketikan. Drop ke segmen: `SftpPanel.DirDropHandler` (upload/salin antar-panel ke folder segmen, file dari panel
+  sendiri ditolak), `LocalFilePane.DirDropHandler` (download). Ditunda: dropdown subfolder (▸) di antara segmen.
+  Test `PathBarTest`; tampilan dicek lewat render PNG terang/gelap
+- [ ] Uji manual user (lihat acceptance Fase 12 di `docs/PLAN.md`)
+- Catatan: 3 test gagal di macOS juga di `master` (`EditorLauncherTest` ×2, `InstallGuideTest`), bukan dari perubahan ini
+
 ### Tambahan dari uji manual user (setelah Fase 4)
 - [x] Auth "Default": coba key `~/.ssh`, lalu jatuh ke password (sebelumnya error kalau tidak ada key)
 - [x] Terminal tidak lagi terlihat hang setelah logout: banner Reconnect + Enter untuk reconnect

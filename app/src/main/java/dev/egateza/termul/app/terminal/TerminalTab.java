@@ -115,6 +115,51 @@ public final class TerminalTab extends TermPane {
     private SftpPanel sftp;              // dibuat saat pertama kali dibuka
     private JSplitPane split;
     private int sftpDivider = 380;
+    /** "Ikuti folder terminal" untuk panel SFTP tab ini. */
+    private final CwdFollower follower;
+    private FollowHost followHost;       // EDT; null = tanpa tombol "Ikuti folder terminal"
+
+    /** Pengaturan "Ikuti folder terminal" yang berlaku untuk semua tab. */
+    public interface FollowHost {
+        boolean following();
+
+        /** Dipanggil saat user menekan tombol di panel SFTP; pemilik menyimpan lalu memanggil {@link #applyFollowing}. */
+        void setFollowing(boolean on);
+    }
+
+    /** Pasang pengaturan "Ikuti folder terminal". Panggil sebelum {@link #connect()}. */
+    public void setFollowHost(FollowHost host) {
+        if (sftpOnly) {
+            return; // tanpa shell: tidak ada folder terminal untuk diikuti
+        }
+        this.followHost = host;
+        follower.setEnabled(host.following());
+    }
+
+    /** "Ikuti folder terminal" dinyalakan/dimatikan (dari tab mana pun). EDT. */
+    public void applyFollowing(boolean on) {
+        if (followHost == null) {
+            return;
+        }
+        follower.setEnabled(on);
+        if (sftp != null) {
+            sftp.setFollowing(on);
+        }
+    }
+
+    /** true selama program layar penuh (vim, htop, less) memakai layar alternatif terminal. EDT. */
+    private boolean isAlternateScreen() {
+        if (widget == null) {
+            return false;
+        }
+        var buffer = widget.getTerminalTextBuffer();
+        buffer.lock();
+        try {
+            return buffer.isUsingAlternateBuffer();
+        } finally {
+            buffer.unlock();
+        }
+    }
 
     public TerminalTab(HostProfile profile, SshTerminalFactory factory, Executor sshOps, TerminalSettings settings,
                        SftpLinks links, boolean sftpOnly, Function<HostProfile, SftpPanel> sftpFactory) {
@@ -127,6 +172,7 @@ public final class TerminalTab extends TermPane {
         this.settings = settings.copy(); // zoom per tab
         this.sftpFactory = sftpFactory;
         TerminalFocusTracker.get(); // dipasang sebelum terminal mana pun difokus, supaya terminal pertama tercatat
+        this.follower = new CwdFollower(sshOps, () -> split != null ? sftp : null, this::isAlternateScreen);
         content.add(banner, BorderLayout.NORTH);
         banner.setVisible(false);
         center.setMargins(28, 16); // kanan lebih lebar: jangan menutupi scrollbar terminal
@@ -376,6 +422,9 @@ public final class TerminalTab extends TermPane {
             if (sftp == null) {
                 sftp = sftpFactory.apply(profile);
                 sftp.addPropertyChangeListener(SftpPanel.DUAL_PANE_PROPERTY, e -> onSftpLayoutChanged());
+                if (followHost != null) {
+                    sftp.setFollowHandler(followHost.following(), followHost::setFollowing);
+                }
             }
             remove(content);
             // batas seret divider: terminal yang disempitkan sampai beberapa kolom membuat prompt shell rusak
@@ -391,6 +440,7 @@ public final class TerminalTab extends TermPane {
             split.setDividerLocation(sftpWidth(sftp.isDualPane(), sftpDivider, getWidth()));
             add(split, BorderLayout.CENTER);
             sftp.connect();
+            follower.refresh(); // mengikuti: panel langsung dibuka di folder terminal
         }
         revalidate();
         repaint();
@@ -575,6 +625,7 @@ public final class TerminalTab extends TermPane {
             }
         });
         tty.addOutputListener(responder);
+        follower.attach(tty);
         gate.set(TerminalState.CONNECTED);
         settings.setPaletteOverride(hostPalette.apply(latestProfile().terminalTheme()));
         widget = new ZoomableTermWidget(settings);
@@ -836,6 +887,9 @@ public final class TerminalTab extends TermPane {
         }
         if ((!enter && !ctrlD) || connector == null || !connector.isConnected()) {
             return false;
+        }
+        if (enter) {
+            follower.commandEntered(); // mis. setelah cd: panel SFTP menyusul (kalau "Ikuti folder terminal" aktif)
         }
         String line = cursorLine();
         if (enter && responder != null) {
@@ -1127,6 +1181,7 @@ public final class TerminalTab extends TermPane {
     }
 
     private void disposeTerminal() {
+        follower.detach();
         if (connector != null) {
             connector.closeByUser();
             connector = null;

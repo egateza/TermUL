@@ -66,7 +66,8 @@ final class LocalFilePane extends JPanel {
     private final LocalTableModel model = new LocalTableModel();
     private final JTable table = new JTable(model);
     private final TableRowSorter<LocalTableModel> sorter = new TableRowSorter<>(model);
-    private final JTextField pathField = new JTextField();
+    /** Breadcrumb folder sekarang; klik area kosong / pensil untuk mengetik path. */
+    private final PathBar pathBar = new PathBar(this::pathSubmitted, dir -> new DirDropHandler(Path.of(dir)));
     /** Filter nama untuk folder yang sedang dibuka (tanpa membaca ulang disk). */
     private final JTextField filterField = new JTextField();
     /** Item yang tidak muat saat panel sempit masuk ke tombol » di ujung kanan. */
@@ -112,11 +113,10 @@ final class LocalFilePane extends JPanel {
         bar.add(SftpPanel.button(AppIcon.PEN, null, I18n.t("sftp.toolbar.rename.tip"), this::renameSelected));
         bar.add(SftpPanel.button(AppIcon.TRASH, null, I18n.t("sftp.local.delete.tip"), this::deleteSelected));
         installFilter(bar);
-        pathField.addActionListener(e -> navigateText(pathField.getText().strip()));
         // susunan sama dengan panel remote: toolbar, lalu path
         var top = new JPanel(new BorderLayout());
         top.add(bar, BorderLayout.NORTH);
-        top.add(pathField, BorderLayout.SOUTH);
+        top.add(pathBar, BorderLayout.SOUTH);
         add(top, BorderLayout.NORTH);
 
         table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
@@ -275,12 +275,29 @@ final class LocalFilePane extends JPanel {
         }
     }
 
-    private void navigateText(String text) {
+    /**
+     * Dari breadcrumb: path segmen yang diklik, atau teks yang diketik di mode edit ({@code ~} = home). Path ketikan
+     * yang gagal dibuka tidak memunculkan dialog: field tetap terbuka dengan tanda error.
+     */
+    private void pathSubmitted(String text) {
+        boolean typed = pathBar.isEditing();
+        Path dir;
         try {
-            navigate(Path.of(text.startsWith("~") ? System.getProperty("user.home") + text.substring(1) : text));
+            dir = Path.of(text.startsWith("~") ? System.getProperty("user.home") + text.substring(1) : text);
         } catch (InvalidPathException e) {
-            Dialogs.error(this, I18n.t("sftp.local.title"), I18n.t("sftp.local.invalidPath", text));
+            String message = I18n.t("sftp.local.invalidPath", text);
+            if (typed) {
+                pathBar.showError(message);
+            } else {
+                Dialogs.error(this, I18n.t("sftp.local.title"), message);
+            }
+            return;
         }
+        if (typed && text.isEmpty()) {
+            pathBar.showError(I18n.t("sftp.path.empty"));
+            return;
+        }
+        navigate(dir, null, typed ? pathBar::showError : null);
     }
 
     void navigate(Path dir) {
@@ -289,6 +306,11 @@ final class LocalFilePane extends JPanel {
 
     /** @param select nama entri yang dipilih setelah dimuat (mis. folder asal saat naik satu tingkat), atau null */
     private void navigate(Path dir, String select) {
+        navigate(dir, select, null);
+    }
+
+    /** @param onError penerima pesan kalau folder gagal dibuka; null = dialog error */
+    private void navigate(Path dir, String select, Consumer<String> onError) {
         long gen = ++generation;
         Path target = dir.toAbsolutePath().normalize();
         UiAsync.run(IO, () -> {
@@ -306,7 +328,7 @@ final class LocalFilePane extends JPanel {
             }
             currentDir = target;
             lastDir = target;
-            pathField.setText(target.toString());
+            pathBar.setPath(target.toString(), PathBar.localCrumbs(target));
             if (target.getRoot() != null && Os.current().isWindows()) {
                 drives.setSelectedItem(target.getRoot());
             }
@@ -318,9 +340,13 @@ final class LocalFilePane extends JPanel {
             if (gen != generation) {
                 return;
             }
-            pathField.setText(currentDir == null ? "" : currentDir.toString());
             log.info("Gagal membuka direktori lokal {}: {}", target, err.toString());
-            Dialogs.error(this, I18n.t("sftp.local.title"), I18n.t("sftp.local.listFailed", target, err.getMessage()));
+            String message = I18n.t("sftp.local.listFailed", target, err.getMessage());
+            if (onError != null) {
+                onError.accept(message);
+            } else {
+                Dialogs.error(this, I18n.t("sftp.local.title"), message);
+            }
         });
     }
 
@@ -643,6 +669,35 @@ final class LocalFilePane extends JPanel {
                 return true;
             } catch (UnsupportedFlavorException | IOException e) {
                 log.warn("Drop file remote gagal", e);
+                return false;
+            }
+        }
+    }
+
+    /** Drop ke segmen breadcrumb: file remote dari tabel SFTP diunduh ke folder segmen itu. */
+    private static final class DirDropHandler extends TransferHandler {
+        private final Path dir;
+
+        DirDropHandler(Path dir) {
+            this.dir = dir;
+        }
+
+        @Override
+        public boolean canImport(TransferSupport support) {
+            return support.isDataFlavorSupported(RemoteSelection.FLAVOR);
+        }
+
+        @Override
+        public boolean importData(TransferSupport support) {
+            if (!canImport(support)) {
+                return false;
+            }
+            try {
+                var selection = (RemoteSelection) support.getTransferable().getTransferData(RemoteSelection.FLAVOR);
+                selection.source().downloadTo(selection.entries(), dir);
+                return true;
+            } catch (UnsupportedFlavorException | IOException e) {
+                log.warn("Drop file remote ke {} gagal", dir, e);
                 return false;
             }
         }

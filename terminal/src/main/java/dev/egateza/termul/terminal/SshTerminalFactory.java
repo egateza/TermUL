@@ -38,8 +38,10 @@ public final class SshTerminalFactory {
     public SshTtyConnector open(HostProfile profile, PtySize size, ConnectCancel cancel) throws SshConnectException {
         SshLease lease = sessions.acquire(profile, cancel);
         try {
-            ChannelShell shell = lease.connection().openShell(size, Map.of());
-            var connector = new SshTtyConnector(lease, shell, profile.name() + "#" + counter.incrementAndGet());
+            // penanda untuk "Ikuti folder terminal" (ShellCwd); server yang tidak menerima env cukup mengabaikannya
+            String token = ShellCwd.newToken();
+            ChannelShell shell = lease.connection().openShell(size, Map.of(ShellCwd.ENV_NAME, token));
+            var connector = new SshTtyConnector(lease, shell, profile.name() + "#" + counter.incrementAndGet(), token);
             log.info("Shell {} dibuka ke {}", connector.getName(), profile.address());
             if (profile.initialDirectory() != null) {
                 connector.write("cd " + ShellQuote.quote(profile.initialDirectory()) + "\r");

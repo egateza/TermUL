@@ -76,7 +76,7 @@ Catatan implementasi: satu `sudo sh -c` per upload (backup ke `/var/backups/term
 - [x] Profile Maven `package-win`: `jlink` runtime yang di-trim + `jpackage` → app-image (default) atau installer `.msi` (`-Djpackage.type=msi`, butuh WiX; belum diuji karena WiX tidak terpasang)
 - [x] WSL Manager opsional (ADR 0004): start/stop distro, grup WSL di panel host, profil SSH ke sshd distro (`localhost`)
 - [x] Tray icon + run at startup + single instance (Pengaturan → Tray & startup)
-- [ ] (backlog) port forwarding, snippet library, session log dengan masking, follow cwd (OSC 7)
+- [ ] (backlog) port forwarding, session log dengan masking
 
 ## Fase 7: Terminal lokal (ADR 0005)
 - [x] Tahap 0–1: tab terminal lokal dengan shell default (modul `localterm`, pty4j). Rincian dan progres di
@@ -107,6 +107,19 @@ Catatan implementasi: satu `sudo sh -c` per upload (backup ke `/var/backups/term
 - [x] Klik kanan → Upload ke ▸ (grup sendiri, lalu tab lain), drag & drop antar-panel, konfirmasi folder/host tujuan
   (+ peringatan PROD), stream langsung tanpa file lokal, folder rekursif, cegah salin ke dirinya sendiri
 - [ ] Acceptance manual: dua server sungguhan, file besar (progress/batal), tujuan PROD, Windows
+
+## Fase 12: Ikuti folder terminal & lepas tab (ide dari MobaXterm)
+- [x] Ikuti folder terminal: tombol di toolbar panel SFTP (global, `sftpFollowTerminal`). Sumber folder: OSC 7 dari shell,
+  atau probe `/proc` lewat exec setelah Enter (penanda `LC_TERMUL_TTY` per shell, `ShellCwd`); tidak mengetik ke shell
+- [x] Lepas tab ke window baru (klik kanan tab / menu Terminal / seret tab menjauh dari baris tab), kembalikan ke window
+  utama; shortcut, konfirmasi tutup/keluar, dan pengaturan tetap berlaku di window terpisah
+- [x] Breadcrumb path di panel SFTP remote & lokal (`PathBar`): klik segmen = buka folder, klik area kosong / pensil =
+  ketik path (Enter buka, Esc batal, gagal = field tetap terbuka bertanda error), segmen kiri dilipat ke "…" kalau
+  sempit, klik kanan = salin/edit path, drop file ke segmen = upload/download ke folder itu
+- [ ] Acceptance manual: follow di Ubuntu (`AcceptEnv LC_*` bawaan), server tanpa AcceptEnv (pesan), `sudo -i` (tetap di
+  folder), vim (tidak probe); lepas/kembalikan tab grup split, Ctrl/⌘+W & inject sudo di window terpisah, keluar aplikasi
+  dengan window terpisah aktif, Windows + macOS; breadcrumb: drive Windows/UNC, path panjang di dua panel, drop dari
+  Explorer/Finder dan antar-panel ke segmen
 
 ## Keputusan terbuka
 | # | Keputusan | Opsi | Status |

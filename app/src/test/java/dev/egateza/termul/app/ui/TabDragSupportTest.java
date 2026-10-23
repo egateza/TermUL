@@ -45,4 +45,18 @@ class TabDragSupportTest {
         assertThat(TabDragSupport.destination(1, 1)).isEqualTo(-1);
         assertThat(TabDragSupport.destination(1, 2)).isEqualTo(-1);
     }
+
+    @Test
+    void seretJauhDariBarisTabMelepasTab() {
+        int d = TabDragSupport.DETACH_DISTANCE;
+        assertThat(TabDragSupport.isDetachZone(THREE, 15)).isFalse();
+        assertThat(TabDragSupport.isDetachZone(THREE, 30 + d)).isFalse(); // sedikit di bawah: masih mengurutkan
+        assertThat(TabDragSupport.isDetachZone(THREE, 31 + d)).isTrue();
+        assertThat(TabDragSupport.isDetachZone(THREE, -d - 1)).isTrue();
+    }
+
+    @Test
+    void tanpaTabTerlihatTidakPernahMelepas() {
+        assertThat(TabDragSupport.isDetachZone(Arrays.asList(null, null), 500)).isFalse();
+    }
 }

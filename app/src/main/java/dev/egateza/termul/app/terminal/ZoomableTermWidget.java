@@ -172,7 +172,7 @@ public final class ZoomableTermWidget extends JediTermWidget {
          */
         private void paintTerminal(Graphics g) {
             var layer = settings instanceof TerminalSettings ts ? ts.backgroundLayer() : null;
-            int opacity = TerminalTranslucency.percent();
+            int opacity = TerminalTranslucency.percentFor(this);
             if (opacity < 100 && getWidth() > 0 && getHeight() > 0) {
                 paintTranslucent((Graphics2D) g, opacity, layer);
                 return;

@@ -89,7 +89,8 @@ public class SftpPanel extends JPanel {
             super.processMouseEvent(e);
         }
     };
-    protected final JTextField pathField = new JTextField();
+    /** Breadcrumb folder sekarang; klik area kosong / pensil untuk mengetik path. */
+    private final PathBar pathBar = new PathBar(this::pathSubmitted, DirDropHandler::new);
     /** Filter nama untuk folder yang sedang dibuka (client-side, tanpa request ke server). */
     private final JTextField filterField = new JTextField();
     private final TableRowSorter<SftpTableModel> sorter = new TableRowSorter<>(model);
@@ -115,6 +116,10 @@ public class SftpPanel extends JPanel {
     private JButton uploadButton;   // disembunyikan di dua panel: upload ada di toolbar panel lokal
     private JButton downloadButton; // dua panel: hanya ikon supaya toolbar muat di setengah lebar
     private final JToggleButton dualToggle = new JToggleButton(AppIcon.FOLDER_OPEN.icon());
+    /** "Ikuti folder terminal": panel pindah ke folder kerja shell di tab yang sama. */
+    private final JToggleButton followToggle = new JToggleButton(AppIcon.LINK.icon());
+    private Consumer<Boolean> followHandler = on -> { }; // EDT
+    private String pendingFollow; // EDT; folder terminal yang diminta selagi panel masih menyambung
     private LocalFilePane local;          // EDT; null = belum pernah tampil dua panel
     private JSplitPane dualSplit;         // EDT; null = tampilan satu panel
 
@@ -164,12 +169,16 @@ public class SftpPanel extends JPanel {
         toolbar.add(button(AppIcon.ARROW_UP, null, I18n.t("sftp.toolbar.up"), this::goUp));
         toolbar.add(button(AppIcon.HOME, null, I18n.t("sftp.toolbar.home"), this::goHome));
         toolbar.add(button(AppIcon.REFRESH, null, I18n.t("sftp.toolbar.refresh"), this::refresh));
+        followToggle.setToolTipText(I18n.t("sftp.toolbar.follow.tip"));
+        followToggle.setFocusable(false);
+        followToggle.setVisible(false); // hanya panel di samping terminal (lihat setFollowHandler)
+        followToggle.addActionListener(e -> followHandler.accept(followToggle.isSelected()));
+        toolbar.add(followToggle);
         toolbar.addSeparator();
 
-        pathField.addActionListener(e -> navigate(pathField.getText().strip()));
         var header = new JPanel(new BorderLayout());
         header.add(toolbar, BorderLayout.NORTH);
-        header.add(pathField, BorderLayout.SOUTH);
+        header.add(pathBar, BorderLayout.SOUTH);
         remotePane.add(header, BorderLayout.NORTH);
 
         table.setAutoCreateRowSorter(false);
@@ -549,10 +558,16 @@ public class SftpPanel extends JPanel {
 
     /** Upload file dan folder (beserta isinya) ke direktori saat ini. */
     public void upload(List<Path> paths) {
-        if (link == null || currentDir == null) {
+        if (currentDir != null) {
+            uploadTo(paths, currentDir);
+        }
+    }
+
+    /** Upload file dan folder (beserta isinya) ke {@code dir} (mis. segmen breadcrumb tempat file di-drop). */
+    private void uploadTo(List<Path> paths, String dir) {
+        if (link == null) {
             return;
         }
-        String dir = currentDir;
         for (Path path : paths) {
             String name = path.getFileName().toString();
             if (Files.isDirectory(path)) {
@@ -694,10 +709,16 @@ public class SftpPanel extends JPanel {
      * sumber ke stream SFTP tujuan tanpa file sementara di disk lokal. EDT.
      */
     void copyFrom(SftpPanel source, List<RemoteEntry> entries) {
-        if (link == null || currentDir == null || entries.isEmpty() || source == this) {
+        if (currentDir != null) {
+            copyFrom(source, entries, currentDir);
+        }
+    }
+
+    /** Seperti {@link #copyFrom(SftpPanel, List)}, ke folder {@code dir} di panel ini. */
+    private void copyFrom(SftpPanel source, List<RemoteEntry> entries, String dir) {
+        if (link == null || entries.isEmpty() || source == this) {
             return;
         }
-        String dir = currentDir;
         if (!confirmCopy(source, entries, dir)) {
             return;
         }
@@ -1045,6 +1066,58 @@ public class SftpPanel extends JPanel {
         }
     }
 
+    /**
+     * Drop ke segmen breadcrumb: file lokal (Explorer/Finder, panel lokal) di-upload, file dari panel SFTP lain disalin,
+     * ke folder segmen itu. File dari panel ini sendiri ditolak (memindahkan file bukan bagian dari drop).
+     */
+    private final class DirDropHandler extends TransferHandler {
+        private final String dir;
+
+        DirDropHandler(String dir) {
+            this.dir = dir;
+        }
+
+        @Override
+        public boolean canImport(TransferSupport support) {
+            if (link == null) {
+                return false;
+            }
+            if (support.isDataFlavorSupported(RemoteSelection.FLAVOR)) {
+                return remoteSelection(support).map(sel -> sel.source() != SftpPanel.this).orElse(true);
+            }
+            return support.isDataFlavorSupported(DataFlavor.javaFileListFlavor);
+        }
+
+        @Override
+        public boolean importData(TransferSupport support) {
+            if (!canImport(support)) {
+                return false;
+            }
+            if (support.isDataFlavorSupported(RemoteSelection.FLAVOR)) {
+                var sel = remoteSelection(support).filter(r -> r.source() != SftpPanel.this);
+                sel.ifPresent(r -> SwingUtilities.invokeLater(() -> copyFrom(r.source(), r.entries(), dir)));
+                return sel.isPresent();
+            }
+            try {
+                @SuppressWarnings("unchecked")
+                var files = (List<File>) support.getTransferable().getTransferData(DataFlavor.javaFileListFlavor);
+                uploadTo(files.stream().map(File::toPath).toList(), dir);
+                return true;
+            } catch (UnsupportedFlavorException | IOException e) {
+                log.warn("Drop ke {} gagal", dir, e);
+                return false;
+            }
+        }
+    }
+
+    private static Optional<RemoteSelection> remoteSelection(TransferHandler.TransferSupport support) {
+        try {
+            return Optional.of((RemoteSelection) support.getTransferable().getTransferData(RemoteSelection.FLAVOR));
+        } catch (UnsupportedFlavorException | IOException | java.awt.dnd.InvalidDnDOperationException e) {
+            return Optional.empty();
+        }
+    }
+
     /** Connect (sekali) lalu buka direktori awal profil atau home. */
     public void connect() {
         if (link != null || connecting || disposed) {
@@ -1073,7 +1146,13 @@ public class SftpPanel extends JPanel {
             link = l;
             unsubscribeEdits = editActions.onActivity(profile.id(), activity::report);
             connectedListener.accept(l.service());
-            navigate(start);
+            String follow = pendingFollow;
+            pendingFollow = null;
+            if (follow != null) { // panel dibuka saat "Ikuti folder terminal" aktif: langsung ke folder shell
+                followTo(follow, () -> navigate(start));
+            } else {
+                navigate(start);
+            }
         }, err -> {
             connecting = false;
             if (disposed) {
@@ -1128,6 +1207,64 @@ public class SftpPanel extends JPanel {
         return currentDir;
     }
 
+    /**
+     * Tampilkan tombol "Ikuti folder terminal" (panel di samping terminal). {@code handler} dipanggil di EDT saat user
+     * menekan tombolnya (true = mulai mengikuti).
+     */
+    public void setFollowHandler(boolean following, Consumer<Boolean> handler) {
+        followHandler = handler;
+        followToggle.setSelected(following);
+        followToggle.setVisible(true);
+    }
+
+    /** Status tombol "Ikuti folder terminal" tanpa memanggil handler (mis. diganti dari tab lain). EDT. */
+    public void setFollowing(boolean on) {
+        followToggle.setSelected(on);
+    }
+
+    /**
+     * Pindah ke folder kerja terminal. Berbeda dengan {@link #navigate}: tanpa dialog error (folder bisa saja tidak
+     * boleh dibaca lewat SFTP), dan tidak memuat ulang kalau sudah di folder itu. EDT.
+     */
+    public void followTo(String dir) {
+        followTo(dir, () -> { });
+    }
+
+    /** @param failed dipanggil di EDT kalau folder tidak bisa dibuka */
+    private void followTo(String dir, Runnable failed) {
+        var l = link;
+        if (l == null) {
+            pendingFollow = dir; // masih menyambung: dipakai sebagai folder awal
+            return;
+        }
+        if (dir.equals(currentDir)) {
+            return;
+        }
+        UiAsync.run(sshOps, () -> {
+            try {
+                return l.execute(() -> new Listing(dir, svc().list(dir)));
+            } catch (Exception e) {
+                throw new CompletionException(e);
+            }
+        }, listing -> {
+            if (disposed || link != l) {
+                return;
+            }
+            show(listing);
+            activity.report(Level.INFO, I18n.t("sftp.follow.moved", listing.dir()));
+        }, err -> {
+            if (!disposed) {
+                activity.report(Level.WARN, I18n.t("sftp.follow.failed", dir, err.getMessage()));
+                failed.run();
+            }
+        });
+    }
+
+    /** Keterangan "Ikuti folder terminal" (mis. server tidak mendukung) di baris aktivitas panel. EDT. */
+    public void followNotice(String message) {
+        activity.report(Level.WARN, message);
+    }
+
     public void navigate(String dir) {
         if (link == null || dir.isEmpty()) {
             return;
@@ -1137,13 +1274,59 @@ public class SftpPanel extends JPanel {
             String canonical = svc().canonicalize(dir);
             return new Listing(canonical, svc().list(canonical));
         }, listing -> {
-            if (!listing.dir().equals(currentDir)) {
-                filterField.setText(""); // filter hanya berlaku untuk folder tempat ia diketik; refresh mempertahankannya
-            }
-            currentDir = listing.dir();
-            pathField.setText(listing.dir());
-            model.setEntries(listing.entries());
+            show(listing);
             activity.report(Level.INFO, I18n.t("sftp.navigate.count", listing.dir(), String.valueOf(listing.entries().size())));
+        });
+    }
+
+    /** Tampilkan isi folder yang baru dibuka: tabel, breadcrumb, dan filter (hanya berlaku di folder tempat ia diketik). */
+    private void show(Listing listing) {
+        if (!listing.dir().equals(currentDir)) {
+            filterField.setText(""); // refresh folder yang sama mempertahankan filter
+        }
+        currentDir = listing.dir();
+        pathBar.setPath(listing.dir(), PathBar.remoteCrumbs(listing.dir()));
+        model.setEntries(listing.entries());
+    }
+
+    /**
+     * Dari breadcrumb: path segmen yang diklik, atau teks yang diketik di mode edit. Path ketikan yang gagal dibuka
+     * tidak memunculkan dialog: field tetap terbuka dengan tanda error. {@code ~} = home.
+     */
+    private void pathSubmitted(String text) {
+        if (!pathBar.isEditing()) {
+            navigate(text);
+            return;
+        }
+        var l = link;
+        if (l == null || text.isEmpty()) {
+            pathBar.showError(I18n.t("sftp.path.empty"));
+            return;
+        }
+        activity.progress(I18n.t("sftp.navigate.loading", text));
+        UiAsync.run(sshOps, () -> {
+            try {
+                return l.execute(() -> {
+                    String dir = text.equals("~") || text.startsWith("~/")
+                            ? RemotePaths.join(svc().home(), text.length() > 2 ? text.substring(2) : "")
+                            : text;
+                    String canonical = svc().canonicalize(dir);
+                    return new Listing(canonical, svc().list(canonical));
+                });
+            } catch (Exception e) {
+                throw new CompletionException(e);
+            }
+        }, listing -> {
+            if (disposed || link != l) {
+                return;
+            }
+            show(listing);
+            activity.report(Level.INFO, I18n.t("sftp.navigate.count", listing.dir(), String.valueOf(listing.entries().size())));
+        }, err -> {
+            if (!disposed) {
+                activity.report(Level.ERROR, I18n.t("sftp.call.failed", err.getMessage()));
+                pathBar.showError(err.getMessage());
+            }
         });
     }
 

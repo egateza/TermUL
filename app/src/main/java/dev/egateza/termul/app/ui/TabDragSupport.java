@@ -17,8 +17,9 @@ import javax.swing.UIManager;
 
 /**
  * Drag tab untuk mengubah urutan. Selama drag hanya garis penanda posisi yang bergerak; tab baru dipindah saat mouse
- * dilepas, supaya panel terminal tidak di-reparent berkali-kali. Ctrl/⌘+klik (tandai untuk digabung) dan klik kanan
- * tidak memulai drag. Semua di EDT.
+ * dilepas, supaya panel terminal tidak di-reparent berkali-kali. Tab yang diseret jauh dari baris tab (lebih dari
+ * {@value #DETACH_DISTANCE} px ke atas/bawah, termasuk ke luar window) dilepas ke window baru. Ctrl/⌘+klik (tandai
+ * untuk digabung) dan klik kanan tidak memulai drag. Semua di EDT.
  */
 public final class TabDragSupport extends MouseAdapter {
 
@@ -27,25 +28,34 @@ public final class TabDragSupport extends MouseAdapter {
         void move(int from, int to);
     }
 
+    /** Melepas tab {@code index} ke window baru di sekitar titik layar {@code screen}. */
+    public interface Detacher {
+        void detach(int index, Point screen);
+    }
+
     /** Jarak gerak minimal (px) sebelum dianggap drag, supaya klik biasa tidak tergeser. */
     static final int THRESHOLD = 6;
     private static final int MARKER_WIDTH = 2;
+    /** Jarak (px) dari baris tab sebelum drag berarti "lepas ke window baru". */
+    static final int DETACH_DISTANCE = 40;
 
     private final JTabbedPane tabs;
     private final Mover mover;
+    private final Detacher detacher;
     private final Marker marker = new Marker();
     private int from = -1;
     private Point pressPoint;
     private boolean dragging;
 
-    private TabDragSupport(JTabbedPane tabs, Mover mover) {
+    private TabDragSupport(JTabbedPane tabs, Mover mover, Detacher detacher) {
         this.tabs = tabs;
         this.mover = mover;
+        this.detacher = detacher;
     }
 
     /** Pasang di {@code tabs}: event area tab (ScrollableTabPanel) diteruskan Swing ke listener JTabbedPane. */
-    public static void install(JTabbedPane tabs, Mover mover) {
-        var support = new TabDragSupport(tabs, mover);
+    public static void install(JTabbedPane tabs, Mover mover, Detacher detacher) {
+        var support = new TabDragSupport(tabs, mover, detacher);
         tabs.addMouseListener(support);
         tabs.addMouseMotionListener(support);
     }
@@ -54,7 +64,7 @@ public final class TabDragSupport extends MouseAdapter {
     public void mousePressed(MouseEvent e) {
         reset();
         if (SwingUtilities.isLeftMouseButton(e) && !e.isPopupTrigger() && !Shortcuts.isMenuDown(e)
-                && tabs.getTabCount() > 1) {
+                && tabs.getTabCount() > 0) { // satu tab: tidak bisa diurutkan, tapi bisa dilepas
             from = tabs.indexAtLocation(e.getX(), e.getY());
             pressPoint = e.getPoint();
         }
@@ -69,8 +79,16 @@ public final class TabDragSupport extends MouseAdapter {
             return;
         }
         dragging = true;
-        tabs.setCursor(Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR));
-        showMarker(insertionIndex(tabBounds(), e.getX()));
+        var bounds = tabBounds();
+        if (isDetachZone(bounds, e.getY())) {
+            tabs.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            hideMarker();
+        } else {
+            tabs.setCursor(Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR));
+            if (tabs.getTabCount() > 1) {
+                showMarker(insertionIndex(bounds, e.getX()));
+            }
+        }
     }
 
     @Override
@@ -79,6 +97,10 @@ public final class TabDragSupport extends MouseAdapter {
         boolean dropped = dragging;
         reset();
         if (!dropped || source >= tabs.getTabCount()) {
+            return;
+        }
+        if (isDetachZone(tabBounds(), e.getY())) {
+            detacher.detach(source, e.getLocationOnScreen());
             return;
         }
         int to = destination(source, insertionIndex(tabBounds(), e.getX()));
@@ -104,6 +126,22 @@ public final class TabDragSupport extends MouseAdapter {
             result.add(r != null && r.intersects(visible) ? r : null);
         }
         return result;
+    }
+
+    /**
+     * true kalau titik dengan koordinat y (dalam koordinat {@code tabs}) cukup jauh di atas atau di bawah baris tab yang
+     * terlihat: tab dilepas ke window baru, bukan dipindah urutannya.
+     */
+    static boolean isDetachZone(List<Rectangle> bounds, int y) {
+        int top = Integer.MAX_VALUE;
+        int bottom = Integer.MIN_VALUE;
+        for (var r : bounds) {
+            if (r != null) {
+                top = Math.min(top, r.y);
+                bottom = Math.max(bottom, r.y + r.height);
+            }
+        }
+        return top <= bottom && (y < top - DETACH_DISTANCE || y > bottom + DETACH_DISTANCE);
     }
 
     /**

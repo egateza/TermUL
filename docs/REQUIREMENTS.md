@@ -23,6 +23,7 @@ Pekerjaan harian melibatkan banyak server Linux (produksi & staging). Masalah ya
 - F2.4 Font, tema, dan ukuran scrollback bisa dikonfigurasi.
 - F2.5 Keep-alive dan deteksi koneksi putus, disertai tombol reconnect.
 - F2.6 (nice to have) Duplicate session, broadcast input ke beberapa tab.
+- F2.8 Lepas tab (tunggal atau grup split) ke window terpisah dan kembalikan ke window utama, tanpa memutus sesi.
 - F2.7 Highlight teks: keyword/regex diwarnai saat tampil (latar, huruf, bold/italic/underline/dim/inverse), per profil
   highlight. Profil dipilih per tab: host / profil terminal lokal → grup terdekat / semua terminal lokal → global.
   Import/export JSON format plugin Tabby (`tabby-highlight`). Default mati.
@@ -34,7 +35,8 @@ Pekerjaan harian melibatkan banyak server Linux (produksi & staging). Masalah ya
 - F3.4 Kalau password ditolak (`Sorry, try again`), jangan kirim ulang. Tampilkan notifikasi.
 
 ### F4. Remote directory (SFTP)
-- F4.1 Panel SFTP di samping terminal yang memakai koneksi yang sama. Opsi "follow terminal cwd" (nice to have, via OSC 7).
+- F4.1 Panel SFTP di samping terminal yang memakai koneksi yang sama. Opsi "Ikuti folder terminal": panel pindah ke folder
+  kerja shell (OSC 7 dari shell, atau probe `/proc` lewat exec setelah Enter; Linux, butuh `AcceptEnv LC_*` di server).
 - F4.2 Browse, upload/download (drag & drop dari Explorer), rename, mkdir, delete (dengan konfirmasi), chmod, dan tampilan owner/mode/size/mtime.
 - F4.3 Progress transfer + cancel.
 - F4.4 Upload antar-server: klik kanan → Upload ke ▸ panel SFTP lain yang terbuka (grup sendiri dulu, lalu tab lain), atau
