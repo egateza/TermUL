@@ -67,6 +67,7 @@ bisa diubah setelah rilis terbit. Tulis untuk pengguna: apa yang berubah dan apa
 |---|---|
 | `-Draft` | Rilis dibuat sebagai draft: belum terlihat oleh aplikasi sampai Anda klik **Publish release** di GitHub. Dianjurkan kalau ingin memeriksa aset dulu |
 | `-Msi` | Membuat installer `.msi` (butuh WiX). Dengan opsi ini zip app-image Windows tidak dibuat |
+| `-AssetsOnly` | Rilis/draft `v<versi>` sudah dibuat dari Mac: hanya build zip Windows (atau `.msi` dengan `-Msi`) dan melampirkannya. Tanpa private key; `HEAD` wajib commit rilis. Lihat [`RELEASE-CROSS-PLATFORM.md`](RELEASE-CROSS-PLATFORM.md) |
 | `-AllowDirty` | Hanya untuk uji. Mengizinkan working tree yang belum di-commit. **Jangan dipakai untuk rilis sungguhan** |
 
 Hasil yang benar di akhir output:
@@ -93,19 +94,21 @@ Selesai: v0.1.130
 
 ## Rilis dari macOS
 
-`tools/release-mac.sh` adalah padanan `release.ps1` untuk MacBook (bash, tanpa PowerShell).
+`tools/release-mac.sh` adalah padanan `release.ps1` untuk MacBook (bash, tanpa PowerShell). Untuk satu rilis yang
+berisi aset Windows dan macOS sekaligus (draft dari satu mesin, aset dari mesin lain), ikuti
+[`RELEASE-CROSS-PLATFORM.md`](RELEASE-CROSS-PLATFORM.md).
 
 ```bash
 git checkout master && git pull
 tools/release-mac.sh --notes docs/release-notes/v0.2.md --draft   # rilis penuh dari Mac
-tools/release-mac.sh --dmg-only                                    # lampirkan DMG ke rilis yang diterbitkan dari Windows
+tools/release-mac.sh --dmg-only                                    # lampirkan DMG ke rilis/draft dari Windows (commit sama)
 tools/release-mac.sh --notes notes.md --dry-run                    # build + tanda tangan, tanpa mengunggah
 ```
 
 - **Rilis penuh** berisi jar + `manifest.json` + `.sig`, `TermUL-<versi>-jar.zip`, dan `TermUL-<versi>-macos.dmg`. Jar sama
-  persis di semua OS, jadi pengguna Windows dan Mac sama-sama bisa update lewat menu. Yang **tidak ada**: zip app-image
-  dan `.msi` Windows (`jpackage` tidak bisa cross-build). Instalasi baru di Windows memakai rilis Windows terakhir lalu
-  update lewat menu.
+  persis di semua OS, jadi pengguna Windows dan Mac sama-sama bisa update lewat menu. Zip app-image dan `.msi` Windows
+  tidak bisa dibuat di Mac (`jpackage` tidak bisa cross-build): lampirkan dari PC Windows dengan
+  `.\tools\release.ps1 -AssetsOnly` di commit yang sama.
 - Skrip menolak rilis yang menaikkan `UpdateProtocol.GENERATION` (dibanding rilis Latest), karena pengguna Windows
   butuh installer baru. Rilis seperti itu diterbitkan dari Windows dengan `release.ps1`, lalu DMG dilampirkan dengan
   `--dmg-only`.

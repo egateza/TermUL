@@ -3,13 +3,12 @@
 # Build, tandatangani, dan terbitkan rilis TermUL ke GitHub Releases dari macOS (padanan tools/release.ps1).
 #
 #   tools/release-mac.sh --notes docs/release-notes/v0.2.md [--draft]   rilis penuh dari Mac
-#   tools/release-mac.sh --dmg-only                                       lampirkan DMG ke rilis yang sudah ada
+#   tools/release-mac.sh --dmg-only                                       lampirkan DMG ke rilis/draft yang sudah ada
 #   tambahkan --dry-run untuk build dan cek semuanya tanpa mengunggah apa pun ke GitHub
 #
 # Rilis penuh: jar + manifest.json + manifest.json.sig (Ed25519, update lewat menu untuk Windows DAN Mac, karena jar-nya
-# sama di semua OS), zip JAR portable, dan DMG macOS. Zip app-image / .msi Windows TIDAK ada (jpackage tidak bisa
-# cross-build): pengguna Windows yang sudah terpasang tetap update lewat menu; instalasi baru Windows memakai rilis
-# Windows terakhir lalu update.
+# sama di semua OS), zip JAR portable, dan DMG macOS. Zip app-image / .msi Windows dibuat di PC Windows dengan
+# tools/release.ps1 -AssetsOnly (jpackage tidak bisa cross-build). Alur lengkap: docs/RELEASE-CROSS-PLATFORM.md.
 #
 # Butuh: JDK 25 (java di PATH atau JAVA_HOME), GitHub CLI (gh auth login, akses tulis ke repo), dan untuk rilis penuh
 # private key di ~/.termul-release/update-signing.key (atau env TERMUL_UPDATE_KEY), mode 600. Lihat docs/RELEASE.md.
@@ -114,11 +113,21 @@ mv "$BUILT_DMG" "$DMG"
 
 # --- hanya DMG: lampirkan ke rilis yang sudah ada ---------------------------------------------------------------------
 if [ "$DMG_ONLY" -eq 1 ]; then
+    TARGET="$(gh release view "$TAG" --json targetCommitish --jq .targetCommitish 2>/dev/null)" \
+        || fail "Rilis $TAG (juga draft) belum ada. Terbitkan dulu (Windows: tools/release.ps1 -Draft, atau skrip ini tanpa --dmg-only)."
+    # Nomor versi = jumlah commit, jadi commit lain (mis. di branch lain) bisa bernomor sama: DMG harus dari commit rilis
+    if [[ "$TARGET" =~ ^[0-9a-f]{40}$ ]]; then
+        EXPECTED="$TARGET"
+    else
+        git fetch -q --tags origin
+        EXPECTED="$(git rev-parse --verify -q "$TAG^{commit}" || true)"
+    fi
+    [ -n "$EXPECTED" ] || fail "Commit rilis $TAG tidak bisa ditentukan (target: $TARGET)"
+    [ "$EXPECTED" = "$COMMIT" ] || fail "Rilis $TAG dibuat dari commit ${EXPECTED:0:7}, sedangkan HEAD ${COMMIT:0:7}. Jalankan: git checkout ${EXPECTED:0:7}"
     if [ "$DRY_RUN" -eq 1 ]; then
-        info "Dry run: akan mengunggah $(basename "$DMG") ke $TAG"
+        info "Dry run: akan mengunggah $(basename "$DMG") ke $TAG (commit ${COMMIT:0:7} cocok)"
         exit 0
     fi
-    gh release view "$TAG" >/dev/null 2>&1 || fail "Rilis $TAG belum ada. Terbitkan dulu (Windows: tools/release.ps1, atau skrip ini tanpa --dmg-only)."
     info "Mengunggah $(basename "$DMG") ke $TAG"
     gh release upload "$TAG" "$DMG" --clobber || fail "gh release upload gagal"
     printf '\033[32mSelesai: DMG terlampir di %s\033[0m\n' "$TAG"
@@ -171,4 +180,5 @@ GH_ARGS=(release create "$TAG" "${ASSETS[@]}" --title "TermUL $VERSION" --notes-
 [ "$DRAFT" -eq 1 ] && GH_ARGS+=(--draft)
 gh "${GH_ARGS[@]}" || fail "gh release create gagal"
 printf '\033[32mSelesai: %s\033[0m\n' "$TAG"
-echo "Catatan: rilis ini tanpa zip/msi Windows. Pengguna Windows yang sudah terpasang tetap update lewat menu."
+echo "Zip Windows untuk rilis yang sama: di PC Windows, git checkout ${COMMIT:0:7} lalu .\\tools\\release.ps1 -AssetsOnly"
+echo "Pengguna Windows yang sudah terpasang tetap bisa update lewat menu tanpa zip itu."
