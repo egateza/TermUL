@@ -1,6 +1,7 @@
 package dev.egateza.termul.app.ui.streak;
 
 import dev.egateza.termul.app.i18n.I18n;
+import dev.egateza.termul.app.ui.DerivedFonts;
 import dev.egateza.termul.core.Os;
 import java.awt.BasicStroke;
 import java.awt.Color;
@@ -467,11 +468,11 @@ final class StreakWidget {
         }
 
         private Font countFont() {
-            return UIManager.getFont("Label.font").deriveFont(Font.BOLD, 22f);
+            return DerivedFonts.derive(UIManager.getFont("Label.font"), Font.BOLD, 22f);
         }
 
         private Font captionFont() {
-            return UIManager.getFont("Label.font").deriveFont(11f);
+            return DerivedFonts.derive(UIManager.getFont("Label.font"), 11f);
         }
 
         String countText() {

@@ -1,6 +1,7 @@
 package dev.egateza.termul.app.ui.fab;
 
 import dev.egateza.termul.app.ui.AppIcon;
+import dev.egateza.termul.app.ui.DerivedFonts;
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Dimension;
@@ -255,7 +256,7 @@ public final class FloatingButton extends JButton {
         if (badge == null) {
             return;
         }
-        var font = labelFont().deriveFont(java.awt.Font.BOLD, 11f);
+        var font = DerivedFonts.derive(labelFont(), java.awt.Font.BOLD, 11f);
         g2.setFont(font);
         FontMetrics fm = g2.getFontMetrics();
         int h = 18;
@@ -294,7 +295,8 @@ public final class FloatingButton extends JButton {
         if (base == null) {
             base = getFont();
         }
-        return base.deriveFont(java.awt.Font.BOLD, size == Size.MINI ? base.getSize2D() - 0.5f : base.getSize2D() + 0.5f);
+        return DerivedFonts.derive(base, java.awt.Font.BOLD,
+                size == Size.MINI ? base.getSize2D() - 0.5f : base.getSize2D() + 0.5f);
     }
 
     @Override

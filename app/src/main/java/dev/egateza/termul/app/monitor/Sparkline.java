@@ -1,5 +1,6 @@
 package dev.egateza.termul.app.monitor;
 
+import dev.egateza.termul.app.ui.DerivedFonts;
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Dimension;
@@ -78,7 +79,7 @@ final class Sparkline extends JComponent {
             if (!text.isEmpty()) {
                 g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
                 var font = getFont();
-                g2.setFont(font.deriveFont(Font.BOLD, Math.max(9f, Math.min(font.getSize2D() - 1, h - 4f))));
+                g2.setFont(DerivedFonts.derive(font, Font.BOLD, Math.max(9f, Math.min(font.getSize2D() - 1, h - 4f))));
                 var fm = g2.getFontMetrics();
                 int ty = (h - fm.getHeight()) / 2 + fm.getAscent();
                 g2.setColor(BACKGROUND);

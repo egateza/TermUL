@@ -5,6 +5,7 @@ import com.jediterm.terminal.TextStyle;
 import com.jediterm.terminal.emulator.ColorPalette;
 import com.jediterm.terminal.ui.AwtTransformers;
 import dev.egateza.termul.app.terminal.TextHighlighter;
+import dev.egateza.termul.app.ui.DerivedFonts;
 import dev.egateza.termul.core.highlight.HighlightKeyword;
 import dev.egateza.termul.core.highlight.HighlightMatcher;
 import dev.egateza.termul.core.highlight.HighlightProfile;
@@ -101,7 +102,7 @@ final class HighlightPreview extends JComponent {
         }
         int fontStyle = (style.hasOption(TextStyle.Option.BOLD) ? Font.BOLD : 0)
                 | (style.hasOption(TextStyle.Option.ITALIC) ? Font.ITALIC : 0);
-        Font font = getFont().deriveFont(fontStyle);
+        Font font = DerivedFonts.derive(getFont(), fontStyle);
         FontMetrics fm = g.getFontMetrics(font);
         int width = fm.stringWidth(part);
         Color fg = look.awt(style.getForeground(), true);

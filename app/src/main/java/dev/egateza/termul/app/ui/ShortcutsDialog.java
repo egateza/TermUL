@@ -88,7 +88,7 @@ public final class ShortcutsDialog extends JDialog {
                 super.getTableCellRendererComponent(t, value, selected, focus, row, col);
                 var action = model.actionAt(t.convertRowIndexToModel(row));
                 boolean changed = draft.isOverridden(action);
-                setFont(getFont().deriveFont(col == COL_KEY && changed ? Font.BOLD : Font.PLAIN));
+                setFont(DerivedFonts.derive(t.getFont(), col == COL_KEY && changed ? Font.BOLD : Font.PLAIN));
                 if (col == COL_DEFAULT && !selected) {
                     setForeground(UIManager.getColor("Label.disabledForeground"));
                 }

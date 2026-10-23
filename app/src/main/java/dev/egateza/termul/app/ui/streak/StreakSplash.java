@@ -1,6 +1,7 @@
 package dev.egateza.termul.app.ui.streak;
 
 import dev.egateza.termul.app.i18n.I18n;
+import dev.egateza.termul.app.ui.DerivedFonts;
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Font;
@@ -321,19 +322,19 @@ final class StreakSplash extends JComponent {
     }
 
     private Font countFont() {
-        return base().deriveFont(Font.BOLD, 54f);
+        return DerivedFonts.derive(base(), Font.BOLD, 54f);
     }
 
     private Font unitFont() {
-        return base().deriveFont(Font.BOLD, 11.5f);
+        return DerivedFonts.derive(base(), Font.BOLD, 11.5f);
     }
 
     private Font badgeFont() {
-        return base().deriveFont(Font.BOLD, 12.5f);
+        return DerivedFonts.derive(base(), Font.BOLD, 12.5f);
     }
 
     private Font messageFont() {
-        return base().deriveFont(Font.PLAIN, 14f);
+        return DerivedFonts.derive(base(), Font.PLAIN, 14f);
     }
 
     private int textTop() {

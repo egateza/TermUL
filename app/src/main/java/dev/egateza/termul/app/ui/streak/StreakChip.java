@@ -1,6 +1,7 @@
 package dev.egateza.termul.app.ui.streak;
 
 import dev.egateza.termul.app.i18n.I18n;
+import dev.egateza.termul.app.ui.DerivedFonts;
 import java.awt.Color;
 import java.awt.Cursor;
 import java.awt.Dimension;
@@ -131,7 +132,7 @@ final class StreakChip extends JComponent {
     }
 
     private Font countFont() {
-        return getFont().deriveFont(Font.BOLD);
+        return DerivedFonts.derive(getFont(), Font.BOLD);
     }
 
     @Override
