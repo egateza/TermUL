@@ -29,6 +29,8 @@ import java.util.UUID;
  *                         distro dan sshd-nya dijalankan dulu sebelum connect. null = server biasa
  * @param protocol         protokol koneksi (null = {@link Protocol#SSH}, juga untuk profil lama). Untuk keluarga FTP,
  *                         auth selalu password dan field khusus SSH (key, jump host, auto-sudo, WSL) diabaikan
+ * @param sensitive        profil sensitif: guard ekstra (kunci saat kembali ke tab, konfirmasi paste, bingkai merah).
+ *                         null = ikut environment (PROD = sensitif), juga untuk profil lama. Lihat {@link #needsGuard()}
  */
 public record HostProfile(
         UUID id,
@@ -47,7 +49,8 @@ public record HostProfile(
         OsInfo os,
         String terminalTheme,
         String wslDistro,
-        Protocol protocol) {
+        Protocol protocol,
+        Boolean sensitive) {
 
     public static final int DEFAULT_PORT = 22;
 
@@ -84,9 +87,18 @@ public record HostProfile(
                 initialDirectory, notes, autoSudo, os, terminalTheme, wslDistro, Protocol.SSH);
     }
 
+    /** Constructor tanpa flag sensitif (ikut environment). */
+    public HostProfile(UUID id, String name, String group, String host, int port, String username,
+                       AuthMethod authMethod, String privateKeyPath, UUID jumpHostId, EnvironmentTag environment,
+                       String initialDirectory, String notes, boolean autoSudo, OsInfo os, String terminalTheme,
+                       String wslDistro, Protocol protocol) {
+        this(id, name, group, host, port, username, authMethod, privateKeyPath, jumpHostId, environment,
+                initialDirectory, notes, autoSudo, os, terminalTheme, wslDistro, protocol, null);
+    }
+
     public HostProfile withTerminalTheme(String themeId) {
         return new HostProfile(id, name, group, host, port, username, authMethod, privateKeyPath, jumpHostId,
-                environment, initialDirectory, notes, autoSudo, os, themeId, wslDistro, protocol);
+                environment, initialDirectory, notes, autoSudo, os, themeId, wslDistro, protocol, sensitive);
     }
 
     public HostProfile {
@@ -133,33 +145,33 @@ public record HostProfile(
     /** Salinan dengan id baru dan nama "(salinan)". */
     public HostProfile duplicate() {
         return new HostProfile(UUID.randomUUID(), name + " (salinan)", group, host, port, username,
-                authMethod, privateKeyPath, jumpHostId, environment, initialDirectory, notes, autoSudo, os, terminalTheme, wslDistro, protocol);
+                authMethod, privateKeyPath, jumpHostId, environment, initialDirectory, notes, autoSudo, os, terminalTheme, wslDistro, protocol, sensitive);
     }
 
     public HostProfile withGroup(String newGroup) {
         return new HostProfile(id, name, newGroup, host, port, username, authMethod, privateKeyPath,
-                jumpHostId, environment, initialDirectory, notes, autoSudo, os, terminalTheme, wslDistro, protocol);
+                jumpHostId, environment, initialDirectory, notes, autoSudo, os, terminalTheme, wslDistro, protocol, sensitive);
     }
 
     public HostProfile withJumpHostId(UUID newJumpHostId) {
         return new HostProfile(id, name, group, host, port, username, authMethod, privateKeyPath,
-                newJumpHostId, environment, initialDirectory, notes, autoSudo, os, terminalTheme, wslDistro, protocol);
+                newJumpHostId, environment, initialDirectory, notes, autoSudo, os, terminalTheme, wslDistro, protocol, sensitive);
     }
 
     public HostProfile withPort(int newPort) {
         return new HostProfile(id, name, group, host, newPort, username, authMethod, privateKeyPath,
-                jumpHostId, environment, initialDirectory, notes, autoSudo, os, terminalTheme, wslDistro, protocol);
+                jumpHostId, environment, initialDirectory, notes, autoSudo, os, terminalTheme, wslDistro, protocol, sensitive);
     }
 
     /** @param distro nama distro WSL, atau null untuk server biasa */
     public HostProfile withWslDistro(String distro) {
         return new HostProfile(id, name, group, host, port, username, authMethod, privateKeyPath,
-                jumpHostId, environment, initialDirectory, notes, autoSudo, os, terminalTheme, distro, protocol);
+                jumpHostId, environment, initialDirectory, notes, autoSudo, os, terminalTheme, distro, protocol, sensitive);
     }
 
     public HostProfile withOs(OsInfo newOs) {
         return new HostProfile(id, name, group, host, port, username, authMethod, privateKeyPath,
-                jumpHostId, environment, initialDirectory, notes, autoSudo, newOs, terminalTheme, wslDistro, protocol);
+                jumpHostId, environment, initialDirectory, notes, autoSudo, newOs, terminalTheme, wslDistro, protocol, sensitive);
     }
 
     /** Salinan dengan protokol lain; port ikut diganti kalau masih port default protokol lama. */
@@ -167,7 +179,22 @@ public record HostProfile(
         var p = Objects.requireNonNullElse(newProtocol, Protocol.SSH);
         int newPort = port == protocol.defaultPort() ? p.defaultPort() : port;
         return new HostProfile(id, name, group, host, newPort, username, authMethod, privateKeyPath,
-                jumpHostId, environment, initialDirectory, notes, autoSudo, os, terminalTheme, wslDistro, p);
+                jumpHostId, environment, initialDirectory, notes, autoSudo, os, terminalTheme, wslDistro, p, sensitive);
+    }
+
+    /** @param value true/false = pilihan eksplisit, null = ikut environment */
+    public HostProfile withSensitive(Boolean value) {
+        return new HostProfile(id, name, group, host, port, username, authMethod, privateKeyPath,
+                jumpHostId, environment, initialDirectory, notes, autoSudo, os, terminalTheme, wslDistro, protocol, value);
+    }
+
+    /**
+     * true kalau profil ini perlu guard ekstra: flag {@link #sensitive()} kalau diisi, selain itu host PROD.
+     * Satu-satunya sumber keputusan guard (jangan cek {@link EnvironmentTag#isProduction()} langsung).
+     */
+    @JsonIgnore
+    public boolean needsGuard() {
+        return sensitive != null ? sensitive : environment.isProduction();
     }
 
     /** true kalau profil ini FTP/FTPS (browser file saja, tanpa terminal). */

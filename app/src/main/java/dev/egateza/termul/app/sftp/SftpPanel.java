@@ -778,7 +778,7 @@ public class SftpPanel extends JPanel {
         return null;
     }
 
-    /** Konfirmasi sebelum upload antar-panel: dari mana, item apa, ke host dan folder mana. Peringatan untuk PROD. */
+    /** Konfirmasi sebelum upload antar-panel: dari mana, item apa, ke host dan folder mana. Peringatan untuk host sensitif. */
     private boolean confirmCopy(SftpPanel source, List<RemoteEntry> entries, String dir) {
         var names = entries.stream().limit(8)
                 .map(e -> "  • " + (e.isDirectory() ? e.name() + "/" : e.name())).toList();
@@ -787,9 +787,9 @@ public class SftpPanel extends JPanel {
         String message = I18n.t("sftp.copy.confirm.message", String.valueOf(entries.size()), source.profile.name(),
                 source.currentDir == null ? "" : source.currentDir, String.join("\n", names) + more,
                 profile.name(), profile.address(), dir);
-        boolean prod = profile.environment().isProduction();
+        boolean prod = profile.needsGuard();
         if (prod) {
-            message += "\n\n" + I18n.t("sftp.copy.confirm.prod", profile.name());
+            message += "\n\n" + I18n.t("sftp.copy.confirm.sensitive", profile.name());
         }
         Object[] options = {I18n.t("sftp.copy.confirm.ok"), I18n.t("sftp.copy.confirm.cancel")};
         return javax.swing.JOptionPane.showOptionDialog(this, message, I18n.t("sftp.copy.confirm.title", profile.name()),

@@ -7,7 +7,7 @@ public enum EnvironmentTag {
     DEV,
     NONE;
 
-    /** Host produksi mendapat guard ekstra (konfirmasi paste, auto-sudo default OFF). */
+    /** Host produksi; default profil sensitif kalau flag-nya tidak diisi ({@link HostProfile#needsGuard()}). */
     public boolean isProduction() {
         return this == PROD;
     }

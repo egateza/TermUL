@@ -70,6 +70,9 @@ public final class ProfileDialog extends JDialog {
     private final JButton browseKey = new JButton("...");
     private final JComboBox<JumpChoice> jumpHost = new JComboBox<>();
     private final JComboBox<EnvironmentTag> environment = new JComboBox<>(EnvironmentTag.values());
+    private final JCheckBox sensitive = new JCheckBox(I18n.t("profile.field.sensitive"));
+    /** User sudah memilih sendiri (atau profil menyimpan pilihan eksplisit): tidak lagi ikut environment. */
+    private boolean sensitiveChosen;
     private final JTextField initialDir = new JTextField(24);
     private final JTextArea notes = new JTextArea(3, 24);
     private final JCheckBox autoSudo = new JCheckBox(I18n.t("profile.field.autoSudo"));
@@ -142,7 +145,17 @@ public final class ProfileDialog extends JDialog {
         shownProtocol = (Protocol) protocol.getSelectedItem();
         protocol.addActionListener(e -> onProtocolChanged());
         auth.addActionListener(e -> updateEnabled());
-        environment.addActionListener(e -> updateEnabled());
+        environment.addActionListener(e -> {
+            if (!sensitiveChosen) {
+                sensitive.setSelected(environment.getSelectedItem() == EnvironmentTag.PROD);
+            }
+            updateEnabled();
+        });
+        sensitive.setToolTipText(I18n.t("profile.field.sensitive.tooltip"));
+        sensitive.addActionListener(e -> { // hanya klik user; setSelected() tidak memicu ActionEvent
+            sensitiveChosen = true;
+            updateEnabled();
+        });
         browseKey.addActionListener(e -> chooseKey());
 
         getContentPane().add(buildForm(), BorderLayout.CENTER);
@@ -194,6 +207,8 @@ public final class ProfileDialog extends JDialog {
         auth.setSelectedItem(p.authMethod());
         keyPath.setText(Objects.requireNonNullElse(p.privateKeyPath(), ""));
         environment.setSelectedItem(p.environment());
+        sensitive.setSelected(p.needsGuard());
+        sensitiveChosen = p.sensitive() != null;
         initialDir.setText(Objects.requireNonNullElse(p.initialDirectory(), ""));
         notes.setText(Objects.requireNonNullElse(p.notes(), ""));
         autoSudo.setSelected(p.autoSudo());
@@ -244,8 +259,7 @@ public final class ProfileDialog extends JDialog {
         if (isDisplayable()) {
             pack(); // baris peringatan muncul/hilang
         }
-        boolean prod = environment.getSelectedItem() == EnvironmentTag.PROD;
-        autoSudo.setToolTipText(prod
+        autoSudo.setToolTipText(sensitive.isSelected()
                 ? I18n.t("profile.autoSudo.tooltip.prod",
                         Shortcuts.text(ShortcutAction.INJECT_SUDO))
                 : I18n.t("profile.autoSudo.tooltip"));
@@ -271,7 +285,7 @@ public final class ProfileDialog extends JDialog {
                     I18n.t("profile.protocol.ftpConfirmTitle"), I18n.t("profile.protocol.ftpConfirm"))) {
                 return;
             }
-            if (autoSudo.isSelected() && env == EnvironmentTag.PROD && !Dialogs.confirm(this,
+            if (autoSudo.isSelected() && sensitive.isSelected() && !Dialogs.confirm(this,
                     I18n.t("profile.autoSudo.prodTitle"), I18n.t("profile.autoSudo.prodConfirm"))) {
                 return;
             }
@@ -281,12 +295,21 @@ public final class ProfileDialog extends JDialog {
                     jump == null || jump.profile() == null ? null : jump.profile().id(),
                     env, initialDir.getText(), notes.getText(), autoSudo.isSelected(), os,
                     terminalColors.getSelectedItem() instanceof HostTerminalColors.Choice c ? c.id() : null,
-                    (String) wslDistro.getSelectedItem(), proto);
+                    (String) wslDistro.getSelectedItem(), proto,
+                    sensitiveValue(sensitiveChosen, sensitive.isSelected(), env));
             result = new Result(profile, collectSecretChanges());
             dispose();
         } catch (IllegalArgumentException e) {
             Dialogs.error(this, I18n.t("profile.error.invalid"), e.getMessage());
         }
+    }
+
+    /**
+     * Nilai flag sensitif yang disimpan: null (ikut environment) kalau sama dengan default environment, supaya profil
+     * yang kelak diganti ke/dari PROD ikut berubah; selain itu pilihan eksplisit user.
+     */
+    static Boolean sensitiveValue(boolean chosen, boolean selected, EnvironmentTag env) {
+        return chosen && selected != env.isProduction() ? selected : null;
     }
 
     private JComponent buildForm() {
@@ -314,6 +337,7 @@ public final class ProfileDialog extends JDialog {
             row = addRow(form, row, I18n.t("profile.field.wslDistro"), wslDistro);
         }
         row = addRow(form, row, I18n.t("profile.field.environment"), environment);
+        row = addRow(form, row, "", sensitive);
         row = addRow(form, row, I18n.t("profile.field.terminalColors"), terminalColors);
         row = addRow(form, row, I18n.t("profile.field.initialDir"), initialDir);
         row = addRow(form, row, I18n.t("profile.field.notes"), new JScrollPane(notes));

@@ -65,6 +65,24 @@ class ProfileStoreTest {
     }
 
     @Test
+    void flagSensitifIkutTersimpanDanProfilLamaTanpaFlagTetapTerbaca() throws Exception {
+        Path file = dir.resolve("profiles.json");
+        var explicit = HostProfile.create("staging-db", "10.0.0.7", "ega").withSensitive(true);
+        var legacy = HostProfile.create("web", "10.0.0.5", "ega");
+        var store = new ProfileStore(file);
+        store.save(explicit);
+        store.save(legacy);
+        // file dari versi lama: tanpa properti "sensitive" sama sekali
+        Files.writeString(file, Files.readString(file).replaceAll(",?\\s*\"sensitive\"\\s*:\\s*null", ""));
+        assertThat(Files.readString(file)).containsOnlyOnce("\"sensitive\"");
+
+        var loaded = new ProfileStore(file).load();
+
+        assertThat(loaded.find(explicit.id())).get().extracting(HostProfile::sensitive).isEqualTo(true);
+        assertThat(loaded.find(legacy.id())).get().extracting(HostProfile::sensitive).isNull();
+    }
+
+    @Test
     void saveMenggantiProfilDenganIdSama() {
         var store = new ProfileStore(dir.resolve("profiles.json"));
         var p = HostProfile.create("a", "h", "u");

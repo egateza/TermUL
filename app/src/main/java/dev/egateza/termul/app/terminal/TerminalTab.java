@@ -86,6 +86,24 @@ public final class TerminalTab extends TermPane {
     private final boolean sftpOnly;               // tab berisi panel SFTP saja, tanpa shell
     private javax.swing.Timer monitor;             // EDT; hanya mode sftpOnly: mendeteksi koneksi SFTP putus
     private Reconnector<?> reconnector; // EDT; tidak null selama reconnect otomatis berjalan
+    private final SensitiveLock lock = new SensitiveLock(); // EDT
+    private LockCover lockCover;         // EDT; dibuat saat pertama kali terkunci
+    /** Fokus keluar/masuk terminal: dasar kunci profil sensitif. */
+    private final java.awt.event.FocusListener lockFocus = new java.awt.event.FocusAdapter() {
+        @Override
+        public void focusLost(java.awt.event.FocusEvent e) {
+            if (leavesTab(e.getOppositeComponent())) {
+                lock.left(System.currentTimeMillis());
+            }
+        }
+
+        @Override
+        public void focusGained(java.awt.event.FocusEvent e) {
+            if (lock.returned(System.currentTimeMillis(), latestProfile().needsGuard())) {
+                showLock();
+            }
+        }
+    };
     private SftpPanel sftp;              // dibuat saat pertama kali dibuka
     private JSplitPane split;
     private int sftpDivider = 380;
@@ -253,16 +271,59 @@ public final class TerminalTab extends TermPane {
         return p != null ? p : profile; // profil sudah dihapus: pakai versi saat tab dibuka
     }
 
-    /** Garis warna environment di atas terminal (prod merah, staging kuning, dev hijau). EDT. */
+    /**
+     * Profil sensitif: bingkai merah di keempat sisi terminal. Selain itu garis warna environment di atas (prod merah,
+     * staging kuning, dev hijau). EDT.
+     */
     private void applyEnvironmentColor() {
-        Color color = dev.egateza.termul.app.ui.EnvColors.of(latestProfile().environment());
+        HostProfile p = latestProfile();
+        if (p.needsGuard()) {
+            content.setBorder(BorderFactory.createMatteBorder(3, 3, 3, 3, dev.egateza.termul.app.ui.EnvColors.SENSITIVE));
+            return;
+        }
+        Color color = dev.egateza.termul.app.ui.EnvColors.of(p.environment());
         content.setBorder(color == null ? null : BorderFactory.createMatteBorder(3, 0, 0, 0, color));
     }
 
-    /** Paste di host prod yang berisi baris baru (langsung dijalankan shell) dikonfirmasi dulu. EDT. */
-    private String confirmPaste(String text) {
+    /**
+     * true kalau fokus pindah ke luar tab ini: aplikasi lain (null), tab/panel lain di jendela utama, atau jendela lain
+     * yang bukan milik jendela ini. Dialog/popup milik jendela ini (konfirmasi paste, menu) tidak dihitung.
+     */
+    private boolean leavesTab(java.awt.Component opposite) {
+        if (opposite == null) {
+            return true;
+        }
+        if (SwingUtilities.isDescendingFrom(opposite, this)) {
+            return false; // mis. panel SFTP atau search bar host yang sama
+        }
+        var mine = SwingUtilities.getWindowAncestor(this);
+        var theirs = opposite instanceof java.awt.Window w ? w : SwingUtilities.getWindowAncestor(opposite);
+        return theirs == null || theirs == mine || theirs.getOwner() != mine;
+    }
+
+    /** Tampilkan lapisan kunci; input ditahan {@link #interceptKey} sampai Enter. EDT. */
+    private void showLock() {
+        if (lockCover == null) {
+            lockCover = new LockCover(this::hideLock);
+        }
         HostProfile p = latestProfile();
-        if (!PasteGuard.needsConfirmation(text, p.environment())) {
+        lockCover.show(p.name(), p.address());
+        center.setCover(lockCover);
+    }
+
+    private void hideLock() {
+        lock.unlock();
+        center.setCover(null);
+        focusTerminal();
+    }
+
+    /** Paste di host sensitif yang berisi baris baru (langsung dijalankan shell) dikonfirmasi dulu. EDT. */
+    private String confirmPaste(String text) {
+        if (lock.isLocked()) {
+            return null; // buka kunci (Enter) dulu
+        }
+        HostProfile p = latestProfile();
+        if (!PasteGuard.needsConfirmation(text, p.needsGuard())) {
             return text;
         }
         var lines = PasteGuard.lines(text);
@@ -278,7 +339,7 @@ public final class TerminalTab extends TermPane {
                 JOptionPane.WARNING_MESSAGE, null, options, options[1]);
         focusTerminal();
         if (choice != 0) {
-            log.info("Paste {} baris ke host prod {} dibatalkan user", lines.size(), p.address());
+            log.info("Paste {} baris ke host sensitif {} dibatalkan user", lines.size(), p.address());
             return null;
         }
         return text;
@@ -501,6 +562,7 @@ public final class TerminalTab extends TermPane {
             floats = null;
         }
         if (widget != null) {
+            widget.getTerminalPanel().removeFocusListener(lockFocus);
             widget.close(); // terminal lama yang beku setelah koneksi putus
         }
         connector = tty;
@@ -531,6 +593,7 @@ public final class TerminalTab extends TermPane {
         }
         widget.setTtyConnector(tty);
         widget.setPasteFilter(this::confirmPaste);
+        widget.getTerminalPanel().addFocusListener(lockFocus);
         applyEnvironmentColor();
         tty.addCloseListener(c -> SwingUtilities.invokeLater(() -> onClosed(c)));
         showCenter(widget);
@@ -729,6 +792,9 @@ public final class TerminalTab extends TermPane {
             swallowTyped = false; // pasangan KEY_TYPED dari key yang sudah ditangani
             return true;
         }
+        if (e.getID() == KeyEvent.KEY_TYPED && lock.isLocked()) {
+            return true; // mis. input IME tanpa KEY_PRESSED yang bisa ditahan
+        }
         if (e.getID() != KeyEvent.KEY_PRESSED || widget == null) {
             return false;
         }
@@ -744,6 +810,17 @@ public final class TerminalTab extends TermPane {
         if (zoom != null) {
             zoom(zoom);
             return true;
+        }
+        switch (lock.onKeyPressed(e.getKeyCode(), e.getModifiersEx(),
+                Shortcuts.isAppCombo(KeyStroke.getKeyStrokeForEvent(e)))) {
+            case UNLOCK -> {
+                hideLock();
+                return true;
+            }
+            case SWALLOW -> {
+                return true;
+            }
+            case PASS -> { }
         }
         boolean enter = e.getKeyCode() == KeyEvent.VK_ENTER && e.getModifiersEx() == 0;
         boolean ctrlD = e.getKeyCode() == KeyEvent.VK_D
@@ -856,6 +933,9 @@ public final class TerminalTab extends TermPane {
     public void reloadColors() {
         settings.setPaletteOverride(hostPalette.apply(latestProfile().terminalTheme()));
         applyEnvironmentColor();
+        if (lock.isLocked() && !latestProfile().needsGuard()) {
+            hideLock(); // profil baru saja diedit jadi tidak sensitif
+        }
         if (widget != null) {
             widget.refreshColors();
         }
@@ -1061,6 +1141,7 @@ public final class TerminalTab extends TermPane {
         }
         if (widget != null) {
             detachHighlighter();
+            widget.getTerminalPanel().removeFocusListener(lockFocus);
             widget.close();
             widget = null;
         }

@@ -33,6 +33,31 @@ class FloatingOverlayTest {
     }
 
     @Test
+    void coverMemenuhiAreaDiAtasKontenDanTombol() {
+        var overlay = new FloatingOverlay();
+        var base = new JLabel("terminal");
+        var fab = box(52, 52);
+        var cover = box(10, 10);
+        overlay.setBase(base);
+        overlay.addFloating(fab, FloatingOverlay.Anchor.BOTTOM_RIGHT);
+        overlay.setCover(cover);
+        var later = box(40, 40);
+        overlay.addFloating(later, FloatingOverlay.Anchor.TOP_LEFT); // tombol baru tetap di bawah cover
+        overlay.setSize(800, 600);
+
+        overlay.doLayout();
+
+        assertThat(cover.getBounds()).isEqualTo(new Rectangle(0, 0, 800, 600));
+        assertThat(overlay.getComponentZOrder(cover)).isZero();
+        assertThat(overlay.getComponentZOrder(later)).isGreaterThan(0);
+
+        overlay.setCover(null);
+        assertThat(cover.getParent()).isNull();
+        assertThat(overlay.cover()).isNull();
+        assertThat(fab.getParent()).isSameAs(overlay);
+    }
+
+    @Test
     void tengahBawahDanTombolTersembunyiTidakMakanTempat() {
         var overlay = new FloatingOverlay();
         var first = box(52, 52);

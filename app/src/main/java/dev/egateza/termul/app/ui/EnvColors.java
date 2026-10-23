@@ -7,13 +7,16 @@ import java.awt.Color;
 /** Warna per environment (tab, tree). */
 public final class EnvColors {
 
+    /** Bingkai terminal profil sensitif (sama dengan PROD). */
+    public static final Color SENSITIVE = new Color(0xE5484D);
+
     private EnvColors() {
     }
 
     /** @return warna aksen, atau null untuk {@link EnvironmentTag#NONE} */
     public static Color of(EnvironmentTag tag) {
         return switch (tag) {
-            case PROD -> new Color(0xE5484D);
+            case PROD -> SENSITIVE;
             case STAGING -> new Color(0xF5A524);
             case DEV -> new Color(0x30A46C);
             case NONE -> null;

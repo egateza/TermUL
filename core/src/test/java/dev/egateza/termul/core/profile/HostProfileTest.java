@@ -116,4 +116,31 @@ class HostProfileTest {
         assertThat(Protocol.FTP.isEncrypted()).isFalse();
         assertThat(Protocol.FTPS.isEncrypted()).isTrue();
     }
+
+    @Test
+    void sensitifIkutEnvironmentKecualiDipilihEksplisit() {
+        var p = HostProfile.create("h", "h", "u");
+        assertThat(p.sensitive()).isNull();
+        assertThat(p.needsGuard()).isFalse();
+
+        var prod = new HostProfile(p.id(), "h", "", "h", 22, "u", null, null, null, EnvironmentTag.PROD, null, null,
+                false);
+        assertThat(prod.needsGuard()).isTrue();
+        assertThat(prod.withSensitive(false).needsGuard()).isFalse(); // PROD tapi user memilih tidak sensitif
+        assertThat(p.withSensitive(true).needsGuard()).isTrue();     // mis. staging berisi data asli
+    }
+
+    @Test
+    void flagSensitifDipertahankanSaatProfilDiubah() {
+        var p = HostProfile.create("h", "h", "u").withSensitive(true);
+
+        assertThat(p.withGroup("A").sensitive()).isTrue();
+        assertThat(p.withPort(2222).sensitive()).isTrue();
+        assertThat(p.withOs(null).sensitive()).isTrue();
+        assertThat(p.withTerminalTheme("x").sensitive()).isTrue();
+        assertThat(p.withWslDistro("Ubuntu").sensitive()).isTrue();
+        assertThat(p.withJumpHostId(null).sensitive()).isTrue();
+        assertThat(p.withProtocol(Protocol.FTP).sensitive()).isTrue();
+        assertThat(p.duplicate().sensitive()).isTrue();
+    }
 }

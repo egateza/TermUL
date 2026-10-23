@@ -1,10 +1,9 @@
 package dev.egateza.termul.app.terminal;
 
-import dev.egateza.termul.core.profile.EnvironmentTag;
 import java.util.List;
 
 /**
- * Aturan konfirmasi paste: di host produksi, teks yang berisi baris baru langsung dijalankan shell begitu di-paste
+ * Aturan konfirmasi paste: di host sensitif ({@code HostProfile#needsGuard()}), teks yang berisi baris baru langsung dijalankan shell begitu di-paste
  * (tiap baris baru = Enter), jadi perlu konfirmasi dulu.
  */
 final class PasteGuard {
@@ -15,8 +14,8 @@ final class PasteGuard {
     private PasteGuard() {
     }
 
-    static boolean needsConfirmation(String text, EnvironmentTag environment) {
-        return environment.isProduction() && text != null && (text.indexOf('\n') >= 0 || text.indexOf('\r') >= 0);
+    static boolean needsConfirmation(String text, boolean sensitive) {
+        return sensitive && text != null && (text.indexOf('\n') >= 0 || text.indexOf('\r') >= 0);
     }
 
     /** Baris yang akan dikirim (CRLF/CR dianggap satu pemisah; baris kosong di akhir tidak dihitung). */

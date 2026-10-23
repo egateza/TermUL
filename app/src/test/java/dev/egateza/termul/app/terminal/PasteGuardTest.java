@@ -2,19 +2,18 @@ package dev.egateza.termul.app.terminal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import dev.egateza.termul.core.profile.EnvironmentTag;
 import org.junit.jupiter.api.Test;
 
 class PasteGuardTest {
 
     @Test
-    void hanyaProdDenganBarisBaruYangPerluKonfirmasi() {
-        assertThat(PasteGuard.needsConfirmation("rm -rf /tmp/x\nls", EnvironmentTag.PROD)).isTrue();
-        assertThat(PasteGuard.needsConfirmation("ls\r", EnvironmentTag.PROD)).isTrue(); // satu baris + Enter tetap langsung jalan
-        assertThat(PasteGuard.needsConfirmation("ls -la", EnvironmentTag.PROD)).isFalse();
-        assertThat(PasteGuard.needsConfirmation("a\nb", EnvironmentTag.STAGING)).isFalse();
-        assertThat(PasteGuard.needsConfirmation("a\nb", EnvironmentTag.NONE)).isFalse();
-        assertThat(PasteGuard.needsConfirmation(null, EnvironmentTag.PROD)).isFalse();
+    void hanyaHostSensitifDenganBarisBaruYangPerluKonfirmasi() {
+        assertThat(PasteGuard.needsConfirmation("rm -rf /tmp/x\nls", true)).isTrue();
+        assertThat(PasteGuard.needsConfirmation("ls\r", true)).isTrue(); // satu baris + Enter tetap langsung jalan
+        assertThat(PasteGuard.needsConfirmation("ls -la", true)).isFalse();
+        assertThat(PasteGuard.needsConfirmation("a\nb", false)).isFalse();
+        assertThat(PasteGuard.needsConfirmation("a\nb", false)).isFalse();
+        assertThat(PasteGuard.needsConfirmation(null, true)).isFalse();
     }
 
     @Test

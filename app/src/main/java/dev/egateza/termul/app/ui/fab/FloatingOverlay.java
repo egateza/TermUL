@@ -30,6 +30,7 @@ public final class FloatingOverlay extends JPanel {
     static final int GAP = 10;
 
     private Component base;
+    private JComponent cover;
     private final Map<JComponent, Anchor> floats = new LinkedHashMap<>();
     /** Posisi sementara selama tombol diseret (kiri atas, koordinat panel ini). */
     private final Map<JComponent, java.awt.Point> dragged = new java.util.HashMap<>();
@@ -63,9 +64,29 @@ public final class FloatingOverlay extends JPanel {
         return base;
     }
 
+    /** Lapisan penuh di atas konten dan tombol (mis. kunci terminal sensitif); null = lepas. */
+    public void setCover(JComponent c) {
+        if (cover == c) {
+            return;
+        }
+        if (cover != null) {
+            remove(cover);
+        }
+        cover = c;
+        if (c != null) {
+            add(c, 0); // indeks pertama = digambar paling atas
+        }
+        revalidate();
+        repaint();
+    }
+
+    public JComponent cover() {
+        return cover;
+    }
+
     public void addFloating(JComponent c, Anchor anchor) {
         floats.put(c, anchor);
-        add(c, 0);
+        add(c, cover == null ? 0 : 1); // tetap di bawah cover
         revalidate();
     }
 
@@ -136,6 +157,9 @@ public final class FloatingOverlay extends JPanel {
         int h = getHeight();
         if (base != null) {
             base.setBounds(0, 0, w, h);
+        }
+        if (cover != null) {
+            cover.setBounds(0, 0, w, h);
         }
         floats.forEach((c, anchor) -> c.setBounds(place(c, anchor, w, h)));
     }

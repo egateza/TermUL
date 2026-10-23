@@ -83,14 +83,27 @@ Rekomendasi operasional (di luar aplikasi): untuk server prod, pertimbangkan aks
 - `-k` memaksa sudo selalu membaca password dari stdin (tidak memakai cache), supaya password tidak pernah sampai ke script. Tanpa password tersimpan dicoba `sudo -n` dulu (NOPASSWD), baru user diminta (tidak disimpan). Password salah tidak diulang.
 - Hook validasi (`config.json` → `validationHooks`) adalah command milik user sendiri yang dijalankan sebagai root; hanya bisa diubah lewat config lokal.
 
+## Profil sensitif
+
+Mencegah salah eksekusi karena salah tab (mengira di server dev, ternyata di produksi). Flag `sensitive` per profil;
+kosong = ikut environment (`PROD` = sensitif), jadi profil lama tetap terlindungi. Satu-satunya sumber keputusan adalah
+`HostProfile.needsGuard()`; jangan cek `EnvironmentTag.isProduction()` langsung untuk guard.
+
+- **Kunci saat kembali** (`SensitiveLock`): fokus pindah ke tab/panel/aplikasi lain lalu kembali setelah ≥ 1,5 detik →
+  lapisan merah dengan nama host menutupi terminal dan semua input ditahan (termasuk paste dan Ctrl+C/Ctrl+D) sampai
+  Enter. Klik di lapisan tidak membuka kunci, supaya klik untuk fokus tidak sekaligus melewati peringatan. Shortcut
+  aplikasi dan Ctrl+Tab tetap jalan. Dialog/popup milik jendela utama (mis. konfirmasi paste) tidak dihitung pergi.
+- Bingkai merah di keempat sisi terminal (selain titik warna environment di tab).
+- Konfirmasi paste multi-baris, auto-sudo perlu konfirmasi saat diaktifkan, peringatan saat upload antar-server.
+
 ## Upload antar-server (SFTP ke SFTP)
 
 - Isi file mengalir langsung dari stream SFTP sumber ke stream SFTP tujuan lewat TermUL: **tidak ada salinan di disk
   lokal**, dan server sumber tidak pernah diberi akses ke server tujuan (tanpa `scp` antar-server, tanpa agent forwarding).
 - Tulis di tujuan memakai aturan upload biasa: file temp lalu rename, file milik user lain / tidak bisa ditulis ditolak,
   mode file lama dipertahankan (file baru memakai mode sumber; folder baru mendapat mode sumber setelah isinya disalin).
-- Selalu ada konfirmasi yang menyebut folder dan host tujuan, dengan tombol default Batal; host bertag PROD diberi
-  peringatan. Di server yang sama, salin ke lokasinya sendiri atau folder ke dalam dirinya sendiri ditolak.
+- Selalu ada konfirmasi yang menyebut folder dan host tujuan, dengan tombol default Batal; host sensitif diberi
+  peringatan (lihat "Profil sensitif"). Di server yang sama, salin ke lokasinya sendiri atau folder ke dalam dirinya sendiri ditolak.
 
 ## FTP/FTPS (ADR 0007)
 
@@ -135,7 +148,9 @@ Detail di `docs/adr/0003-self-update.md`.
 - Auto-sudo meng-arm hanya kalau baris kursor dikenali sebagai prompt shell (heuristik `ExitGuard`); prompt dengan spasi (mis. `(venv) user@host:~$`) dan prompt `sudo-rs` (`[sudo: authenticate] Password:`, tanpa username) tidak dikenali, jadi auto-sudo tidak jalan (fail-safe). Hotkey tetap bisa dipakai.
 - Selama validasi berjalan (antara `mv` dan rollback), file baru yang invalid sempat terpasang sebentar.
 - ProxyJump memakai local forward `127.0.0.1:<port acak>` selama koneksi tujuan hidup. Proses lain di PC yang sama bisa memakai port itu untuk menjangkau port SSH host tujuan lewat jump host (tetap harus lolos auth SSH tujuan). Listener hanya di loopback dan ditutup bersama koneksi. Host key tujuan diverifikasi dengan alamat aslinya, bukan alamat tunnel.
-- Paste multi-baris ke host `PROD` selalu dikonfirmasi (preview + jumlah baris); host non-prod tidak.
+- Paste multi-baris ke host sensitif selalu dikonfirmasi (preview + jumlah baris); host lain tidak.
+- Kunci profil sensitif hanya melindungi dari salah tab/jendela, bukan dari perintah berbahaya yang diketik sengaja
+  setelah kunci dibuka. Tidak ada parsing perintah (mis. `rm -rf`), jadi tidak ada jaminan di luar itu.
 - FTP biasa (ADR 0007) tidak terenkripsi sama sekali; satu-satunya mitigasi adalah peringatan + konfirmasi di dialog profil.
 - **Password login & passphrase key di MINA berupa `String`.** API Apache MINA SSHD (`UserInteraction`, `FilePasswordProvider`) hanya menerima `String`. Konversi `char[] → String` dibatasi di satu tempat (`ssh/.../auth/AuthSetup.java`), dilakukan tepat saat MINA memintanya, dan `char[]` asal langsung di-zero. String itu tidak disimpan di field, tidak di-log, dan menjadi garbage setelah paket auth terkirim. Password sudo/su (inject ke terminal) tetap `char[]`/`byte[]` penuh.
 
