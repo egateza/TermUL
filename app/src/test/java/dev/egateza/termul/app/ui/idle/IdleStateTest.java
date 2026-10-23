@@ -40,6 +40,23 @@ class IdleStateTest {
     }
 
     @Test
+    void altF4TetapMenutupAplikasiSaatLayarIdleTampil() {
+        var idle = new IdleState(0);
+        idle.activate();
+
+        assertThat(idle.onKey(PRESSED, KeyEvent.VK_ALT, 1)).isEqualTo(WAKE);
+        assertThat(idle.onKey(PRESSED, KeyEvent.VK_F4, 2)).isEqualTo(PASS);
+        assertThat(idle.onKey(PRESSED, KeyEvent.VK_D, 3)).isEqualTo(SWALLOW); // Alt+D tetap ditelan
+        assertThat(idle.onKey(RELEASED, KeyEvent.VK_ALT, 4)).isEqualTo(SWALLOW);
+        assertThat(idle.onKey(PRESSED, KeyEvent.VK_F4, 5)).isEqualTo(PASS);   // setelah Alt dilepas: biasa
+
+        var ctrl = new IdleState(0);
+        ctrl.activate();
+        assertThat(ctrl.onKey(PRESSED, KeyEvent.VK_CONTROL, 1)).isEqualTo(WAKE);
+        assertThat(ctrl.onKey(PRESSED, KeyEvent.VK_F4, 2)).isEqualTo(SWALLOW); // Ctrl+F4 bukan tutup aplikasi
+    }
+
+    @Test
     void tanpaLayarIdleSemuaTombolDiteruskan() {
         var idle = new IdleState(0);
         assertThat(idle.onKey(PRESSED, KeyEvent.VK_A, 1)).isEqualTo(PASS);

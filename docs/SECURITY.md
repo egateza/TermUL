@@ -89,10 +89,13 @@ Mencegah salah eksekusi karena salah tab (mengira di server dev, ternyata di pro
 kosong = ikut environment (`PROD` = sensitif), jadi profil lama tetap terlindungi. Satu-satunya sumber keputusan adalah
 `HostProfile.needsGuard()`; jangan cek `EnvironmentTag.isProduction()` langsung untuk guard.
 
-- **Kunci saat kembali** (`SensitiveLock`): fokus pindah ke tab/panel/aplikasi lain lalu kembali setelah ≥ 1,5 detik →
-  lapisan merah dengan nama host menutupi terminal dan semua input ditahan (termasuk paste dan Ctrl+C/Ctrl+D) sampai
-  Enter. Klik di lapisan tidak membuka kunci, supaya klik untuk fokus tidak sekaligus melewati peringatan. Shortcut
-  aplikasi dan Ctrl+Tab tetap jalan. Dialog/popup milik jendela utama (mis. konfirmasi paste) tidak dihitung pergi.
+- **Kunci saat kembali** (`SensitiveLock`): selama fokus di luar terminal, fokus sempat dipegang **terminal lain**
+  (tab/panel split lain, termasuk terminal lokal dan panel SFTP host lain) atau **aplikasi lain** aktif
+  (`TerminalFocusTracker`), lalu kembali setelah ≥ 1,5 detik → lapisan merah dengan nama host menutupi terminal dan
+  semua input ditahan (termasuk paste dan Ctrl+C/Ctrl+D) sampai Enter. Klik di lapisan tidak membuka kunci, supaya klik
+  untuk fokus tidak sekaligus melewati peringatan. Shortcut aplikasi dan Ctrl+Tab tetap jalan. Fokus yang hanya mampir
+  ke tree host, toolbar, panel SFTP host yang sama, atau dialog milik aplikasi (mis. konfirmasi paste), serta terminal
+  yang dicabut-pasang saat panel SFTP dibuka/ditutup, tidak mengunci.
 - Bingkai merah di keempat sisi terminal (selain titik warna environment di tab).
 - Konfirmasi paste multi-baris, auto-sudo perlu konfirmasi saat diaktifkan, peringatan saat upload antar-server.
 

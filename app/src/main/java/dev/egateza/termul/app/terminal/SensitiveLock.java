@@ -4,9 +4,10 @@ import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 
 /**
- * Kunci terminal profil sensitif: setiap kali fokus kembali ke terminal setelah pindah ke tab, panel, atau aplikasi
- * lain, input ditahan sampai user menekan Enter. Mencegah perintah yang dimaksudkan untuk server dev terketik di server
- * produksi karena salah tab. Kembali dalam {@link #GRACE_MILLIS} (mis. klik singkat di tempat lain) tidak mengunci.
+ * Kunci terminal profil sensitif: setiap kali fokus kembali ke terminal setelah sempat dipegang terminal lain atau
+ * aplikasi lain ({@link TerminalFocusTracker}), input ditahan sampai user menekan Enter. Mencegah perintah yang
+ * dimaksudkan untuk server dev terketik di server produksi karena salah tab. Kembali dalam {@link #GRACE_MILLIS} (mis.
+ * klik singkat di tempat lain) tidak mengunci; fokus yang hanya mampir ke tree, toolbar, atau panel SFTP juga tidak.
  *
  * <p>Logika murni tanpa Swing; waktu diberikan pemanggil. Dipakai di EDT.
  */
@@ -38,11 +39,12 @@ final class SensitiveLock {
     /**
      * Fokus kembali ke terminal.
      *
-     * @param sensitive profil saat ini sensitif (dibaca saat itu, profil bisa sudah diedit)
+     * @param sensitive      profil saat ini sensitif (dibaca saat itu, profil bisa sudah diedit)
+     * @param contextChanged selama pergi, fokus sempat dipegang terminal lain atau aplikasi lain
      * @return true kalau terminal (sekarang) terkunci
      */
-    boolean returned(long now, boolean sensitive) {
-        boolean away = leftAt != 0 && now - leftAt >= GRACE_MILLIS;
+    boolean returned(long now, boolean sensitive, boolean contextChanged) {
+        boolean away = contextChanged && leftAt != 0 && now - leftAt >= GRACE_MILLIS;
         leftAt = 0;
         if (!sensitive) {
             locked = false;

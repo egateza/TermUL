@@ -80,6 +80,10 @@ public final class IdleState {
         if (wakeKey == NO_KEY) {
             return Decision.PASS;
         }
+        if (kind == Key.PRESSED && wakeKey == java.awt.event.KeyEvent.VK_ALT
+                && keyCode == java.awt.event.KeyEvent.VK_F4) {
+            return Decision.PASS; // Alt+F4 tetap menutup aplikasi (menelannya juga membatalkan penutupan oleh Windows)
+        }
         // termasuk karakter (TYPED), auto-repeat (PRESSED berulang), dan tombol lain selama tombol pembangun ditahan
         if (kind == Key.RELEASED && keyCode == wakeKey) {
             wakeKey = NO_KEY;

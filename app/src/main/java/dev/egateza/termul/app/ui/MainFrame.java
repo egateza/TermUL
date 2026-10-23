@@ -348,9 +348,8 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         tabs.addChangeListener(e -> {
             updateCenter();
             updateTerminalMenu();
-            if (tabs.getSelectedComponent() instanceof TerminalTab tab) {
-                SwingUtilities.invokeLater(tab::focusTerminal);
-            }
+            // isi tab selalu SplitPanes: fokuskan panel aktifnya (juga dasar kunci profil sensitif saat kembali ke tab)
+            currentTab().ifPresent(pane -> SwingUtilities.invokeLater(pane::focusTerminal));
         });
         // Ctrl+klik tab (Cmd+klik di Mac) = pilih/batal pilih untuk digabung (Ctrl+G); klik biasa membatalkan semua
         // pilihan; klik kanan = menu tab (popup trigger: saat ditekan di Mac, saat dilepas di Windows)
@@ -546,11 +545,24 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
      * sebelum JediTerm, supaya tetap jalan saat fokus di terminal dan tidak ikut terkirim ke remote. Shortcut shell biasa
      * (Ctrl+F, Ctrl+N, ...) tidak disentuh. Lihat {@link Shortcuts#isAppCombo}.
      */
+    /** KEY_PRESSED shortcut keluar (Alt+F4; tidak ada di Mac, Cmd+Q ditangani menu aplikasi macOS). */
+    static boolean isExitKey(KeyEvent e) {
+        var exit = Shortcuts.exit();
+        return exit != null && e.getID() == KeyEvent.KEY_PRESSED && KeyStroke.getKeyStrokeForEvent(e).equals(exit);
+    }
+
     private boolean dispatchHotkey(KeyEvent e) {
         if (dispatchIdleKey(e)) {
             return true;
         }
         var tab = currentGroup().flatMap(g -> g.paneOf(e.getComponent())); // panel split tempat key diketik
+        if (tab.isPresent() && isExitKey(e)) {
+            // Alt+F4 di terminal: JediTerm mengirimnya ke server sebagai escape sequence (bell, jendela tidak
+            // tertutup) dan accelerator menu Keluar tidak pernah terpicu. Tutup seperti tombol X (ikut aturan tray).
+            e.consume();
+            SwingUtilities.invokeLater(() -> dispatchEvent(new WindowEvent(this, WindowEvent.WINDOW_CLOSING)));
+            return true;
+        }
         if (tab.isPresent() && tab.get().interceptKey(e)) {
             e.consume();
             return true;
@@ -2435,11 +2447,17 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
     private int firstActiveTab() {
         for (int i = 0; i < tabs.getTabCount(); i++) {
-            if (groupAt(i).panes().stream().anyMatch(tab -> tab.isSessionActive() || tab.activeTransfers() > 0)) {
+            if (isTabActive(i)) {
                 return i;
             }
         }
         return -1;
+    }
+
+    /** Tab ke-{@code index} punya sesi atau transfer yang masih berjalan; false untuk indeks di luar jangkauan. */
+    private boolean isTabActive(int index) {
+        return index >= 0 && index < tabs.getTabCount()
+                && groupAt(index).panes().stream().anyMatch(tab -> tab.isSessionActive() || tab.activeTransfers() > 0);
     }
 
     /**
@@ -2620,8 +2638,8 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     }
 
     /**
-     * Konfirmasi menutup aplikasi; kalau masih ada sesi/edit aktif, daftarnya ditampilkan. Ditolak = tab aktif pertama
-     * (atau daftar edit) ditampilkan. EDT.
+     * Konfirmasi menutup aplikasi; kalau masih ada sesi/edit aktif, daftarnya ditampilkan. Ditolak = tetap di tab yang
+     * sedang dibuka kalau tab itu aktif, selain itu tab aktif pertama (atau daftar edit) ditampilkan. EDT.
      */
     private boolean confirmQuit(String title, String idleMessage) {
         List<String> active = activeWork();
@@ -2638,6 +2656,9 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                 active.isEmpty() ? JOptionPane.QUESTION_MESSAGE : JOptionPane.WARNING_MESSAGE);
         if (choice != JOptionPane.YES_OPTION) {
             int first = firstActiveTab();
+            if (first >= 0 && isTabActive(tabs.getSelectedIndex())) {
+                return false; // tab yang sedang dipakai sudah menunjukkan sesi aktif: jangan dipindah
+            }
             if (first >= 0) {
                 tabs.setSelectedIndex(first);
             } else if (!ctx.edits().entries().isEmpty()) {

@@ -88,18 +88,26 @@ public final class TerminalTab extends TermPane {
     private Reconnector<?> reconnector; // EDT; tidak null selama reconnect otomatis berjalan
     private final SensitiveLock lock = new SensitiveLock(); // EDT
     private LockCover lockCover;         // EDT; dibuat saat pertama kali terkunci
-    /** Fokus keluar/masuk terminal: dasar kunci profil sensitif. */
+    private TerminalFocusTracker.Mark leaveMark; // EDT; hitungan konteks saat fokus keluar, null = tidak sedang pergi
+    /**
+     * Fokus keluar/masuk terminal: dasar kunci profil sensitif. Hanya mengunci kalau selama pergi fokus sempat dipegang
+     * terminal lain atau aplikasi lain; terminal yang dicabut-pasang (panel SFTP dibuka/ditutup), dialog konfirmasi,
+     * tree, dan panel SFTP tidak dihitung.
+     */
     private final java.awt.event.FocusListener lockFocus = new java.awt.event.FocusAdapter() {
         @Override
         public void focusLost(java.awt.event.FocusEvent e) {
-            if (leavesTab(e.getOppositeComponent())) {
-                lock.left(System.currentTimeMillis());
+            lock.left(System.currentTimeMillis());
+            if (leaveMark == null) {
+                leaveMark = TerminalFocusTracker.get().mark();
             }
         }
 
         @Override
         public void focusGained(java.awt.event.FocusEvent e) {
-            if (lock.returned(System.currentTimeMillis(), latestProfile().needsGuard())) {
+            boolean contextChanged = leaveMark != null && !leaveMark.equals(TerminalFocusTracker.get().mark());
+            leaveMark = null;
+            if (lock.returned(System.currentTimeMillis(), latestProfile().needsGuard(), contextChanged)) {
                 showLock();
             }
         }
@@ -118,6 +126,7 @@ public final class TerminalTab extends TermPane {
         this.sshOps = sshOps;
         this.settings = settings.copy(); // zoom per tab
         this.sftpFactory = sftpFactory;
+        TerminalFocusTracker.get(); // dipasang sebelum terminal mana pun difokus, supaya terminal pertama tercatat
         content.add(banner, BorderLayout.NORTH);
         banner.setVisible(false);
         center.setMargins(28, 16); // kanan lebih lebar: jangan menutupi scrollbar terminal
@@ -283,22 +292,6 @@ public final class TerminalTab extends TermPane {
         }
         Color color = dev.egateza.termul.app.ui.EnvColors.of(p.environment());
         content.setBorder(color == null ? null : BorderFactory.createMatteBorder(3, 0, 0, 0, color));
-    }
-
-    /**
-     * true kalau fokus pindah ke luar tab ini: aplikasi lain (null), tab/panel lain di jendela utama, atau jendela lain
-     * yang bukan milik jendela ini. Dialog/popup milik jendela ini (konfirmasi paste, menu) tidak dihitung.
-     */
-    private boolean leavesTab(java.awt.Component opposite) {
-        if (opposite == null) {
-            return true;
-        }
-        if (SwingUtilities.isDescendingFrom(opposite, this)) {
-            return false; // mis. panel SFTP atau search bar host yang sama
-        }
-        var mine = SwingUtilities.getWindowAncestor(this);
-        var theirs = opposite instanceof java.awt.Window w ? w : SwingUtilities.getWindowAncestor(opposite);
-        return theirs == null || theirs == mine || theirs.getOwner() != mine;
     }
 
     /** Tampilkan lapisan kunci; input ditahan {@link #interceptKey} sampai Enter. EDT. */
@@ -811,8 +804,11 @@ public final class TerminalTab extends TermPane {
             zoom(zoom);
             return true;
         }
+        var ks = KeyStroke.getKeyStrokeForEvent(e);
+        // Alt+F4 tidak termasuk isAppCombo (ada Alt), tapi harus tetap bisa menutup aplikasi saat terminal terkunci:
+        // menelannya juga memblokir penutupan bawaan Windows
         switch (lock.onKeyPressed(e.getKeyCode(), e.getModifiersEx(),
-                Shortcuts.isAppCombo(KeyStroke.getKeyStrokeForEvent(e)))) {
+                Shortcuts.isAppCombo(ks) || ks.equals(Shortcuts.exit()))) {
             case UNLOCK -> {
                 hideLock();
                 return true;

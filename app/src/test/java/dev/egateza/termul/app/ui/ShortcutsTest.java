@@ -22,6 +22,16 @@ class ShortcutsTest {
     }
 
     @Test
+    void altF4DariKeyEventCocokDenganShortcutKeluar() {
+        org.junit.jupiter.api.Assumptions.assumeTrue(Shortcuts.exit() != null); // Mac: Cmd+Q dari menu aplikasi
+        var e = new KeyEvent(new javax.swing.JPanel(), KeyEvent.KEY_PRESSED, 0, ALT, KeyEvent.VK_F4,
+                KeyEvent.CHAR_UNDEFINED);
+
+        assertThat(KeyStroke.getKeyStrokeForEvent(e)).isEqualTo(Shortcuts.exit());
+        assertThat(Shortcuts.isAppCombo(KeyStroke.getKeyStrokeForEvent(e))).isFalse(); // makanya dicek terpisah di kunci
+    }
+
+    @Test
     void modifierUtamaCtrlAtauCmd() {
         assertThat(Shortcuts.menuMask(false)).isEqualTo(CTRL);
         assertThat(Shortcuts.menuMask(true)).isEqualTo(CMD);
