@@ -117,9 +117,9 @@ mvnw.cmd install -DskipTests && mvnw.cmd -pl app -Ppackage-jar -DskipTests packa
   `xattr -dr com.apple.quarantine <folder>`.
 - `.app`/`.dmg` dengan runtime bawaan butuh `jpackage` di Mac (tidak bisa cross-build dari Windows): di Mac jalankan
   `./mvnw install -DskipTests && ./mvnw -pl app -Ppackage-win -DskipTests package -Djpackage.type=dmg`
-  → `app/target/dist/TermUL-1.1.<build>.dmg` (tanpa `-Djpackage.type` → `TermUL.app`). Profile `package-mac` aktif
+  → `app/target/dist/TermUL-1.2.<build>.dmg` (tanpa `-Djpackage.type` → `TermUL.app`). Profile `package-mac` aktif
   otomatis di macOS dan menimpa ikon (`termul.icns`, dibuat `tools/MakeAppIcon.java`), identifier bundle, dan versi
-  (macOS menolak versi bundle berawalan 0, jadi `1.1.<build>`; versi di aplikasi tetap `0.2.<build>`). Belum
+  (macOS menolak versi bundle berawalan 0, jadi `1.2.<build>`; versi di aplikasi tetap `0.3.<build>`). Belum
   ditandatangani/notarized: buka pertama kali lewat klik kanan → Open.
 
 ## Perbedaan perilaku di macOS
