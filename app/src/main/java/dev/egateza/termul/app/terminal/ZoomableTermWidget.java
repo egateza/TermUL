@@ -172,6 +172,11 @@ public final class ZoomableTermWidget extends JediTermWidget {
          */
         private void paintTerminal(Graphics g) {
             var layer = settings instanceof TerminalSettings ts ? ts.backgroundLayer() : null;
+            int opacity = TerminalTranslucency.percent();
+            if (opacity < 100 && getWidth() > 0 && getHeight() > 0) {
+                paintTranslucent((Graphics2D) g, opacity, layer);
+                return;
+            }
             if (layer == null || getWidth() <= 0 || getHeight() <= 0) {
                 super.paintComponent(g);
                 return;
@@ -189,6 +194,49 @@ public final class ZoomableTermWidget extends JediTermWidget {
             g2.drawImage(scaled, 0, 0, null);
             g2.setComposite(previous);
             super.paintComponent(new FillFilterGraphics2D(g2, layer.base()));
+        }
+
+        private BufferedImage backdrop; // latar solid (warna dasar + gambar latar) untuk mode tembus; EDT
+        private BufferedImage backdropSource;
+        private java.awt.Color backdropBase;
+        private int backdropVisibility;
+
+        /**
+         * Latar tembus (window beralpha per piksel): latar digambar dengan alpha {@code opacity} dan mengganti piksel
+         * (bukan menumpuk), lalu teks digambar solid di atasnya. Gambar latar tema ikut tembus.
+         */
+        private void paintTranslucent(Graphics2D g2, int opacity, TerminalSettings.BackgroundLayer layer) {
+            java.awt.Color base = getBackground(); // warna latar default yang diisi JediTerm (tema / warna host)
+            var previous = g2.getComposite();
+            g2.setComposite(AlphaComposite.Src.derive(opacity / 100f));
+            if (layer == null) {
+                g2.setColor(base);
+                g2.fillRect(0, 0, getWidth(), getHeight());
+            } else {
+                g2.drawImage(backdrop(layer, base), 0, 0, null);
+            }
+            g2.setComposite(previous);
+            super.paintComponent(new FillFilterGraphics2D(g2, base));
+        }
+
+        /** Warna dasar + gambar latar (sesuai keterlihatannya), solid, seukuran panel; dibuat ulang kalau berubah. */
+        private BufferedImage backdrop(TerminalSettings.BackgroundLayer layer, java.awt.Color base) {
+            if (backdrop == null || backdropSource != layer.image() || !base.equals(backdropBase)
+                    || backdropVisibility != layer.visibility()
+                    || backdrop.getWidth() != getWidth() || backdrop.getHeight() != getHeight()) {
+                var img = new BufferedImage(getWidth(), getHeight(), BufferedImage.TYPE_INT_RGB);
+                var bg = img.createGraphics();
+                bg.setColor(base);
+                bg.fillRect(0, 0, getWidth(), getHeight());
+                bg.setComposite(AlphaComposite.SrcOver.derive(layer.visibility() / 100f));
+                bg.drawImage(BackgroundImages.cover(layer.image(), getWidth(), getHeight()), 0, 0, null);
+                bg.dispose();
+                backdrop = img;
+                backdropSource = layer.image();
+                backdropBase = base;
+                backdropVisibility = layer.visibility();
+            }
+            return backdrop;
         }
 
         // --- kursor garis (bawah / tegak) digambar sendiri, lihat LineCursor ---
@@ -291,6 +339,7 @@ public final class ZoomableTermWidget extends JediTermWidget {
         @Override
         public void addNotify() {
             super.addNotify();
+            TerminalTranslucency.register(this);
             if (blink == null) {
                 blink = new javax.swing.Timer(Math.max(100, settings.caretBlinkingMs()), e -> blinkTick());
             }
@@ -302,6 +351,7 @@ public final class ZoomableTermWidget extends JediTermWidget {
             if (blink != null) {
                 blink.stop();
             }
+            TerminalTranslucency.unregister(this);
             super.removeNotify();
         }
 

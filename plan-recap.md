@@ -165,6 +165,21 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] Es/padam yang dipecahkan lewat widget sekarang ikut memperbarui animasi besar di window utama (sebelumnya animasi tetap beku), dan klik api di window utama ikut memutar efek di api widget
 - [ ] Uji manual user: seret ke monitor kedua lalu restart, klik api saat padam (3x) / beku, dobel klik saat window di tray, ganti tema terang/gelap
 
+### FTP/FTPS (permintaan user 2026-10-22, ADR 0007)
+- [x] `HostProfile.protocol` (SSH default, FTPS, FTPS implisit, FTP); profil lama = SSH. FTP: auth password saja, field khusus SSH diabaikan
+- [x] `RemoteFileService` jadi interface: `SftpFileService` (kode lama) + `ftp.FtpFileService` (commons-net); `SftpLinks` memilih opener per protokol
+- [x] FTPS: CA + hostname, lalu TOFU fingerprint di `ftps_known_certs`; sertifikat berubah = tolak. Kanal data memakai ulang sesi TLS (vsftpd `require_ssl_reuse`). Login `PASS` dari `char[]`
+- [x] UI: pilihan protokol + peringatan/konfirmasi FTP biasa di dialog profil, profil FTP selalu tab file saja, menu "Lupakan sertifikat FTPS", tanpa "Edit sebagai root"
+- [x] Test: `FtpFileServiceTest`, `FtpsTest`, `FtpsCertStoreTest`, `FtpClientsTest` (Apache FtpServer in-process), `VsftpdIT` (vsftpd asli, butuh Docker)
+- [x] `VsftpdIT` dijalankan (2026-10-23) dan menemukan 2 bug resumption TLS kanal data (522 session reuse required), sudah diperbaiki: (1) cache sesi JDK berkunci port socket asli, jadi socket data dibungkus `SessionKeySocket` yang melapor port kontrol; (2) `SSLContext` per koneksi kontrol (bukan per service), karena vsftpd punya kunci tiket per proses/koneksi. Opsi `ssl_tlsv1_2` dibuang dari config test (tidak dikenal vsftpd 3.0.5 Alpine)
+- [ ] Uji manual ke server FTP/FTPS nyata (shared hosting / vsftpd / ProFTPD)
+
+### Memori & transparansi (permintaan user 2026-10-23, ADR 0008)
+- [x] Heap 400+ MB: `deriveFont(BOLD)` font komposit (Segoe UI) di paint animasi membuat `CompositeFont` baru tiap frame; font turunan sekarang dicache di `DerivedFonts` (StreakChip, FloatingButton, StreakWidget, StreakSplash, Sparkline, HighlightPreview, ShortcutsDialog)
+- [x] Transparansi dua slider: jendela (selain terminal, teks ikut pudar) + latar terminal (`terminalOpacity`, teks solid), langsung berlaku tanpa restart
+- [x] Windows: window utama selalu tanpa dekorasi + `WinCustomFrame` (Snap, Snap Layouts, resize tepi, maximize pas area kerja, animasi docking); tanpa kedip/ikon taskbar hilang saat ganti mode. Diuji manual user lewat prototipe dan build dev
+- [ ] Uji multi-monitor DPI berbeda, dan transparansi di macOS
+
 ### Tambahan dari uji manual user (setelah Fase 4)
 - [x] Auth "Default": coba key `~/.ssh`, lalu jatuh ke password (sebelumnya error kalau tidak ada key)
 - [x] Terminal tidak lagi terlihat hang setelah logout: banner Reconnect + Enter untuk reconnect

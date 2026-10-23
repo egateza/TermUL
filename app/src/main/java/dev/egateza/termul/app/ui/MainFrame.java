@@ -207,6 +207,24 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private int hostWidth = 260; // EDT
     private int hostDividerSize; // EDT; ukuran divider bawaan LaF, dipakai lagi saat panel host dibuka
     private boolean roundedPanels; // EDT; panel host, area terminal, dan panel log tampil sebagai kartu membulat
+    private WinCustomFrame customFrame; // Windows: bingkai sendiri yang berperilaku native; null di OS lain
+
+    /** Root pane yang bisa memudarkan bagian selain terminal (transparansi jendela). */
+    @Override
+    protected javax.swing.JRootPane createRootPane() {
+        var root = new TranslucentRootPane();
+        root.setOpaque(true);
+        return root;
+    }
+
+    /** HWND baru dibuat di sini: bingkai Windows dipasang sebelum window tampil supaya tidak "melompat". */
+    @Override
+    public void addNotify() {
+        super.addNotify();
+        if (customFrame != null) {
+            customFrame.install();
+        }
+    }
 
     public MainFrame(AppContext ctx, List<CustomTheme> customThemes, Runnable onExit) {
         super("TermUL");
@@ -278,12 +296,16 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         this.theme = UiThemes.resolve(ctx.config().current().theme(), this.customThemes);
         this.wantedMode = ThemeMode.fromId(ctx.config().current().themeMode());
 
-        int opacity = ctx.config().current().windowOpacity();
-        if (opacity < 100) {
-            // Java menolak transparansi pada window berdekorasi native: pakai title bar FlatLaf
+        var startConfig = ctx.config().current();
+        if (WindowOpacity.undecorated(startConfig)) {
+            // alpha per piksel hanya bisa di window tanpa dekorasi native: title bar FlatLaf. Di Windows selalu,
+            // dengan bingkai yang berperilaku native (Snap) supaya transparansi bisa diubah tanpa membuat window ulang
             setUndecorated(true);
             getRootPane().setWindowDecorationStyle(javax.swing.JRootPane.FRAME);
-            WindowOpacity.apply(this, opacity);
+            if (WindowOpacity.ownFrame()) {
+                customFrame = new WinCustomFrame(this);
+            }
+            WindowOpacity.apply(this, startConfig.windowOpacity(), startConfig.terminalOpacity());
         }
 
         setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
@@ -1649,33 +1671,47 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     }
 
     /**
-     * Dialog transparansi seluruh jendela. Perubahan antar nilai di bawah 100% langsung terlihat; dari 100% ke bawahnya
-     * butuh restart karena window harus dibuat tanpa dekorasi native.
+     * Dialog transparansi, dua slider: bagian selain terminal (teks ikut pudar) dan latar terminal (teks tetap solid).
+     * Perubahan langsung terlihat saat slider digeser. Di Windows selalu; di OS lain hanya kalau window sudah dibuat
+     * tanpa dekorasi native (transparansi aktif saat start), selain itu berlaku setelah restart.
      */
     private void configureWindowOpacity() {
-        int original = ctx.config().current().windowOpacity();
-        var slider = new javax.swing.JSlider(AppConfig.MIN_WINDOW_OPACITY, 100, original);
-        var label = new JLabel(I18n.t("window.opacity.label", original));
-        slider.addChangeListener(e -> {
-            label.setText(I18n.t("window.opacity.label", slider.getValue()));
-            WindowOpacity.apply(this, slider.getValue()); // pratinjau langsung; diam-diam gagal di window berdekorasi
-        });
+        var config = ctx.config().current();
+        int originalWindow = config.windowOpacity();
+        int originalTerminal = config.terminalOpacity();
+        var windowSlider = new javax.swing.JSlider(AppConfig.MIN_WINDOW_OPACITY, 100, originalWindow);
+        var terminalSlider = new javax.swing.JSlider(AppConfig.MIN_TERMINAL_OPACITY, 100, originalTerminal);
+        var windowLabel = new JLabel(I18n.t("window.opacity.label", originalWindow));
+        var terminalLabel = new JLabel(I18n.t("window.opacity.terminalLabel", originalTerminal));
+        javax.swing.event.ChangeListener preview = e -> {
+            windowLabel.setText(I18n.t("window.opacity.label", windowSlider.getValue()));
+            terminalLabel.setText(I18n.t("window.opacity.terminalLabel", terminalSlider.getValue()));
+            WindowOpacity.apply(this, windowSlider.getValue(), terminalSlider.getValue()); // pratinjau langsung
+        };
+        windowSlider.addChangeListener(preview);
+        terminalSlider.addChangeListener(preview);
         var hint = new JLabel("<html>" + I18n.t("window.opacity.hint") + "</html>");
         hint.setPreferredSize(new Dimension(380, 70));
-        var panel = new JPanel(new BorderLayout(0, 6));
-        panel.add(label, BorderLayout.NORTH);
-        panel.add(slider, BorderLayout.CENTER);
+        var sliders = new JPanel(new java.awt.GridLayout(0, 1, 0, 4));
+        sliders.add(windowLabel);
+        sliders.add(windowSlider);
+        sliders.add(terminalLabel);
+        sliders.add(terminalSlider);
+        var panel = new JPanel(new BorderLayout(0, 8));
+        panel.add(sliders, BorderLayout.CENTER);
         panel.add(hint, BorderLayout.SOUTH);
         int answer = JOptionPane.showConfirmDialog(this, panel, I18n.t("window.opacity.title"),
                 JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
-        int chosen = answer == JOptionPane.OK_OPTION ? slider.getValue() : original;
-        WindowOpacity.apply(this, chosen); // batal: kembali ke nilai semula
-        if (chosen == original) {
+        boolean ok = answer == JOptionPane.OK_OPTION;
+        int window = ok ? windowSlider.getValue() : originalWindow;
+        int terminal = ok ? terminalSlider.getValue() : originalTerminal;
+        boolean applied = WindowOpacity.apply(this, window, terminal); // batal: kembali ke nilai semula
+        if (window == originalWindow && terminal == originalTerminal) {
             return;
         }
-        mutate(I18n.t("error.saveSettings"), () ->
-                ctx.config().save(ctx.config().current().withWindowOpacity(chosen)));
-        if (!isUndecorated() && chosen < 100) {
+        mutate(I18n.t("error.saveSettings"), () -> ctx.config().save(
+                ctx.config().current().withWindowOpacity(window).withTerminalOpacity(terminal)));
+        if (!applied) {
             JOptionPane.showMessageDialog(this, I18n.t("window.opacity.restart"),
                     I18n.t("window.opacity.title"), JOptionPane.INFORMATION_MESSAGE);
         }

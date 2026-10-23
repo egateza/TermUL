@@ -223,3 +223,20 @@ distro (`localhost:<port>`). Profilnya `HostProfile` dengan field `wslDistro`, j
   atau shortcut yang diganti user. Default tanpa Shift lain (Ctrl+N, Ctrl+F, Ctrl+G, zoom) tetap milik shell di Windows.
 - `ShortcutRules`: tolak tanpa Ctrl/⌘, Alt/Option, tombol Windows, shortcut sistem (⌘Q, ⌘Space, ⌘⇧4, Ctrl+Esc, Cmd+Ctrl),
   dan inject password tanpa modifier utama; peringatkan kombinasi milik shell / copy-paste terminal.
+
+## Transparansi jendela (ADR 0008)
+
+- Dua opasitas di config: `windowOpacity` (bagian selain terminal, teks ikut pudar) dan `terminalOpacity` (latar terminal,
+  teks tetap solid). Dialog Pengaturan > Transparansi jendela memberi pratinjau langsung; `WindowOpacity.apply` adalah
+  satu-satunya titik yang menerapkannya.
+- Windows: `MainFrame` selalu tanpa dekorasi native (title bar FlatLaf) + `WinCustomFrame` (subclass window procedure
+  lewat JNA): gaya window berbingkai, `WM_NCCALCSIZE` (maximize = area kerja monitor), `WM_NCHITTEST` (tepi resize,
+  title bar = seret, tombol maximize FlatLaf = `HTMAXBUTTON`). Dipasang di `MainFrame.addNotify`, sebelum window tampil.
+  Geometri title bar dihitung di EDT dan dibaca window procedure (thread toolkit) lewat field volatile.
+- Solid ↔ tembus: `Frame.setBackground` beralpha atau tidak, tanpa membuat HWND baru. Saat tembus, `Toolkit.setDynamicLayout(false)`.
+- `TranslucentRootPane` (root pane `MainFrame`): opasitas jendela < 100% → painting origin, isi window digambar ke buffer,
+  ditempel dengan `AlphaComposite.Src` × alpha, lalu area terminal (`TerminalTranslucency.visibleAreasIn`) dan popup
+  ringan ditempel ulang tanpa dipudarkan.
+- Latar terminal: `ZoomableTermWidget` mengisi latar (warna default JediTerm + gambar latar tema) dengan
+  `AlphaComposite.Src` × `TerminalTranslucency.percent()`, lalu teks lewat `FillFilterGraphics2D`.
+- macOS: window tanpa dekorasi hanya kalau transparansi aktif saat start; dari 100% butuh restart.
