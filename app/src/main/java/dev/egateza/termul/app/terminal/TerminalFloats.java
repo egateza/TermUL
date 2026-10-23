@@ -51,7 +51,13 @@ final class TerminalFloats {
     /** Pemeriksaan prompt tertunda di EDT (dipicu perubahan layar dari thread emulator). */
     private final AtomicBoolean promptCheckQueued = new AtomicBoolean();
     private final TerminalModelListener modelListener = this::queuePromptCheck;
-    private final TerminalSelectionChangesListener selectionListener = sel -> refreshToolbar();
+    /**
+     * JediTerm memanggil listener seleksi juga dari thread emulator (output menggulung layar saat ada seleksi), sambil
+     * memegang lock buffer. Operasi Swing di sana bisa deadlock dengan EDT yang sedang menggambar terminal, jadi
+     * pembaruan toolbar selalu dipindah ke EDT.
+     */
+    private final TerminalSelectionChangesListener selectionListener = sel -> queueToolbarRefresh();
+    private final AtomicBoolean toolbarRefreshQueued = new AtomicBoolean();
     private PromptResponder.Kind prompt; // EDT; prompt password di baris kursor, null kalau tidak ada
     private final NewLinesCounter counter = new NewLinesCounter();
     /** Satu pembaruan label tertunda di EDT; mencegah banjir invokeLater saat output deras. */
@@ -146,6 +152,18 @@ final class TerminalFloats {
             return y < 0 || y >= buffer.getHeight() ? "" : buffer.getLine(y).getText();
         } finally {
             buffer.unlock();
+        }
+    }
+
+    /** Dari thread mana pun: {@link #refreshToolbar()} di EDT, paling banyak satu antrean sekaligus. */
+    private void queueToolbarRefresh() {
+        if (SwingUtilities.isEventDispatchThread()) {
+            refreshToolbar();
+        } else if (toolbarRefreshQueued.compareAndSet(false, true)) {
+            SwingUtilities.invokeLater(() -> {
+                toolbarRefreshQueued.set(false);
+                refreshToolbar();
+            });
         }
     }
 
