@@ -6,6 +6,7 @@ import dev.egateza.termul.core.profile.EnvironmentTag;
 import dev.egateza.termul.core.profile.HostProfile;
 import dev.egateza.termul.core.profile.OsInfo;
 import dev.egateza.termul.core.profile.ProfileSnapshot;
+import dev.egateza.termul.core.profile.Protocol;
 import dev.egateza.termul.vault.SecretType;
 import java.awt.BorderLayout;
 import java.awt.Component;
@@ -57,6 +58,10 @@ public final class ProfileDialog extends JDialog {
     private final OsInfo os; // hasil deteksi otomatis, dipertahankan saat edit
     private final JTextField name = new JTextField(24);
     private final JComboBox<String> group = new JComboBox<>();
+    private final JComboBox<Protocol> protocol = new JComboBox<>(Protocol.values());
+    private final JLabel plainFtpWarning = new JLabel(I18n.t("profile.protocol.ftpWarning"));
+    private final boolean wasPlainFtp; // profil yang diedit sudah FTP biasa: tidak dikonfirmasi lagi saat simpan
+    private Protocol shownProtocol = Protocol.SSH; // protokol sebelum combo diganti (untuk port default)
     private final JTextField host = new JTextField(24);
     private final JSpinner port = new JSpinner(new SpinnerNumberModel(HostProfile.DEFAULT_PORT, 1, 65_535, 1));
     private final JTextField username = new JTextField(16);
@@ -91,6 +96,7 @@ public final class ProfileDialog extends JDialog {
         colorChoices.forEach(terminalColors::addItem);
         this.id = initial == null || isNew ? UUID.randomUUID() : initial.id();
         this.os = initial == null || isNew ? null : initial.os();
+        this.wasPlainFtp = initial != null && !isNew && initial.protocol() == Protocol.FTP;
         wslDistro.addItem("");
         wslDistros.forEach(wslDistro::addItem);
         if (initial != null && initial.wslDistro() != null && !wslDistros.contains(initial.wslDistro())) {
@@ -108,8 +114,15 @@ public final class ProfileDialog extends JDialog {
         snapshot.allGroups().forEach(group::addItem);
         jumpHost.addItem(new JumpChoice(null));
         snapshot.profiles().stream()
-                .filter(p -> !p.id().equals(id))
+                .filter(p -> !p.id().equals(id) && !p.isFtp()) // jump host harus server SSH
                 .forEach(p -> jumpHost.addItem(new JumpChoice(p)));
+        protocol.setRenderer(labelRenderer(v -> switch ((Protocol) v) {
+            case SSH -> I18n.t("profile.protocol.ssh");
+            case FTPS -> I18n.t("profile.protocol.ftps");
+            case FTPS_IMPLICIT -> I18n.t("profile.protocol.ftpsImplicit");
+            case FTP -> I18n.t("profile.protocol.ftp");
+        }));
+        plainFtpWarning.setForeground(new java.awt.Color(0xC62828));
         auth.setRenderer(labelRenderer(v -> switch ((AuthMethod) v) {
             case KEY -> I18n.t("profile.auth.key");
             case AGENT -> I18n.t("profile.auth.agent");
@@ -126,13 +139,15 @@ public final class ProfileDialog extends JDialog {
             auth.setSelectedItem(AuthMethod.AGENT);
             environment.setSelectedItem(EnvironmentTag.NONE);
         }
+        shownProtocol = (Protocol) protocol.getSelectedItem();
+        protocol.addActionListener(e -> onProtocolChanged());
         auth.addActionListener(e -> updateEnabled());
         environment.addActionListener(e -> updateEnabled());
         browseKey.addActionListener(e -> chooseKey());
-        updateEnabled();
 
         getContentPane().add(buildForm(), BorderLayout.CENTER);
         getContentPane().add(buildButtons(), BorderLayout.SOUTH);
+        updateEnabled(); // buildForm() mengatur ulang checkbox secret
         pack();
         setMinimumSize(getSize());
         setLocationRelativeTo(owner);
@@ -172,6 +187,7 @@ public final class ProfileDialog extends JDialog {
     private void fill(HostProfile p, ProfileSnapshot snapshot) {
         name.setText(p.name());
         group.setSelectedItem(p.group());
+        protocol.setSelectedItem(p.protocol());
         host.setText(p.host());
         port.setValue(p.port());
         username.setText(p.username());
@@ -199,10 +215,35 @@ public final class ProfileDialog extends JDialog {
         }
     }
 
+    /** Port ikut protokol kalau masih port default protokol sebelumnya. */
+    private void onProtocolChanged() {
+        var now = (Protocol) protocol.getSelectedItem();
+        if (now != null && (Integer) port.getValue() == shownProtocol.defaultPort()) {
+            port.setValue(now.defaultPort());
+        }
+        shownProtocol = now;
+        updateEnabled();
+    }
+
     private void updateEnabled() {
-        boolean key = auth.getSelectedItem() == AuthMethod.KEY;
+        boolean ssh = protocol.getSelectedItem() == Protocol.SSH;
+        boolean key = ssh && auth.getSelectedItem() == AuthMethod.KEY;
+        auth.setEnabled(ssh); // FTP: selalu password
         keyPath.setEnabled(key);
         browseKey.setEnabled(key);
+        jumpHost.setEnabled(ssh);
+        wslDistro.setEnabled(ssh);
+        autoSudo.setEnabled(ssh);
+        terminalColors.setEnabled(ssh);
+        for (SecretType type : SecretType.values()) {
+            boolean usable = ssh || type == SecretType.LOGIN_PASSWORD; // FTP: tanpa key, sudo, atau su
+            secretFields.get(type).setEnabled(usable && !clearBoxes.get(type).isSelected());
+            clearBoxes.get(type).setEnabled(usable && storedSecrets.contains(type));
+        }
+        plainFtpWarning.setVisible(protocol.getSelectedItem() == Protocol.FTP);
+        if (isDisplayable()) {
+            pack(); // baris peringatan muncul/hilang
+        }
         boolean prod = environment.getSelectedItem() == EnvironmentTag.PROD;
         autoSudo.setToolTipText(prod
                 ? I18n.t("profile.autoSudo.tooltip.prod",
@@ -225,6 +266,11 @@ public final class ProfileDialog extends JDialog {
         try {
             var jump = (JumpChoice) jumpHost.getSelectedItem();
             var env = (EnvironmentTag) environment.getSelectedItem();
+            var proto = (Protocol) protocol.getSelectedItem();
+            if (proto == Protocol.FTP && !wasPlainFtp && !Dialogs.confirm(this,
+                    I18n.t("profile.protocol.ftpConfirmTitle"), I18n.t("profile.protocol.ftpConfirm"))) {
+                return;
+            }
             if (autoSudo.isSelected() && env == EnvironmentTag.PROD && !Dialogs.confirm(this,
                     I18n.t("profile.autoSudo.prodTitle"), I18n.t("profile.autoSudo.prodConfirm"))) {
                 return;
@@ -235,7 +281,7 @@ public final class ProfileDialog extends JDialog {
                     jump == null || jump.profile() == null ? null : jump.profile().id(),
                     env, initialDir.getText(), notes.getText(), autoSudo.isSelected(), os,
                     terminalColors.getSelectedItem() instanceof HostTerminalColors.Choice c ? c.id() : null,
-                    (String) wslDistro.getSelectedItem());
+                    (String) wslDistro.getSelectedItem(), proto);
             result = new Result(profile, collectSecretChanges());
             dispose();
         } catch (IllegalArgumentException e) {
@@ -249,6 +295,8 @@ public final class ProfileDialog extends JDialog {
         int row = 0;
         row = addRow(form, row, I18n.t("profile.field.name"), name);
         row = addRow(form, row, I18n.t("profile.field.group"), group);
+        row = addRow(form, row, I18n.t("profile.field.protocol"), protocol);
+        row = addRow(form, row, "", plainFtpWarning);
         row = addRow(form, row, I18n.t("profile.field.host"), host);
         var portUser = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         portUser.add(port);

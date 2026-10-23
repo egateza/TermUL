@@ -36,7 +36,7 @@ class RemoteFileServiceTest {
     private Path local;
     private TestSshServer server;
     private SessionManager sessions;
-    private RemoteFileService files;
+    private SftpFileService files;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -72,7 +72,7 @@ class RemoteFileServiceTest {
                         Duration.ZERO, 0, Duration.ZERO));
         var profile = new HostProfile(UUID.randomUUID(), "sftp", "", "127.0.0.1", server.port(), TestSshServer.USER,
                 AuthMethod.PASSWORD, null, null, EnvironmentTag.DEV, null, null, false);
-        files = RemoteFileService.open(sessions.acquire(profile));
+        files = SftpFileService.open(sessions.acquire(profile));
     }
 
     @AfterEach

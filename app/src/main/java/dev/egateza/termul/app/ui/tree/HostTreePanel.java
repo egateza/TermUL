@@ -74,6 +74,9 @@ public final class HostTreePanel extends JPanel {
         /** Hapus host key profil ini dari known_hosts (mis. server di-reinstall); konfirmasi dulu. */
         void forgetHostKey(HostProfile profile);
 
+        /** Hapus sertifikat FTPS yang dipercaya untuk profil ini (mis. sertifikat server diganti); konfirmasi dulu. */
+        void forgetFtpsCert(HostProfile profile);
+
         void newGroup(String parent);
 
         void renameGroup(String group);
@@ -378,8 +381,12 @@ public final class HostTreePanel extends JPanel {
         var menu = new JPopupMenu();
         switch (target) {
             case HostProfile p -> {
-                menu.add(item(AppIcon.TERMINAL, I18n.t("tree.menu.openTerminal"), () -> actions.open(p)));
-                menu.add(item(AppIcon.SFTP, I18n.t("tree.menu.openSftp"), () -> actions.openSftp(p)));
+                if (p.isFtp()) {
+                    menu.add(item(AppIcon.SFTP, I18n.t("tree.menu.openFtp"), () -> actions.openSftp(p)));
+                } else {
+                    menu.add(item(AppIcon.TERMINAL, I18n.t("tree.menu.openTerminal"), () -> actions.open(p)));
+                    menu.add(item(AppIcon.SFTP, I18n.t("tree.menu.openSftp"), () -> actions.openSftp(p)));
+                }
                 menu.addSeparator();
                 menu.add(item(null, I18n.t("tree.menu.edit"), () -> actions.edit(p)));
                 menu.add(item(null, I18n.t("tree.menu.duplicate"), () -> actions.duplicate(p)));
@@ -388,7 +395,12 @@ public final class HostTreePanel extends JPanel {
                         () -> actions.setFavorite(p, !favorite)));
                 menu.add(item(null, I18n.t("tree.menu.delete"), () -> actions.delete(p)));
                 menu.addSeparator();
-                menu.add(item(null, I18n.t("tree.menu.forgetHostKey"), () -> actions.forgetHostKey(p)));
+                switch (p.protocol()) {
+                    case SSH -> menu.add(item(null, I18n.t("tree.menu.forgetHostKey"), () -> actions.forgetHostKey(p)));
+                    case FTPS, FTPS_IMPLICIT ->
+                            menu.add(item(null, I18n.t("tree.menu.forgetFtpsCert"), () -> actions.forgetFtpsCert(p)));
+                    case FTP -> { } // tanpa enkripsi: tidak ada kunci/sertifikat yang dipercaya
+                }
                 if (p.wslDistro() != null && wslRunning != null) {
                     menu.add(item(AppIcon.TERMINAL, I18n.t("tree.menu.checkWslSsh"), () -> actions.checkWslSsh(p)));
                 }
@@ -490,8 +502,8 @@ public final class HostTreePanel extends JPanel {
                 String stopped = wslStopped.test(p) ? " &middot; " + escape(I18n.t("tree.wsl.stopped")) : "";
                 setText("<html>" + dot + escape(p.name()) + " <font color='gray'>" + escape(p.address()) + stopped
                         + "</font></html>");
-                setIcon(OsIcons.of(p.os()));
-                String os = escape(OsIcons.label(p.os()));
+                setIcon(OsIcons.forHost(p));
+                String os = escape(OsIcons.hostLabel(p));
                 setToolTipText(p.notes() == null ? os : "<html>" + os + "<br>" + escape(p.notes()) + "</html>");
             } else if (uo instanceof BuiltinGroup b) {
                 setText(switch (b) {

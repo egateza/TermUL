@@ -441,7 +441,9 @@ public class SftpPanel extends JPanel {
         menu.add(view);
         menu.add(edit);
         menu.add(editWith);
-        menu.add(editAsRoot);
+        if (!profile.isFtp()) { // sudo butuh exec lewat SSH
+            menu.add(editAsRoot);
+        }
         menu.addSeparator();
         menu.addPopupMenuListener(new javax.swing.event.PopupMenuListener() {
             @Override

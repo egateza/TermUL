@@ -27,7 +27,7 @@ public final class SwingCredentialProvider implements CredentialProvider {
     public char[] password(HostProfile profile, int attempt) {
         String msg = attempt > 1 ? I18n.t("ssh.password.rejected", profile.address())
                 : I18n.t("ssh.password.prompt", profile.address());
-        return ask(I18n.t("ssh.password.title"), msg);
+        return ask(I18n.t(profile.isFtp() ? "ftp.password.title" : "ssh.password.title"), msg);
     }
 
     @Override

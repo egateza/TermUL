@@ -9,6 +9,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Stream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Upload/download/salin antar-server satu direktori beserta isinya di atas {@link RemoteFileService}. Isi direktori dibaca dulu
@@ -19,6 +21,8 @@ import java.util.stream.Stream;
  * untuk direktori tujuan lewat {@link Conflict}.
  */
 public final class TreeTransfer {
+
+    private static final Logger log = LoggerFactory.getLogger(TreeTransfer.class);
 
     /** Hasil transfer direktori. */
     public record Result(int files, int directories, long bytes, List<String> skipped) {
@@ -162,7 +166,14 @@ public final class TreeTransfer {
             done += f.size();
         }
         for (CopyJob dir : created.reversed()) { // terdalam dulu
-            to.chmod(dir.to(), dir.mode());
+            if (dir.mode() == 0) {
+                continue; // sumber tidak memberi info mode (mis. sebagian server FTP): pakai default server tujuan
+            }
+            try {
+                to.chmod(dir.to(), dir.mode());
+            } catch (RemoteFileException e) { // mis. server FTP tanpa SITE CHMOD; isinya sudah tersalin
+                log.warn("Mode direktori {} tidak bisa disamakan dengan sumber: {}", dir.to(), e.getMessage());
+            }
         }
         listener.progress(total, total);
         return new Result(files.size(), dirs.size(), total, skipped);

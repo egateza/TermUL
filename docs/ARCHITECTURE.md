@@ -102,6 +102,7 @@ Lokasi per OS (`AppPaths`): Windows `%APPDATA%` / `%LOCALAPPDATA%`; macOS `~/Lib
   config.json         preferensi (font, tema, editor mapping, hotkey)
   profiles.json       host tree + profil (TANPA secret)
   known_hosts         host key terverifikasi (format OpenSSH)
+  ftps_known_certs    sertifikat FTPS yang dipercaya user (TOFU): "host port SHA256:..." (ADR 0007)
   vault.bin           secret terenkripsi
   vault.bin.dpapi     (Windows, opsional) DEK dibungkus DPAPI untuk "Ingat di PC ini"
   vault.bin.keychain  (macOS .app, opsional) DEK dibungkus kunci di Keychain untuk "Ingat di Mac ini" (ADR 0006)
@@ -186,6 +187,20 @@ distro (`localhost:<port>`). Profilnya `HostProfile` dengan field `wslDistro`, j
 1. **Connect**: double-click host, lalu `ssh-ops` menjalankan `acquire()`: TCP connect, verifikasi host key (dialog TOFU di EDT kalau host baru), dan auth (agent, key, lalu password dari vault/prompt). Setelah itu buka `ChannelShell` + PTY, pasang connector ke JediTerm, dan tab aktif.
 2. **Sudo inject (hotkey)**: EDT → vault.get → write bytes ke channel (di `ssh-ops`) → zero buffer.
 3. **Edit file**: double-click di SFTP panel, download ke cache + stat baseline, jalankan editor (`ProcessBuilder`), watcher mendeteksi perubahan, debounce, lalu upload (normal/sudo) dan status di EditTracker diperbarui.
+
+## FTP/FTPS (ADR 0007)
+
+- `RemoteFileService` (modul `sftp`) adalah interface: `SftpFileService` (SFTP di atas lease SSH) dan
+  `ftp.FtpFileService` (Apache Commons Net). `SftpLinks.acquire` memilih opener dari `HostProfile.protocol`; profil FTP
+  tidak punya gate terminal, jadi `SftpConnection` langsung membuka service.
+- `FtpConnector` membuka koneksi: TLS (`FtpsTrust`: CA + hostname, lalu TOFU `FtpsCertStore`), login `char[]`
+  (`FtpClients`), `PBSZ 0`/`PROT P`, mode biner, passive. Satu `SSLContext` (cache sesi) per koneksi kontrol, dan
+  socket data melapor port kontrol (`SessionKeySocket`), supaya kanal data me-resume sesi TLS kanal kontrolnya sendiri.
+- `FtpFileService`: operasi metadata lewat satu koneksi kontrol (`ReentrantLock`, dibuka ulang otomatis setelah idle
+  timeout, dicek `NOOP` setelah 30 detik menganggur); setiap download/upload memakai koneksi transfer sendiri (pool kecil,
+  maks. 2 menganggur), sehingga listing tetap jalan selama transfer. Stat memakai `MLST` kalau ada, kalau tidak listing
+  parent + `MDTM`.
+- UI: profil FTP selalu dibuka sebagai tab file saja (`MainFrame.openTab`), tanpa deteksi OS dan tanpa "Edit sebagai root".
 
 ## Upload antar-panel SFTP
 

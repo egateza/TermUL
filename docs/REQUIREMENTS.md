@@ -76,6 +76,7 @@ Pekerjaan harian melibatkan banyak server Linux (produksi & staging). Masalah ya
 - (Sudah tidak out of scope) Terminal lokal dengan profil (PowerShell, cmd, Git Bash, WSL tanpa sshd, shell
   `/etc/shells`, profil custom): ADR 0005. Distro WSL tetap juga bisa dimasuki lewat SSH ke `localhost`, dengan
   WSL Manager opsional untuk start/stop distro (ADR 0004).
+- (Sudah tidak out of scope) FTP/FTPS sebagai browser file saja, tanpa terminal: ADR 0007.
 - RDP, VNC, X11 server, protokol serial/telnet.
 - Sinkronisasi profil ke cloud / multi-user.
 - Linux sebagai target. macOS didukung (N8), termasuk `.app`/`.dmg` dan "Ingat di Mac ini" lewat Keychain (ADR 0006,

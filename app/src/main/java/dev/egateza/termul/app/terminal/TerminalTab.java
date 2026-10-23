@@ -118,7 +118,14 @@ public final class TerminalTab extends TermPane {
 
     @Override
     public String displayName() {
-        return profile.name() + (sftpOnly ? " (SFTP)" : "");
+        if (!sftpOnly) {
+            return profile.name();
+        }
+        return profile.name() + switch (profile.protocol()) {
+            case SSH -> " (SFTP)";
+            case FTP -> " (FTP)";
+            case FTPS, FTPS_IMPLICIT -> " (FTPS)";
+        };
     }
 
     @Override

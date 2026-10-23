@@ -4,6 +4,7 @@ import dev.egateza.termul.app.edit.EditManager;
 import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.app.monitor.MemoryTuning;
 import dev.egateza.termul.app.ssh.SwingCredentialProvider;
+import dev.egateza.termul.app.ssh.SwingFtpsCertPrompt;
 import dev.egateza.termul.app.ssh.SwingHostKeyPrompt;
 import dev.egateza.termul.app.startup.AutoStart;
 import dev.egateza.termul.app.startup.ForegroundPermission;
@@ -38,6 +39,8 @@ import dev.egateza.termul.core.profile.ProfileStore;
 import dev.egateza.termul.core.wsl.ProcessWslRunner;
 import dev.egateza.termul.core.wsl.WslManager;
 import dev.egateza.termul.sftp.SftpLinks;
+import dev.egateza.termul.sftp.ftp.FtpConnector;
+import dev.egateza.termul.sftp.ftp.FtpsCertStore;
 import dev.egateza.termul.ssh.SessionManager;
 import dev.egateza.termul.ssh.SshSettings;
 import dev.egateza.termul.sftp.edit.EditCache;
@@ -123,12 +126,15 @@ public final class TermULApp {
                         OsKeyProtectors.forCurrentOs(paths.vaultFile())),
                 frameRef::get, Duration.ofMinutes(15));
         var knownHosts = new KnownHostsStore(paths.knownHostsFile());
+        var credentials = new VaultCredentialProvider(vault, new SwingCredentialProvider(frameRef::get));
         var sessions = new SessionManager(
                 knownHosts,
                 new SwingHostKeyPrompt(frameRef::get),
-                new VaultCredentialProvider(vault, new SwingCredentialProvider(frameRef::get)),
+                credentials,
                 SshSettings.defaults(), id -> store.snapshot().find(id));
-        var sftpLinks = new SftpLinks(sessions);
+        var ftpsCerts = new FtpsCertStore(paths.ftpsCertsFile());
+        var sftpLinks = new SftpLinks(sessions,
+                new FtpConnector(credentials, ftpsCerts, new SwingFtpsCertPrompt(frameRef::get)));
         var wsl = new WslManager(new ProcessWslRunner());
         EditManager edits;
         try {
@@ -156,8 +162,8 @@ public final class TermULApp {
             terminalSettings.setCursorShape(TerminalSettings.cursorShapeOf(config.current().cursorShape(),
                     config.current().cursorBlink()));
             var ctx = new AppContext(paths, config, store, io, sshOps, sessions, new SshTerminalFactory(sessions),
-                    terminalSettings, vault, edits, sftpLinks, themes, knownHosts, wsl, snippets, locals, highlights,
-                    shortcuts);
+                    terminalSettings, vault, edits, sftpLinks, themes, knownHosts, ftpsCerts, wsl, snippets, locals,
+                    highlights, shortcuts);
             var frame = new MainFrame(ctx, customThemes,
                     () -> shutdown(io, sshOps, sessions, vault, edits, wsl, instance, log));
             frameRef.set(frame);

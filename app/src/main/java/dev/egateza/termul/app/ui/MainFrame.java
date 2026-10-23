@@ -1949,7 +1949,9 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
     /** Panel SFTP: deteksi OS lewat SFTP saat pertama tersambung (host yang tidak pernah dibuka di terminal). */
     private SftpPanel detectOsOnConnect(HostProfile profile, SftpPanel panel) {
-        panel.setConnectedListener(svc -> detectOsViaSftp(profile.id(), svc));
+        if (!profile.isFtp()) { // akun FTP biasanya di-chroot; /etc/os-release bukan milik server
+            panel.setConnectedListener(svc -> detectOsViaSftp(profile.id(), svc));
+        }
         return panel;
     }
 
@@ -2446,7 +2448,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     /** Logo OS untuk ikon tab: OS host SSH (hasil deteksi tersimpan di profil), ikon terminal untuk tab lokal. */
     private static javax.swing.Icon osIcon(TermPane pane) {
         return switch (pane) {
-            case TerminalTab t -> OsIcons.of(t.profile().os());
+            case TerminalTab t -> OsIcons.forHost(t.profile());
             case LocalTerminalTab l -> OsIcons.local();
         };
     }
@@ -2831,6 +2833,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     }
 
     private void openTab(HostProfile profile, boolean sftpOnly) {
+        sftpOnly |= profile.isFtp(); // FTP tidak punya shell: selalu tab file saja
         drawer.setOpen(false); // mode tombol melayang: beri ruang penuh untuk terminal
         mutate(I18n.t("main.error.recent"), () -> store.markUsed(profile.id()));
         var tab = createPane(profile, sftpOnly);
@@ -3072,6 +3075,24 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                     removed -> Dialogs.info(this, I18n.t("knownHosts.remove.title"), I18n.t("knownHosts.forget.done", label)),
                     err -> Dialogs.error(this, I18n.t("knownHosts.error.write"), err));
         }, err -> Dialogs.error(this, I18n.t("knownHosts.error.read"), err));
+    }
+
+    @Override
+    public void forgetFtpsCert(HostProfile profile) {
+        var certs = ctx.ftpsCerts();
+        String label = profile.host() + ":" + profile.port();
+        UiAsync.run(io, () -> certs.find(profile.host(), profile.port()), known -> {
+            if (known.isEmpty()) {
+                Dialogs.info(this, I18n.t("ftps.forget.title"), I18n.t("ftps.forget.none", profile.name(), label));
+                return;
+            }
+            if (!Dialogs.confirm(this, I18n.t("ftps.forget.title"), I18n.t("ftps.forget.confirm", label, known.get()))) {
+                return;
+            }
+            UiAsync.run(io, () -> certs.remove(profile.host(), profile.port()),
+                    removed -> Dialogs.info(this, I18n.t("ftps.forget.title"), I18n.t("ftps.forget.done", label)),
+                    err -> Dialogs.error(this, I18n.t("ftps.forget.error"), err));
+        }, err -> Dialogs.error(this, I18n.t("ftps.forget.error"), err));
     }
 
     @Override

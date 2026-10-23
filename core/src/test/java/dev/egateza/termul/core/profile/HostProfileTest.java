@@ -80,4 +80,40 @@ class HostProfileTest {
         assertThatThrownBy(() -> p.withWslDistro("Ubuntu & calc")).hasMessageContaining("distro WSL");
         assertThatThrownBy(() -> p.withWslDistro("-d")).hasMessageContaining("distro WSL");
     }
+
+    @Test
+    void profilFtpMengabaikanFieldKhususSsh() {
+        var jump = UUID.randomUUID();
+        var p = new HostProfile(UUID.randomUUID(), "ftp", "", "files.example.com", 21, "web", AuthMethod.KEY,
+                "C:/keys/id", jump, EnvironmentTag.PROD, null, null, true, null, null, "Ubuntu", Protocol.FTPS);
+
+        assertThat(p.isFtp()).isTrue();
+        assertThat(p.authMethod()).isEqualTo(AuthMethod.PASSWORD);
+        assertThat(p.privateKeyPath()).isNull();
+        assertThat(p.jumpHostId()).isNull();
+        assertThat(p.autoSudo()).isFalse();
+        assertThat(p.wslDistro()).isNull();
+        assertThat(p.address()).isEqualTo("ftps://web@files.example.com");
+    }
+
+    @Test
+    void protokolDefaultSshDanPortIkutProtokol() {
+        var ssh = HostProfile.create("h", "h", "u");
+        assertThat(ssh.protocol()).isEqualTo(Protocol.SSH);
+        assertThat(ssh.isFtp()).isFalse();
+
+        var implicit = ssh.withProtocol(Protocol.FTPS_IMPLICIT);
+        assertThat(implicit.port()).isEqualTo(990);
+        assertThat(implicit.address()).isEqualTo("ftps://u@h");
+        var plain = implicit.withProtocol(Protocol.FTP);
+        assertThat(plain.port()).isEqualTo(21);
+        assertThat(plain.address()).isEqualTo("ftp://u@h");
+        assertThat(plain.withProtocol(Protocol.SSH).port()).isEqualTo(22);
+
+        var custom = ssh.withPort(2121).withProtocol(Protocol.FTP);
+        assertThat(custom.port()).isEqualTo(2121); // port pilihan user tidak diubah
+        assertThat(custom.address()).isEqualTo("ftp://u@h:2121");
+        assertThat(Protocol.FTP.isEncrypted()).isFalse();
+        assertThat(Protocol.FTPS.isEncrypted()).isTrue();
+    }
 }

@@ -164,6 +164,11 @@ public final class EditManager implements AutoCloseable {
 
     /** Buka file untuk diedit sebagai root: perubahan dipasang lewat sudo (backup + validasi + rollback). */
     public void openAsRoot(HostProfile profile, String remotePath) {
+        if (profile.isFtp()) { // sudo butuh exec lewat SSH
+            showError(I18n.t("edit.error.openFailed", remotePath),
+                    new IllegalStateException(I18n.t("edit.sudo.notForFtp")));
+            return;
+        }
         open(profile, remotePath, null, true);
     }
 

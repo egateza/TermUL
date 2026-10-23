@@ -35,7 +35,7 @@ class RemoteFileServiceIT {
     Path tmp;
 
     private SessionManager sessions;
-    private RemoteFileService files;
+    private SftpFileService files;
     private String home;
 
     @BeforeEach
@@ -64,7 +64,7 @@ class RemoteFileServiceIT {
         sessions = new SessionManager(new KnownHostsStore(tmp.resolve("known_hosts")), trust, creds, SshSettings.defaults());
         var profile = new HostProfile(UUID.randomUUID(), "it", "", SSHD.getHost(), SSHD.sshPort(), OpenSshContainer.USER,
                 AuthMethod.PASSWORD, null, null, EnvironmentTag.DEV, null, null, false);
-        files = RemoteFileService.open(sessions.acquire(profile));
+        files = SftpFileService.open(sessions.acquire(profile));
         home = files.home();
         String work = home + "/it-" + UUID.randomUUID();
         files.mkdir(work);

@@ -143,6 +143,29 @@ class ProfileStoreTest {
     }
 
     @Test
+    void protokolTersimpanDanFileLamaTanpaFieldMenjadiSsh() throws Exception {
+        Path file = dir.resolve("profiles.json");
+        var ftp = HostProfile.create("ftp", "h", "u").withProtocol(Protocol.FTPS);
+        var ssh = HostProfile.create("ssh", "h2", "u");
+        var store = new ProfileStore(file);
+        store.save(ftp);
+        store.save(ssh);
+
+        assertThat(new ProfileStore(file).load().find(ftp.id())).get()
+                .satisfies(p -> {
+                    assertThat(p.protocol()).isEqualTo(Protocol.FTPS);
+                    assertThat(p.port()).isEqualTo(21);
+                });
+        String json = Files.readString(file);
+        assertThat(json).doesNotContain("\"ftp\" :"); // isFtp() tidak ikut diserialisasi
+
+        String old = json.replaceAll(",\\s*\"protocol\"\\s*:\\s*\"[^\"]*\"", ""); // profiles.json versi lama
+        assertThat(old).doesNotContain("protocol");
+        Files.writeString(file, old);
+        assertThat(new ProfileStore(file).load().find(ssh.id())).map(HostProfile::protocol).contains(Protocol.SSH);
+    }
+
+    @Test
     void jsonTidakMengandungFieldSecret() throws Exception {
         Path file = dir.resolve("profiles.json");
         new ProfileStore(file).save(HostProfile.create("a", "h", "u"));

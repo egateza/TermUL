@@ -166,7 +166,7 @@ public final class RemoteEditSession {
         log.info("Edit dimuat ulang dari server: {}", remotePath);
     }
 
-    /** Upload default: SFTP atomic, mode file dipertahankan. */
+    /** Upload default: temp lalu rename (SFTP/FTP), mode file dipertahankan. */
     public static final Uploader SFTP_UPLOADER = (files, local, remote) -> files.upload(local, remote, null, TransferListener.NONE);
 
     /** Memakai koneksi SFTP baru (mis. setelah reconnect) untuk sync berikutnya. */

@@ -12,7 +12,7 @@
 
     <artifactId>termul-sftp</artifactId>
     <name>TermUL :: sftp</name>
-    <description>RemoteFileService dan RemoteEditSession</description>
+    <description>RemoteFileService (SFTP, FTP/FTPS) dan RemoteEditSession</description>
 
     <dependencies>
         <dependency>
@@ -22,6 +22,15 @@
         <dependency>
             <groupId>org.apache.sshd</groupId>
             <artifactId>sshd-sftp</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>commons-net</groupId>
+            <artifactId>commons-net</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.ftpserver</groupId>
+            <artifactId>ftpserver-core</artifactId>
+            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>dev.egateza.termul</groupId>

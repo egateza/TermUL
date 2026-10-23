@@ -19,7 +19,7 @@ public final class ConnectCancel {
     }
 
     /** Menjalankan {@code action} saat dibatalkan (langsung kalau sudah), di thread yang membatalkan. */
-    void onCancel(Runnable action) {
+    public void onCancel(Runnable action) {
         cancelled.thenRun(action);
     }
 

@@ -1,6 +1,7 @@
 package dev.egateza.termul.app.ui;
 
 import dev.egateza.termul.app.i18n.I18n;
+import dev.egateza.termul.core.profile.HostProfile;
 import dev.egateza.termul.core.profile.OsInfo;
 import java.awt.BasicStroke;
 import java.awt.Color;
@@ -72,6 +73,20 @@ public final class OsIcons {
     }
 
     private static final Icon LOCAL = AppIcon.TERMINAL.icon(SIZE);
+
+    /** Ikon host: profil FTP memakai ikon transfer file (OS-nya tidak dideteksi), lainnya ikon OS. */
+    public static Icon forHost(HostProfile profile) {
+        return profile.isFtp() ? SFTP_ONLY : of(profile.os());
+    }
+
+    /** Teks tooltip host: protokol FTP/FTPS, atau OS. */
+    public static String hostLabel(HostProfile profile) {
+        return switch (profile.protocol()) {
+            case SSH -> label(profile.os());
+            case FTP -> I18n.t("os.ftp");
+            case FTPS, FTPS_IMPLICIT -> I18n.t("os.ftps");
+        };
+    }
 
     /** Ikon untuk OS (null = belum terdeteksi). */
     public static Icon of(OsInfo os) {

@@ -1,6 +1,7 @@
 package dev.egateza.termul.sftp;
 
 import dev.egateza.termul.core.profile.HostProfile;
+import dev.egateza.termul.sftp.ftp.FtpConnector;
 import dev.egateza.termul.ssh.SessionManager;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -10,7 +11,8 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Satu {@link SftpConnection} bersama per profil, dipakai panel SFTP dan sesi edit remote sekaligus, plus daftar
+ * Satu {@link SftpConnection} bersama per profil (SFTP di atas SSH, atau FTP/FTPS untuk profil FTP), dipakai panel file
+ * dan sesi edit remote sekaligus, plus daftar
  * sesi terminal per profil. Terminal melaporkan statusnya lewat {@link #registerTerminal}; SFTP mengikutinya
  * (menunggu saat terminal menyambung ulang, tersedia lagi begitu terminal tersambung).
  *
@@ -64,12 +66,28 @@ public final class SftpLinks {
     }
 
     private final SessionManager sessions;
+    private final FtpConnector ftp; // null = profil FTP tidak didukung (test)
     private final Map<UUID, Slot> slots = new HashMap<>(); // guarded by this
     private final Object gateLock = new Object();
     private final Map<UUID, List<TerminalHandle>> terminals = new HashMap<>(); // guarded by gateLock
 
     public SftpLinks(SessionManager sessions) {
+        this(sessions, null);
+    }
+
+    public SftpLinks(SessionManager sessions, FtpConnector ftp) {
         this.sessions = sessions;
+        this.ftp = ftp;
+    }
+
+    private SftpConnection.Opener opener(HostProfile profile) {
+        if (!profile.isFtp()) {
+            return cancel -> SftpFileService.open(sessions.acquire(profile, cancel));
+        }
+        if (ftp == null) {
+            throw new IllegalStateException("FTP tidak dikonfigurasi");
+        }
+        return cancel -> ftp.open(profile, cancel);
     }
 
     /** Daftarkan sebuah tab terminal untuk profil ini (status awal {@link TerminalState#CONNECTING}). */
@@ -140,7 +158,7 @@ public final class SftpLinks {
     /** Ambil (atau buat) koneksi bersama untuk profil ini. Pasangkan dengan {@link #release}. */
     public synchronized SftpConnection acquire(HostProfile profile) {
         var slot = slots.computeIfAbsent(profile.id(), id -> new Slot(new SftpConnection(
-                cancel -> RemoteFileService.open(sessions.acquire(profile, cancel)), new SftpConnection.SessionGate() {
+                opener(profile), new SftpConnection.SessionGate() {
                     @Override
                     public TerminalState state() {
                         return terminalState(id);

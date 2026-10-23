@@ -109,6 +109,11 @@ public record AppPaths(Path configDir, Path cacheDir) {
         return configDir.resolve("known_hosts");
     }
 
+    /** Sertifikat FTPS yang dipercaya user (TOFU), per host:port. */
+    public Path ftpsCertsFile() {
+        return configDir.resolve("ftps_known_certs");
+    }
+
     public Path vaultFile() {
         return configDir.resolve("vault.bin");
     }

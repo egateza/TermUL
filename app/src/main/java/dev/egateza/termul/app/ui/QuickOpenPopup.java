@@ -209,7 +209,7 @@ final class QuickOpenPopup extends JDialog {
                             + escape(c.commandLine()) + def + "</font></html>");
                 }
                 case Host(HostProfile p, boolean pinned) -> {
-                    setIcon(OsIcons.of(p.os()));
+                    setIcon(OsIcons.forHost(p));
                     var color = EnvColors.of(p.environment());
                     String dot = color == null ? ""
                             : "<font color='#%06x'>&#9679;</font> ".formatted(color.getRGB() & 0xFFFFFF);

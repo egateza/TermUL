@@ -8,7 +8,7 @@ import dev.egateza.termul.core.config.ValidationHooks.Hook;
 import dev.egateza.termul.core.profile.AuthMethod;
 import dev.egateza.termul.core.profile.EnvironmentTag;
 import dev.egateza.termul.core.profile.HostProfile;
-import dev.egateza.termul.sftp.RemoteFileService;
+import dev.egateza.termul.sftp.SftpFileService;
 import dev.egateza.termul.ssh.SessionManager;
 import dev.egateza.termul.ssh.SshSettings;
 import dev.egateza.termul.ssh.auth.CredentialProvider;
@@ -42,7 +42,7 @@ class SudoWriterIT {
     Path tmp;
 
     private SessionManager sessions;
-    private RemoteFileService files;
+    private SftpFileService files;
     private String dir;
     private String target;
     private final AtomicInteger prompts = new AtomicInteger();
@@ -78,7 +78,7 @@ class SudoWriterIT {
         sessions = new SessionManager(new KnownHostsStore(tmp.resolve("known_hosts")), trust, creds, SshSettings.defaults());
         var profile = new HostProfile(UUID.randomUUID(), "it", "", SSHD.getHost(), SSHD.sshPort(), OpenSshContainer.USER,
                 AuthMethod.PASSWORD, null, null, EnvironmentTag.DEV, null, null, false);
-        files = RemoteFileService.open(sessions.acquire(profile));
+        files = SftpFileService.open(sessions.acquire(profile));
     }
 
     @AfterEach

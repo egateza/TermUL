@@ -14,6 +14,7 @@
 
 Fokus utamanya SSH: PTY berada di server remote dan aplikasi merender stream dari SSH channel. Sejak ADR 0005 ada juga
 tab **terminal lokal** (shell di mesin sendiri lewat pty4j), tanpa fitur khusus SSH (SFTP, inject password, vault).
+Sejak ADR 0007 profil juga bisa **FTP/FTPS** (browser file + remote edit saja, tanpa terminal/sudo).
 
 ## Pemilik & konteks pemakaian
 
@@ -28,6 +29,7 @@ tab **terminal lokal** (shell di mesin sendiri lewat pty4j), tanpa fitur khusus 
 | Bahasa | Java 25 (LTS), `maven.compiler.release=25` |
 | Build | Maven multi-module (parent POM + `dependencyManagement`) + Maven Wrapper (`mvnw`) |
 | SSH/SFTP | Apache MINA SSHD (`sshd-core`, `sshd-sftp`) |
+| FTP/FTPS | Apache Commons Net (`commons-net`), ADR 0007; test memakai Apache FtpServer in-process |
 | Terminal widget | JediTerm (`jediterm-core`, `jediterm-ui`) dengan custom `TtyConnector` di atas `ChannelShell` |
 | UI | Swing + FlatLaf (JediTerm berbasis Swing, jadi jangan pakai JavaFX) |
 | Credential | Vault AES-256-GCM + Argon2id; opsi "ingat" lewat Windows DPAPI / macOS Keychain via JNA (ADR 0002, 0006) |
@@ -45,7 +47,7 @@ termul/
 ├─ ssh/        SessionManager, koneksi MINA, known_hosts, auth (key/agent/password), jump host
 ├─ terminal/   JediTerm TtyConnector, PromptResponder (sudo inject)
 ├─ localterm/  terminal lokal: shell default per OS, PTY lokal (pty4j), LocalTtyConnector (ADR 0005)
-├─ sftp/       RemoteFileService, RemoteEditSession (download → watch → upload atomic)
+├─ sftp/       RemoteFileService (SFTP + ftp/ untuk FTP/FTPS), RemoteEditSession (download → watch → upload atomic)
 ├─ update/     update via GitHub Releases: manifest Ed25519, delta jar, Bootstrap (main class distribusi), ReleaseTool
 └─ app/        Swing UI (host tree, tabs, SFTP panel, dialogs), wiring, main()
 ```
@@ -69,7 +71,7 @@ Arah dependensi: `app → terminal, sftp → ssh → core`, `vault → core`, `a
 ### Security invariants (jangan dilanggar)
 1. Secret selalu disimpan sebagai `char[]`/`byte[]`, **di-zero setelah dipakai** (`Arrays.fill`). Jangan pernah dikonversi ke `String`.
 2. Secret **tidak pernah** di-log, masuk exception message, atau tersimpan di file profil, export, atau clipboard history.
-3. Host key wajib diverifikasi terhadap `known_hosts` milik aplikasi. Host baru memakai TOFU dengan dialog fingerprint (SHA256). Kalau host key berubah, **tolak** koneksi dan tampilkan peringatan keras. Tidak boleh ada `AcceptAllServerKeyVerifier`, termasuk di kode dev.
+3. Host key wajib diverifikasi terhadap `known_hosts` milik aplikasi. Host baru memakai TOFU dengan dialog fingerprint (SHA256). Kalau host key berubah, **tolak** koneksi dan tampilkan peringatan keras. Tidak boleh ada `AcceptAllServerKeyVerifier`, termasuk di kode dev. Sertifikat FTPS sama: lolos CA + hostname, atau TOFU (`ftps_known_certs`); berubah = tolak. Tidak boleh ada TrustManager yang menerima semua sertifikat.
 4. Auto-sudo trigger hanya boleh aktif dengan guard lengkap (armed window, match di baris terakhir, one-shot, berhenti saat "Sorry, try again"). Lihat `docs/SECURITY.md`.
 5. Upload remote edit wajib atomic (temp file lalu rename), memeriksa konflik (stat remote sebelum upload), dan mempertahankan mode file.
 6. Update aplikasi hanya dipasang/dijalankan kalau tanda tangan Ed25519 manifest valid (public key di `UpdateKeys`) dan SHA-256 setiap jar cocok; tidak boleh downgrade. Private key rilis tidak pernah masuk repo. Lihat `docs/adr/0003-self-update.md`.

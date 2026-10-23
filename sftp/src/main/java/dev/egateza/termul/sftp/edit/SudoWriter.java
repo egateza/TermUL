@@ -4,6 +4,7 @@ import dev.egateza.termul.core.config.ValidationHooks;
 import dev.egateza.termul.sftp.RemoteFileException;
 import dev.egateza.termul.sftp.RemoteFileService;
 import dev.egateza.termul.sftp.RemotePaths;
+import dev.egateza.termul.sftp.SftpFileService;
 import dev.egateza.termul.sftp.TransferListener;
 import dev.egateza.termul.ssh.RemoteExec;
 import dev.egateza.termul.ssh.ShellQuote;
@@ -118,7 +119,10 @@ public final class SudoWriter implements RemoteEditSession.Uploader {
     }
 
     @Override
-    public void upload(RemoteFileService files, Path local, String remotePath) throws RemoteFileException {
+    public void upload(RemoteFileService any, Path local, String remotePath) throws RemoteFileException {
+        if (!(any instanceof SftpFileService files)) {
+            throw new RemoteFileException("Edit sebagai root (sudo) hanya tersedia untuk koneksi SSH, bukan FTP.");
+        }
         if (!remotePath.startsWith("/")) {
             throw new RemoteFileException("Path remote harus absolut: " + remotePath);
         }
@@ -141,7 +145,7 @@ public final class SudoWriter implements RemoteEditSession.Uploader {
     }
 
     /** Menjalankan sudo dengan password tersimpan, atau {@code sudo -n} lalu prompt kalau server minta password. */
-    private RemoteExec.Result runSudo(RemoteFileService files, List<String> script) throws RemoteFileException {
+    private RemoteExec.Result runSudo(SftpFileService files, List<String> script) throws RemoteFileException {
         char[] stored = password.stored();
         if (stored != null) {
             return runWithPassword(files, script, stored, true);
@@ -157,7 +161,7 @@ public final class SudoWriter implements RemoteEditSession.Uploader {
         return runWithPassword(files, script, typed, false);
     }
 
-    private RemoteExec.Result runWithPassword(RemoteFileService files, List<String> script, char[] pw,
+    private RemoteExec.Result runWithPassword(SftpFileService files, List<String> script, char[] pw,
                                               boolean fromVault) throws RemoteFileException {
         byte[] stdin = null;
         try {
@@ -177,7 +181,7 @@ public final class SudoWriter implements RemoteEditSession.Uploader {
         }
     }
 
-    private static RemoteExec.Result exec(RemoteFileService files, String sudoCommand, byte[] stdin)
+    private static RemoteExec.Result exec(SftpFileService files, String sudoCommand, byte[] stdin)
             throws RemoteFileException {
         try {
             // env: bekerja di shell login apa pun; LC_ALL=C supaya pesan sudo bisa dikenali

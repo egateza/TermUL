@@ -18,14 +18,14 @@ import java.util.UUID;
 import org.apache.sshd.common.file.virtualfs.VirtualFileSystemFactory;
 import org.apache.sshd.sftp.server.SftpSubsystemFactory;
 
-/** Server SFTP in-process (root = {@link #remoteRoot}) + {@link RemoteFileService} yang sudah terhubung. */
+/** Server SFTP in-process (root = {@link #remoteRoot}) + {@link SftpFileService} yang sudah terhubung. */
 public final class SftpFixture implements AutoCloseable {
 
     public final Path remoteRoot;
     public final TestSshServer server;
     public final SessionManager sessions;
     public final HostProfile profile;
-    public final RemoteFileService files;
+    public final SftpFileService files;
 
     public SftpFixture(Path tmp) throws Exception {
         remoteRoot = Files.createDirectories(tmp.resolve("remote"));
@@ -59,7 +59,7 @@ public final class SftpFixture implements AutoCloseable {
                         Duration.ZERO, 0, Duration.ZERO));
         profile = new HostProfile(UUID.randomUUID(), "sftp", "", "127.0.0.1", server.port(), TestSshServer.USER,
                 AuthMethod.PASSWORD, null, null, EnvironmentTag.DEV, null, null, false);
-        files = RemoteFileService.open(sessions.acquire(profile));
+        files = SftpFileService.open(sessions.acquire(profile));
     }
 
     @Override

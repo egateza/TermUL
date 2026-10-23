@@ -1,5 +1,6 @@
 package dev.egateza.termul.core.profile;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import dev.egateza.termul.core.wsl.WslDistro;
 import java.util.Objects;
 import java.util.UUID;
@@ -26,6 +27,8 @@ import java.util.UUID;
  *                         app), null = ikut pengaturan
  * @param wslDistro        distro WSL tempat sshd host ini berjalan (host-nya biasanya {@code localhost}); kalau diisi,
  *                         distro dan sshd-nya dijalankan dulu sebelum connect. null = server biasa
+ * @param protocol         protokol koneksi (null = {@link Protocol#SSH}, juga untuk profil lama). Untuk keluarga FTP,
+ *                         auth selalu password dan field khusus SSH (key, jump host, auto-sudo, WSL) diabaikan
  */
 public record HostProfile(
         UUID id,
@@ -43,7 +46,8 @@ public record HostProfile(
         boolean autoSudo,
         OsInfo os,
         String terminalTheme,
-        String wslDistro) {
+        String wslDistro,
+        Protocol protocol) {
 
     public static final int DEFAULT_PORT = 22;
 
@@ -71,9 +75,18 @@ public record HostProfile(
                 initialDirectory, notes, autoSudo, os, terminalTheme, null);
     }
 
+    /** Constructor tanpa protokol (SSH). */
+    public HostProfile(UUID id, String name, String group, String host, int port, String username,
+                       AuthMethod authMethod, String privateKeyPath, UUID jumpHostId, EnvironmentTag environment,
+                       String initialDirectory, String notes, boolean autoSudo, OsInfo os, String terminalTheme,
+                       String wslDistro) {
+        this(id, name, group, host, port, username, authMethod, privateKeyPath, jumpHostId, environment,
+                initialDirectory, notes, autoSudo, os, terminalTheme, wslDistro, Protocol.SSH);
+    }
+
     public HostProfile withTerminalTheme(String themeId) {
         return new HostProfile(id, name, group, host, port, username, authMethod, privateKeyPath, jumpHostId,
-                environment, initialDirectory, notes, autoSudo, os, themeId, wslDistro);
+                environment, initialDirectory, notes, autoSudo, os, themeId, wslDistro, protocol);
     }
 
     public HostProfile {
@@ -84,6 +97,7 @@ public record HostProfile(
         if (port < 1 || port > 65_535) {
             throw new IllegalArgumentException("Port harus di antara 1 dan 65535: " + port);
         }
+        protocol = Objects.requireNonNullElse(protocol, Protocol.SSH);
         authMethod = Objects.requireNonNullElse(authMethod, AuthMethod.AGENT);
         environment = Objects.requireNonNullElse(environment, EnvironmentTag.NONE);
         group = normalizeGroup(group);
@@ -92,6 +106,13 @@ public record HostProfile(
         notes = blankToNull(notes);
         terminalTheme = blankToNull(terminalTheme);
         wslDistro = blankToNull(wslDistro);
+        if (protocol.isFtp()) { // FTP: hanya username + password; field khusus SSH tidak berlaku
+            authMethod = AuthMethod.PASSWORD;
+            privateKeyPath = null;
+            jumpHostId = null;
+            autoSudo = false;
+            wslDistro = null;
+        }
         if (wslDistro != null && !WslDistro.isValidName(wslDistro)) {
             throw new IllegalArgumentException("Nama distro WSL tidak valid: " + wslDistro);
         }
@@ -112,38 +133,57 @@ public record HostProfile(
     /** Salinan dengan id baru dan nama "(salinan)". */
     public HostProfile duplicate() {
         return new HostProfile(UUID.randomUUID(), name + " (salinan)", group, host, port, username,
-                authMethod, privateKeyPath, jumpHostId, environment, initialDirectory, notes, autoSudo, os, terminalTheme, wslDistro);
+                authMethod, privateKeyPath, jumpHostId, environment, initialDirectory, notes, autoSudo, os, terminalTheme, wslDistro, protocol);
     }
 
     public HostProfile withGroup(String newGroup) {
         return new HostProfile(id, name, newGroup, host, port, username, authMethod, privateKeyPath,
-                jumpHostId, environment, initialDirectory, notes, autoSudo, os, terminalTheme, wslDistro);
+                jumpHostId, environment, initialDirectory, notes, autoSudo, os, terminalTheme, wslDistro, protocol);
     }
 
     public HostProfile withJumpHostId(UUID newJumpHostId) {
         return new HostProfile(id, name, group, host, port, username, authMethod, privateKeyPath,
-                newJumpHostId, environment, initialDirectory, notes, autoSudo, os, terminalTheme, wslDistro);
+                newJumpHostId, environment, initialDirectory, notes, autoSudo, os, terminalTheme, wslDistro, protocol);
     }
 
     public HostProfile withPort(int newPort) {
         return new HostProfile(id, name, group, host, newPort, username, authMethod, privateKeyPath,
-                jumpHostId, environment, initialDirectory, notes, autoSudo, os, terminalTheme, wslDistro);
+                jumpHostId, environment, initialDirectory, notes, autoSudo, os, terminalTheme, wslDistro, protocol);
     }
 
     /** @param distro nama distro WSL, atau null untuk server biasa */
     public HostProfile withWslDistro(String distro) {
         return new HostProfile(id, name, group, host, port, username, authMethod, privateKeyPath,
-                jumpHostId, environment, initialDirectory, notes, autoSudo, os, terminalTheme, distro);
+                jumpHostId, environment, initialDirectory, notes, autoSudo, os, terminalTheme, distro, protocol);
     }
 
     public HostProfile withOs(OsInfo newOs) {
         return new HostProfile(id, name, group, host, port, username, authMethod, privateKeyPath,
-                jumpHostId, environment, initialDirectory, notes, autoSudo, newOs, terminalTheme, wslDistro);
+                jumpHostId, environment, initialDirectory, notes, autoSudo, newOs, terminalTheme, wslDistro, protocol);
+    }
+
+    /** Salinan dengan protokol lain; port ikut diganti kalau masih port default protokol lama. */
+    public HostProfile withProtocol(Protocol newProtocol) {
+        var p = Objects.requireNonNullElse(newProtocol, Protocol.SSH);
+        int newPort = port == protocol.defaultPort() ? p.defaultPort() : port;
+        return new HostProfile(id, name, group, host, newPort, username, authMethod, privateKeyPath,
+                jumpHostId, environment, initialDirectory, notes, autoSudo, os, terminalTheme, wslDistro, p);
+    }
+
+    /** true kalau profil ini FTP/FTPS (browser file saja, tanpa terminal). */
+    @JsonIgnore
+    public boolean isFtp() {
+        return protocol.isFtp();
     }
 
     /** Label singkat {@code user@host[:port]} untuk judul tab/log. */
     public String address() {
-        return port == DEFAULT_PORT ? username + "@" + host : username + "@" + host + ":" + port;
+        String base = port == protocol.defaultPort() ? username + "@" + host : username + "@" + host + ":" + port;
+        return switch (protocol) {
+            case SSH -> base;
+            case FTP -> "ftp://" + base;
+            case FTPS, FTPS_IMPLICIT -> "ftps://" + base;
+        };
     }
 
     /** Menormalkan path grup: trim tiap segmen, buang segmen kosong, pakai '/'. */

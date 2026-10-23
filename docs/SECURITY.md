@@ -92,6 +92,22 @@ Rekomendasi operasional (di luar aplikasi): untuk server prod, pertimbangkan aks
 - Selalu ada konfirmasi yang menyebut folder dan host tujuan, dengan tombol default Batal; host bertag PROD diberi
   peringatan. Di server yang sama, salin ke lokasinya sendiri atau folder ke dalam dirinya sendiri ditolak.
 
+## FTP/FTPS (ADR 0007)
+
+- Default protokol baru tetap SSH; FTPS dianjurkan untuk server tanpa SSH. **FTP biasa** mengirim username, password,
+  dan isi file tanpa enkripsi: dialog profil menampilkan peringatan dan meminta konfirmasi saat profil FTP disimpan.
+- Sertifikat FTPS: lolos validasi CA (truststore JDK) + hostname diterima. Kalau tidak (self-signed, hostname beda,
+  kedaluwarsa), dialog menampilkan alasan + fingerprint `SHA256:` (base64 dan hex ala `openssl -fingerprint`) dan user
+  harus konfirmasi (TOFU); hasilnya disimpan di `ftps_known_certs`. Fingerprint tersimpan yang berbeda = koneksi
+  **ditolak** tanpa opsi "percaya saja"; penggantian hanya lewat klik kanan host > Lupakan sertifikat FTPS.
+- Kanal data dan koneksi transfer wajib memakai sertifikat yang sama dengan koneksi kontrol (dicek per service).
+- Password tidak pernah menjadi `String`: perintah `PASS` ditulis dari `char[]` langsung ke stream kontrol, tanpa
+  listener perintah. Karena koneksi transfer dan reconnect setelah idle butuh login ulang, `FtpFileService` memegang
+  salinan `char[]` selama tab terbuka dan meng-zero-nya saat ditutup. (Buffer internal `BufferedWriter`/encoder JDK bisa
+  menyisakan salinan sampai tertimpa; sama seperti socket SSH, tidak bisa dikontrol dari aplikasi.)
+- Tidak ada sudo/exec lewat FTP. Upload memakai file temp lalu rename, tetapi tanpa pemeriksaan owner/izin sebelum
+  menulis (FTP tidak punya padanan `test -w`/uid), dan rename yang menimpa bisa jatuh ke hapus + rename (tidak atomic).
+
 ## Single instance & run at startup
 
 - Hanya satu proses TermUL per folder data (`core.instance.SingleInstance`): `FileLock` di `instance.lock`, supaya vault, `known_hosts`, dan profil tidak ditulis dua proses sekaligus.
@@ -120,6 +136,7 @@ Detail di `docs/adr/0003-self-update.md`.
 - Selama validasi berjalan (antara `mv` dan rollback), file baru yang invalid sempat terpasang sebentar.
 - ProxyJump memakai local forward `127.0.0.1:<port acak>` selama koneksi tujuan hidup. Proses lain di PC yang sama bisa memakai port itu untuk menjangkau port SSH host tujuan lewat jump host (tetap harus lolos auth SSH tujuan). Listener hanya di loopback dan ditutup bersama koneksi. Host key tujuan diverifikasi dengan alamat aslinya, bukan alamat tunnel.
 - Paste multi-baris ke host `PROD` selalu dikonfirmasi (preview + jumlah baris); host non-prod tidak.
+- FTP biasa (ADR 0007) tidak terenkripsi sama sekali; satu-satunya mitigasi adalah peringatan + konfirmasi di dialog profil.
 - **Password login & passphrase key di MINA berupa `String`.** API Apache MINA SSHD (`UserInteraction`, `FilePasswordProvider`) hanya menerima `String`. Konversi `char[] → String` dibatasi di satu tempat (`ssh/.../auth/AuthSetup.java`), dilakukan tepat saat MINA memintanya, dan `char[]` asal langsung di-zero. String itu tidak disimpan di field, tidak di-log, dan menjadi garbage setelah paket auth terkirim. Password sudo/su (inject ke terminal) tetap `char[]`/`byte[]` penuh.
 
 ## Terminal lokal (ADR 0005)
