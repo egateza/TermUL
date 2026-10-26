@@ -71,11 +71,12 @@ public final class TermULApp {
     }
 
     public static void main(String[] args) {
-        MacIntegration.configureBeforeAwt();
         AppPaths.Detected detected = AppPaths.detect();
         AppPaths paths = detected.paths();
-        // Harus diset sebelum logger pertama dibuat (dipakai logback.xml)
+        // Harus diset sebelum logger pertama dibuat (dipakai logback.xml), termasuk logger static class lain seperti
+        // MacIntegration: logback hanya membaca konfigurasi sekali, sesudah itu log tertulis ke ./logs
         System.setProperty("termul.logDir", paths.logDir().toString());
+        MacIntegration.configureBeforeAwt();
         Logger log = LoggerFactory.getLogger(TermULApp.class);
         log.info("TermUL start, config={}, cache={}", paths.configDir(), paths.cacheDir());
         detected.notes().forEach(note -> log.warn("{}", note));
