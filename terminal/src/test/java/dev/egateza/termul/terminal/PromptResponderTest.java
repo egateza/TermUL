@@ -80,6 +80,51 @@ class PromptResponderTest {
         assertThat(events).containsExactly("respond SUDO");
     }
 
+    @Test
+    void promptSudoRsUbuntu26Dikenali() {
+        assertThat(PromptResponder.passwordPrompt("[sudo: authenticate] Password: ")).isEqualTo(Kind.SUDO);
+
+        responder.onEnter("ega@2026-main-server-04-sewa:~$ sudo su ");
+        output("\r\n[sudo: authenticate] Password: ");
+
+        assertThat(events).containsExactly("respond SUDO");
+    }
+
+    @Test
+    void promptSudoRsDenganUserProfilDikenali() {
+        responder.onEnter(PROMPT + "sudo ls");
+        output("\r\n[sudo: authenticate] Password for user: ");
+
+        assertThat(events).containsExactly("respond SUDO");
+    }
+
+    @Test
+    void promptSudoRsUntukUserLainTidakMemicu() {
+        responder.onEnter(PROMPT + "sudo ls");
+        output("\r\n[sudo: authenticate as root] Password: ");
+        responder.onEnter(PROMPT + "sudo ls");
+        output("\r\n[sudo: authenticate] Password for deploy: ");
+
+        assertThat(events).isEmpty();
+    }
+
+    @Test
+    void sudoRsGagalDilaporkan() {
+        responder.onEnter(PROMPT + "sudo ls");
+        output("\r\n[sudo: authenticate] Password: ");
+        output("\r\nsudo: Authentication failed, try again.\r\n[sudo: authenticate] Password: ");
+
+        assertThat(events).containsExactly("respond SUDO", "rejected SUDO");
+    }
+
+    @Test
+    void promptSudoRsTidakDipakaiUntukSu() {
+        responder.onEnter(PROMPT + "su -");
+        output("\r\n[sudo: authenticate] Password: ");
+
+        assertThat(events).isEmpty();
+    }
+
     // --- spoofing: prompt palsu tidak boleh memicu ---
 
     @Test

@@ -31,7 +31,7 @@ Pekerjaan harian melibatkan banyak server Linux (produksi & staging). Masalah ya
 ### F3. Password sudo/su
 - F3.1 Vault menyimpan per profil: password login (opsional), password sudo (user), dan password root (untuk `su`).
 - F3.2 **Hotkey inject** (default `Ctrl+Shift+P`) mengirim password sudo ke terminal aktif.
-- F3.3 **Auto-trigger** (opsional per host, default OFF untuk prod) mendeteksi prompt `[sudo] password for <user>:` atau `Password:` setelah user menjalankan `sudo`/`su`, lalu mengirim password. Guard wajib ada, lihat `SECURITY.md`.
+- F3.3 **Auto-trigger** (opsional per host, default OFF untuk prod) mendeteksi prompt `[sudo] password for <user>:`, `[sudo: authenticate] Password:` (sudo-rs, Ubuntu 26.04), atau `Password:` setelah user menjalankan `sudo`/`su`, lalu mengirim password. Guard wajib ada, lihat `SECURITY.md`.
 - F3.4 Kalau password ditolak (`Sorry, try again`), jangan kirim ulang. Tampilkan notifikasi.
 
 ### F4. Remote directory (SFTP)

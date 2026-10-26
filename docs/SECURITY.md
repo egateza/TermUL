@@ -58,9 +58,10 @@ tertekan saat mengetik.
 2. **Dalam window**: ≤ 5 detik sejak armed.
 3. **Pola cocok di akhir output** (prompt sedang menunggu input), setelah ANSI escape di-strip:
    - sudo: `\[sudo\] (password for|kata sandi untuk) <user>:\s*$`, dan `<user>` harus sama dengan username profil
+   - sudo-rs (default Ubuntu 25.10+/26.04): `\[sudo: authenticate( as <user>)?\] Password( for <user>)?:\s*$`. Prompt ini biasanya tanpa user (selalu password user yang menjalankan sudo); kalau `<user>` disebut, harus sama dengan username profil
    - su: `^(Password|Kata sandi):\s*$` pada baris terakhir
 4. **One-shot**: maksimal satu kali kirim per perintah yang di-arm.
-5. **Stop on failure**: kalau `Sorry, try again` / `Authentication failure` muncul, disarm dan tampilkan notifikasi. Jangan kirim ulang.
+5. **Stop on failure**: kalau `Sorry, try again` / `Authentication failure` / `Authentication failed` (sudo-rs) muncul, disarm dan tampilkan notifikasi. Jangan kirim ulang.
 6. Secret yang dipakai: sudo → `SUDO_PASSWORD`, su → `ROOT_PASSWORD`. Kalau tidak ada, tidak mengirim apa pun.
 
 Catatan keterbatasan: dari sisi client tidak bisa diketahui apakah remote dalam mode echo-off (status termios tidak dikirim lewat SSH). Karena itu guard di atas wajib, dan hotkey tetap menjadi cara yang paling aman.

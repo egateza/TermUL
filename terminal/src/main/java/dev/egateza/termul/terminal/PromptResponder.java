@@ -3,6 +3,7 @@ package dev.egateza.termul.terminal;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.function.LongSupplier;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,7 +15,9 @@ import org.slf4j.LoggerFactory;
  *       berupa {@code su}/{@code su ...};</li>
  *   <li>prompt password muncul <b>dalam {@value #ARM_WINDOW_SECONDS} detik</b> sejak armed;</li>
  *   <li>prompt adalah <b>baris terakhir</b> output (ANSI di-strip), cocok penuh dengan
- *       {@code [sudo] password for <user>:} (user = username profil) atau {@code Password:} untuk su;</li>
+ *       {@code [sudo] password for <user>:} (user = username profil), prompt sudo-rs (Ubuntu 26.04+)
+ *       {@code [sudo: authenticate] Password:} (tanpa user; kalau ada {@code as <user>}/{@code for <user>}, harus
+ *       username profil), atau {@code Password:} untuk su;</li>
  *   <li><b>one-shot</b>: paling banyak satu kali per perintah yang di-arm;</li>
  *   <li><b>berhenti saat gagal</b>: {@code Sorry, try again}/{@code Authentication failure} setelah password dikirim
  *       → disarm dan {@link Listener#rejected} (tidak pernah dikirim ulang).</li>
@@ -37,10 +40,13 @@ public final class PromptResponder implements SshTtyConnector.OutputListener {
 
     private static final Pattern SUDO_COMMAND = Pattern.compile("sudo\\s+\\S.*");
     private static final Pattern SU_COMMAND = Pattern.compile("su(\\s+.*)?");
-    private static final Pattern SUDO_PROMPT = Pattern.compile("\\[sudo\\] (?:password for|kata sandi untuk) (\\S+):\\s*");
+    private static final Pattern SUDO_PROMPT = Pattern.compile(
+            "\\[sudo\\] (?:password for|kata sandi untuk) (?<user>\\S+):\\s*"
+            // sudo-rs (default sejak Ubuntu 25.10): "[sudo: authenticate] Password:", user opsional
+            + "|\\[sudo: authenticate(?: as (?<as>\\S+))?\\] (?:Password|Kata sandi)(?: for (?<for>\\S+))?:\\s*");
     private static final Pattern SU_PROMPT = Pattern.compile("(?:Password|Kata sandi):\\s*");
     private static final Pattern FAILURE = Pattern.compile(
-            "Sorry, try again|Maaf, coba lagi|Authentication failure|Otentikasi gagal|incorrect password",
+            "Sorry, try again|Maaf, coba lagi|Authentication fail(?:ure|ed)|Otentikasi gagal|incorrect (?:password|authentication)",
             Pattern.CASE_INSENSITIVE);
 
     /** Jenis prompt; menentukan secret yang dikirim (sudo → password sudo, su → password root). */
@@ -178,7 +184,7 @@ public final class PromptResponder implements SshTtyConnector.OutputListener {
         return switch (kind) {
             case SUDO -> {
                 var m = SUDO_PROMPT.matcher(line);
-                yield m.matches() && m.group(1).equals(username);
+                yield m.matches() && promptUser(m) == null;
             }
             case SU -> SU_PROMPT.matcher(line).matches();
         };
@@ -190,7 +196,21 @@ public final class PromptResponder implements SshTtyConnector.OutputListener {
             return null;
         }
         var m = SUDO_PROMPT.matcher(line);
-        return m.matches() && !m.group(1).equals(username) ? m.group(1) : null;
+        return m.matches() ? promptUser(m) : null;
+    }
+
+    /**
+     * User di prompt sudo yang cocok yang <b>bukan</b> user profil, atau null kalau user profil / tidak disebut
+     * (sudo-rs tanpa {@code as}/{@code for} selalu meminta password user yang menjalankan sudo).
+     */
+    private String promptUser(Matcher m) {
+        for (String group : new String[] {"user", "as", "for"}) {
+            String user = m.group(group);
+            if (user != null && !user.equals(username)) {
+                return user;
+            }
+        }
+        return null;
     }
 
     private static String lastLine(CharSequence text) {
