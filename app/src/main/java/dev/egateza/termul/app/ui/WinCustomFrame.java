@@ -92,7 +92,7 @@ final class WinCustomFrame {
 
         boolean IsZoomed(Pointer hwnd);
 
-        Pointer MonitorFromWindow(Pointer hwnd, int flags);
+        Pointer MonitorFromRect(Pointer rect, int flags);
 
         boolean GetMonitorInfoW(Pointer monitor, int[] info);
 
@@ -188,7 +188,7 @@ final class WinCustomFrame {
                     if (user32.IsZoomed(hwnd)) {
                         // maximize: Windows menaruh window melewati tiap sisi layar setebal bingkai; area isi
                         // dibatasi ke area kerja monitor supaya title bar dan tombolnya tidak terpotong
-                        clientToWorkArea(hwnd, lParam);
+                        clientToWorkArea(lParam);
                     }
                     return new Pointer(0); // tanpa area non-client: seluruh window adalah isi (title bar FlatLaf)
                 }
@@ -285,9 +285,14 @@ final class WinCustomFrame {
         return HTCLIENT;
     }
 
-    /** NCCALCSIZE_PARAMS.rgrc[0] (RECT pertama di lParam) = area kerja monitor tempat window berada. */
-    private static void clientToWorkArea(Pointer hwnd, Pointer params) {
-        Pointer monitor = user32.MonitorFromWindow(hwnd, 2); // MONITOR_DEFAULTTONEAREST
+    /**
+     * NCCALCSIZE_PARAMS.rgrc[0] (RECT pertama di lParam) = area kerja monitor tujuan window. Monitornya dipilih dari
+     * rgrc[0] (posisi baru window), bukan dari posisi window sekarang: saat dibuka dari minimize window masih di
+     * -32000,-32000, sehingga monitor "terdekat" bisa monitor lain. Area isi lalu jatuh di luar window dan semua yang
+     * digambar terpotong (window tampak freeze sampai di-resize).
+     */
+    private static void clientToWorkArea(Pointer params) {
+        Pointer monitor = user32.MonitorFromRect(params, 2); // MONITOR_DEFAULTTONEAREST
         int[] info = new int[10]; // cbSize, rcMonitor(4), rcWork(4), dwFlags
         info[0] = 40;
         if (monitor == null || !user32.GetMonitorInfoW(monitor, info)) {
