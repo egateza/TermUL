@@ -6,6 +6,7 @@ import java.awt.Component;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
+import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.List;
@@ -26,6 +27,7 @@ final class TranslucentRootPane extends JRootPane {
 
     private float chromeAlpha = 1f;
     private BufferedImage buffer; // dipakai ulang antar-paint; EDT
+    private BufferedImage cover; // tangkapan isi window selama berganti mode, lihat setCover; EDT
 
     /** @param percent opasitas bagian selain terminal; 100 = tidak dipudarkan */
     void setChromeOpacity(int percent) {
@@ -48,8 +50,45 @@ final class TranslucentRootPane extends JRootPane {
         return fading() || super.isPaintingOrigin();
     }
 
+    /**
+     * Isi root pane saat ini sebagai gambar seukuran piksel layar (skala HiDPI ikut), untuk {@link #setCover}.
+     */
+    BufferedImage capture() {
+        var gc = getGraphicsConfiguration();
+        AffineTransform tx = gc == null ? new AffineTransform() : gc.getDefaultTransform();
+        var img = new BufferedImage(Math.max(1, (int) Math.ceil(getWidth() * tx.getScaleX())),
+                Math.max(1, (int) Math.ceil(getHeight() * tx.getScaleY())), BufferedImage.TYPE_INT_ARGB_PRE);
+        var g = img.createGraphics();
+        try {
+            g.scale(tx.getScaleX(), tx.getScaleY());
+            g.setClip(0, 0, getWidth(), getHeight());
+            paint(g);
+        } finally {
+            g.dispose();
+        }
+        return img;
+    }
+
+    /**
+     * Selama {@code image} tidak null, paint hanya menempel gambar itu apa adanya (cepat), bukan menggambar isi window.
+     * Dipakai saat window berganti mode solid/beralpha, ketika Windows membuang isi window dan butuh gambar baru segera.
+     */
+    void setCover(BufferedImage image) {
+        cover = image;
+    }
+
     @Override
     public void paint(Graphics g) {
+        if (cover != null) {
+            var out = (Graphics2D) g.create();
+            try {
+                out.setComposite(AlphaComposite.Src);
+                out.drawImage(cover, 0, 0, getWidth(), getHeight(), null);
+            } finally {
+                out.dispose();
+            }
+            return;
+        }
         if (!fading()) {
             super.paint(g);
             return;

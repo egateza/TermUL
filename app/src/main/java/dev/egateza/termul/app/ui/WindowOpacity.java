@@ -7,6 +7,8 @@ import java.awt.Color;
 import java.awt.IllegalComponentStateException;
 import java.awt.Toolkit;
 import javax.swing.JFrame;
+import javax.swing.JRootPane;
+import javax.swing.RepaintManager;
 
 /**
  * Transparansi window utama, dua slider: bagian selain terminal ({@link TranslucentRootPane}, teks ikut pudar) dan
@@ -61,8 +63,16 @@ final class WindowOpacity {
         if (solidBackground == null) {
             solidBackground = frame.getBackground();
         }
+        boolean switching = translucent == frame.isOpaque(); // berganti mode solid <-> beralpha per piksel
+        if (switching && !translucent && frame.isShowing()) {
+            // Ke solid: buat semua piksel penuh dulu selagi window masih beralpha, supaya window yang sudah solid
+            // tidak sempat menampilkan isi yang masih dipudarkan (tampak gelap sesaat).
+            root.setChromeOpacity(100);
+            TerminalTranslucency.setPercent(100);
+            paintNow(root);
+        }
         try {
-            frame.setBackground(translucent ? new Color(0, 0, 0, 0) : solidBackground);
+            setBackground(frame, root, translucent ? new Color(0, 0, 0, 0) : solidBackground, switching);
         } catch (IllegalComponentStateException | UnsupportedOperationException e) {
             return !translucent; // sistem tanpa dukungan alpha per piksel
         }
@@ -76,5 +86,32 @@ final class WindowOpacity {
         toolkit.setDynamicLayout(!translucent && dynamicLayout);
         root.repaint();
         return true;
+    }
+
+    /**
+     * Ganti latar window. Saat berganti mode, Windows membuang isi window ({@code WS_EX_LAYERED} dipasang/dilepas) dan
+     * window kosong sampai digambar ulang penuh: terlihat sebagai kedipan. Selama pergantian, root pane cukup menempel
+     * tangkapan isinya, sehingga window langsung terisi lagi dengan gambar yang sama.
+     */
+    private static void setBackground(JFrame frame, TranslucentRootPane root, Color background, boolean switching) {
+        if (!switching || !frame.isShowing() || root.getWidth() <= 0 || root.getHeight() <= 0) {
+            frame.setBackground(background);
+            return;
+        }
+        root.setCover(root.capture());
+        try {
+            frame.setBackground(background); // ke beralpha: AWT langsung menggambar ulang penuh (paintAll) di sini
+            if (frame.isOpaque()) {
+                paintNow(root); // ke solid: AWT tidak menggambar ulang, isi sendiri sekarang
+            }
+        } finally {
+            root.setCover(null);
+        }
+    }
+
+    /** Gambar root pane sekarang (bukan nanti lewat antrean repaint), termasuk mengirimnya ke window beralpha. */
+    private static void paintNow(JRootPane root) {
+        root.repaint();
+        RepaintManager.currentManager(root).paintDirtyRegions();
     }
 }
