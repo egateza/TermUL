@@ -60,6 +60,7 @@ final class WinCustomFrame {
     private static final int WM_NCLBUTTONUP = 0x00A2;
     private static final int WM_NCLBUTTONDBLCLK = 0x00A3;
     private static final int WM_NCMOUSELEAVE = 0x02A2;
+    private static final int WM_GETMINMAXINFO = 0x0024;
 
     private static final int HTCLIENT = 1;
     private static final int HTCAPTION = 2;
@@ -146,6 +147,9 @@ final class WinCustomFrame {
         frame.getRootPane().addComponentListener(relayout);
         // maximize/restore menukar tombol FlatLaf; geometri dihitung setelah layout-nya selesai
         frame.addWindowStateListener(e -> SwingUtilities.invokeLater(this::updateGeometry));
+        // pindah ke monitor dengan scaling lain: ukuran logis tetap (tanpa componentResized), tapi skala piksel fisik
+        // berubah. Event ini bisa datang dari thread toolkit.
+        frame.addPropertyChangeListener("graphicsConfiguration", e -> SwingUtilities.invokeLater(this::updateGeometry));
     }
 
     /**
@@ -210,6 +214,19 @@ final class WinCustomFrame {
                     SwingUtilities.invokeLater(this::clickMaxButton);
                     return new Pointer(0);
                 }
+            }
+            case WM_GETMINMAXINFO -> {
+                // Windows mengisi ukuran & posisi maximize untuk monitor tempat window berada; AWT menimpanya dengan
+                // Frame.getMaximizedBounds(), yang diset FlatLaf saat tombol maximize-nya diklik dan tidak diperbarui
+                // saat window pindah monitor. Akibatnya maximize lewat Windows (dobel klik title bar, Snap, Win+Up)
+                // jatuh di monitor lama, dan ukuran restore menyusut setiap pindah monitor beda scaling. Ukuran
+                // minimum dari AWT tetap dipakai; area isi saat maximize sudah diatur WM_NCCALCSIZE.
+                int[] maxSizeAndPosition = lParam.getIntArray(8, 4); // ptMaxSize, ptMaxPosition
+                int[] maxTrackSize = lParam.getIntArray(32, 2); // ptMaxTrackSize
+                Pointer result = user32.CallWindowProcW(previous, hwnd, msg, wParam, lParam);
+                lParam.write(8, maxSizeAndPosition, 0, 4);
+                lParam.write(32, maxTrackSize, 0, 2);
+                return result;
             }
             default -> {
             }
