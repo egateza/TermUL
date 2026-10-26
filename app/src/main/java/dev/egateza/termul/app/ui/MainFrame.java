@@ -324,6 +324,11 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             WindowOpacity.apply(this, startConfig.windowOpacity(), startConfig.terminalOpacity());
         }
 
+        // pindah ke monitor dengan scaling lain: lebar teks ikut berubah (hinting per skala), tapi ukuran logis window
+        // tetap sehingga Swing tidak menyusun ulang; label yang tadinya pas jadi terpotong ("16:…"). Bisa datang dari
+        // thread toolkit.
+        addPropertyChangeListener("graphicsConfiguration", e -> SwingUtilities.invokeLater(this::relayoutForScreen));
+
         setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
         addWindowListener(new WindowAdapter() {
             @Override
@@ -737,6 +742,25 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         }
         setExtendedState(ICONIFIED);
         setVisible(true);
+    }
+
+    /**
+     * Susun ulang seluruh isi window untuk skala layar yang baru. {@code revalidate()} saja tidak cukup: validasi hanya
+     * turun ke container yang tidak valid, jadi semua komponen ditandai tidak valid dulu. EDT.
+     */
+    private void relayoutForScreen() {
+        invalidateTree(getRootPane());
+        validate();
+        repaint();
+    }
+
+    private static void invalidateTree(java.awt.Component c) {
+        c.invalidate();
+        if (c instanceof java.awt.Container parent) {
+            for (java.awt.Component child : parent.getComponents()) {
+                invalidateTree(child);
+            }
+        }
     }
 
     /** Sembunyikan window ke tray; sesi SSH dan transfer tetap berjalan. EDT. */
