@@ -10,8 +10,10 @@ import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
@@ -120,6 +122,36 @@ public final class ProfileStore {
             }
             return s.withGroups(s.groups().stream().filter(x -> !isSameOrChild(x, g)).toList());
         });
+    }
+
+    /**
+     * Mengubah flag sensitif semua profil di grup {@code group} beserta subgrupnya sekaligus.
+     *
+     * @param sensitive true/false = pilihan eksplisit, null = ikut environment (lihat {@link HostProfile#needsGuard()})
+     */
+    public ProfileSnapshot setGroupSensitive(String group, Boolean sensitive) {
+        return mutate(s -> withSensitive(s, s.profilesUnder(group), sensitive));
+    }
+
+    /**
+     * Mengubah flag sensitif profil dengan id {@code ids} sekaligus; id yang tidak ada diabaikan.
+     *
+     * @param sensitive true/false = pilihan eksplisit, null = ikut environment
+     */
+    public ProfileSnapshot setSensitive(Collection<UUID> ids, Boolean sensitive) {
+        var targets = Set.copyOf(ids);
+        return mutate(s -> withSensitive(s,
+                s.profiles().stream().filter(p -> targets.contains(p.id())).toList(), sensitive));
+    }
+
+    private static ProfileSnapshot withSensitive(ProfileSnapshot s, List<HostProfile> targets, Boolean sensitive) {
+        var result = s;
+        for (HostProfile p : targets) {
+            if (!Objects.equals(p.sensitive(), sensitive)) {
+                result = result.withProfile(p.withSensitive(sensitive));
+            }
+        }
+        return result;
     }
 
     /** Mengganti nama/memindahkan grup beserta subgrup dan profil di dalamnya. */

@@ -26,6 +26,7 @@ import java.util.Set;
 import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
 import javax.swing.JComponent;
+import javax.swing.JMenu;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
@@ -83,6 +84,23 @@ public final class HostTreePanel extends JPanel {
 
         void deleteGroup(String group);
 
+        /**
+         * Ubah flag sensitif semua profil di grup beserta subgrupnya; konfirmasi dulu.
+         *
+         * @param sensitive true = tandai sensitif, null = ikut environment (PROD tetap sensitif)
+         */
+        void setGroupSensitive(String group, Boolean sensitive);
+
+        /** Buka tab untuk semua profil terpilih (multi-seleksi); konfirmasi kalau banyak. */
+        void openAll(List<HostProfile> profiles);
+
+        /**
+         * Ubah flag sensitif profil terpilih (multi-seleksi); konfirmasi dulu.
+         *
+         * @param sensitive true = tandai sensitif, null = ikut environment (PROD tetap sensitif)
+         */
+        void setSensitive(List<HostProfile> profiles, Boolean sensitive);
+
         /** Tambah ({@code true}) atau keluarkan profil dari grup bawaan Favorites. */
         void setFavorite(HostProfile profile, boolean favorite);
 
@@ -131,7 +149,8 @@ public final class HostTreePanel extends JPanel {
 
         tree.setRootVisible(false);
         tree.setShowsRootHandles(true);
-        tree.getSelectionModel().setSelectionMode(TreeSelectionModel.SINGLE_TREE_SELECTION);
+        // Ctrl+klik (Cmd di Mac) / Shift+klik untuk memilih beberapa profil sekaligus
+        tree.getSelectionModel().setSelectionMode(TreeSelectionModel.DISCONTIGUOUS_TREE_SELECTION);
         tree.setCellRenderer(new Renderer(this::isWslStopped));
         tree.setToggleClickCount(0);
         javax.swing.ToolTipManager.sharedInstance().registerComponent(tree);
@@ -165,6 +184,11 @@ public final class HostTreePanel extends JPanel {
             }
         });
         bindKey(KeyEvent.VK_ENTER, "open", () -> {
+            var hosts = selectedProfiles();
+            if (hosts.size() > 1) {
+                actions.openAll(hosts);
+                return;
+            }
             switch (selectedObject()) {
                 case HostProfile p -> actions.open(p);
                 case LocalTerminalNode n -> actions.openLocalTerminal();
@@ -174,6 +198,9 @@ public final class HostTreePanel extends JPanel {
             }
         });
         bindKey(KeyEvent.VK_DELETE, "delete", () -> {
+            if (tree.getSelectionCount() > 1) {
+                return; // multi-seleksi: hapus tetap satu per satu
+            }
             if (selectedObject() instanceof HostProfile p) {
                 actions.delete(p);
             } else if (selectedObject() instanceof GroupNode g && !g.path().isEmpty()) {
@@ -181,6 +208,9 @@ public final class HostTreePanel extends JPanel {
             } // grup bawaan (BuiltinGroup) sengaja tidak bisa dihapus
         });
         bindKey(KeyEvent.VK_F2, "edit", () -> {
+            if (tree.getSelectionCount() > 1) {
+                return;
+            }
             if (selectedObject() instanceof HostProfile p) {
                 actions.edit(p);
             } else if (selectedObject() instanceof GroupNode g && !g.path().isEmpty()) {
@@ -287,10 +317,12 @@ public final class HostTreePanel extends JPanel {
 
     private void rebuild() {
         Set<Object> expanded = expandedGroups();
-        TreePath selectedPath = tree.getSelectionPath();
-        Object selected = selectedPath == null ? null : userObject(selectedPath);
-        Object selectedParent = selectedPath == null || selectedPath.getParentPath() == null
-                ? null : userObject(selectedPath.getParentPath());
+        TreePath[] selectedPaths = tree.getSelectionPaths();
+        var selected = new java.util.ArrayList<Object[]>(); // {user object node, user object parent-nya}
+        for (TreePath p : selectedPaths == null ? new TreePath[0] : selectedPaths) {
+            selected.add(new Object[] {userObject(p), p.getParentPath() == null ? null : userObject(p.getParentPath())});
+        }
+        var reselect = new java.util.ArrayList<TreePath>();
         boolean filtering = !search.getText().isBlank();
         boolean hadWsl = hasChild((DefaultMutableTreeNode) model.getRoot(), BuiltinGroup.WSL);
 
@@ -307,9 +339,13 @@ public final class HostTreePanel extends JPanel {
             }
             // profil bisa muncul dua kali (grup asli + Favorites/Last used): cocokkan juga parent-nya
             var parent = (DefaultMutableTreeNode) n.getParent();
-            if (isSame(uo, selected) && parent != null && isSame(parent.getUserObject(), selectedParent)) {
-                tree.setSelectionPath(path);
+            if (parent != null && selected.stream()
+                    .anyMatch(s -> isSame(uo, s[0]) && isSame(parent.getUserObject(), s[1]))) {
+                reselect.add(path);
             }
+        }
+        if (!reselect.isEmpty()) {
+            tree.setSelectionPaths(reselect.toArray(TreePath[]::new));
         }
     }
 
@@ -369,12 +405,24 @@ public final class HostTreePanel extends JPanel {
             return;
         }
         TreePath path = tree.getPathForLocation(e.getX(), e.getY());
-        if (path != null) {
-            tree.setSelectionPath(path);
-        } else {
+        if (path == null) {
             tree.clearSelection();
+        } else if (!tree.isPathSelected(path)) {
+            tree.setSelectionPath(path); // klik kanan di luar seleksi: seleksi pindah ke node itu saja
         }
-        buildPopup(path == null ? null : userObject(path)).show(tree, e.getX(), e.getY());
+        Object target = path == null ? null : userObject(path);
+        var hosts = selectedProfiles();
+        var popup = target instanceof HostProfile && hosts.size() > 1 ? buildMultiPopup(hosts) : buildPopup(target);
+        popup.show(tree, e.getX(), e.getY());
+    }
+
+    /** Menu klik kanan saat beberapa profil terpilih. */
+    private JPopupMenu buildMultiPopup(List<HostProfile> hosts) {
+        var menu = new JPopupMenu();
+        menu.add(item(AppIcon.TERMINAL, I18n.t("tree.menu.multi.open", hosts.size()), () -> actions.openAll(hosts)));
+        menu.addSeparator();
+        menu.add(sensitiveMenu(hosts, v -> actions.setSensitive(hosts, v)));
+        return menu;
     }
 
     private JPopupMenu buildPopup(Object target) {
@@ -411,6 +459,8 @@ public final class HostTreePanel extends JPanel {
                 menu.addSeparator();
                 menu.add(item(null, I18n.t("tree.menu.renameGroup"), () -> actions.renameGroup(g.path())));
                 menu.add(item(null, I18n.t("tree.menu.deleteGroup"), () -> actions.deleteGroup(g.path())));
+                menu.addSeparator();
+                menu.add(sensitiveMenu(snapshot.profilesUnder(g.path()), v -> actions.setGroupSensitive(g.path(), v)));
             }
             case BuiltinGroup.RECENT -> {
                 var clear = item(AppIcon.BROOM, I18n.t("tree.menu.clearRecent"), actions::clearRecent);
@@ -450,6 +500,24 @@ public final class HostTreePanel extends JPanel {
         return menu;
     }
 
+    /**
+     * Submenu "Profil sensitif" untuk {@code profiles}: item yang tidak mengubah apa pun dinonaktifkan.
+     *
+     * @param apply dipanggil dengan true (tandai sensitif) atau null (ikut environment)
+     */
+    private JMenu sensitiveMenu(List<HostProfile> profiles, java.util.function.Consumer<Boolean> apply) {
+        var sensitive = new JMenu(I18n.t("tree.menu.groupSensitive"));
+        sensitive.setEnabled(!profiles.isEmpty());
+        var mark = item(null, I18n.t("tree.menu.groupSensitive.mark"), () -> apply.accept(true));
+        mark.setEnabled(profiles.stream().anyMatch(p -> !Boolean.TRUE.equals(p.sensitive())));
+        var reset = item(null, I18n.t("tree.menu.groupSensitive.reset"), () -> apply.accept(null));
+        reset.setEnabled(profiles.stream().anyMatch(p -> p.sensitive() != null));
+        reset.setToolTipText(I18n.t("tree.menu.groupSensitive.reset.tooltip"));
+        sensitive.add(mark);
+        sensitive.add(reset);
+        return sensitive;
+    }
+
     private static JMenuItem item(AppIcon icon, String label, Runnable r) {
         var item = icon == null ? new JMenuItem(label) : new JMenuItem(label, icon.icon());
         item.addActionListener(e -> r.run());
@@ -464,6 +532,26 @@ public final class HostTreePanel extends JPanel {
                 r.run();
             }
         });
+    }
+
+    /**
+     * Profil terpilih sesuai urutan di tree, tanpa duplikat (profil yang sama bisa terpilih di grup asli dan di
+     * Favorites/Last used). Node selain profil diabaikan.
+     */
+    List<HostProfile> selectedProfiles() {
+        int[] rows = tree.getSelectionRows();
+        if (rows == null) {
+            return List.of();
+        }
+        java.util.Arrays.sort(rows);
+        var result = new java.util.LinkedHashMap<java.util.UUID, HostProfile>();
+        for (int row : rows) {
+            TreePath path = tree.getPathForRow(row);
+            if (path != null && userObject(path) instanceof HostProfile p) {
+                result.putIfAbsent(p.id(), p);
+            }
+        }
+        return List.copyOf(result.values());
     }
 
     private Object selectedObject() {

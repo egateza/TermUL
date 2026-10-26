@@ -106,6 +106,63 @@ class ProfileStoreTest {
     }
 
     @Test
+    void setSensitiveMengubahSemuaProfilDiGrupDanSubgrup() {
+        var store = new ProfileStore(dir.resolve("profiles.json"));
+        var a = HostProfile.create("a", "h", "u").withGroup("Prod");
+        var b = HostProfile.create("b", "h", "u").withGroup("Prod/Db").withSensitive(false);
+        var other = HostProfile.create("c", "h", "u").withGroup("Production");
+        store.save(a);
+        store.save(b);
+        store.save(other);
+
+        store.setGroupSensitive("Prod", true);
+
+        var s = store.snapshot();
+        assertThat(s.find(a.id())).get().extracting(HostProfile::needsGuard).isEqualTo(true);
+        assertThat(s.find(b.id())).get().extracting(HostProfile::needsGuard).isEqualTo(true);
+        assertThat(s.find(other.id())).get().extracting(HostProfile::sensitive).isNull();
+        assertThat(new ProfileStore(dir.resolve("profiles.json")).load()).isEqualTo(s);
+
+        store.setGroupSensitive("Prod", null);
+
+        assertThat(store.snapshot().profilesUnder("Prod")).extracting(HostProfile::sensitive).containsOnlyNulls();
+    }
+
+    @Test
+    void setSensitiveHanyaMengubahProfilTerpilih() {
+        var store = new ProfileStore(dir.resolve("profiles.json"));
+        var a = HostProfile.create("a", "h", "u").withGroup("G1");
+        var b = HostProfile.create("b", "h", "u").withGroup("G2");
+        var c = HostProfile.create("c", "h", "u").withGroup("G1");
+        store.save(a);
+        store.save(b);
+        store.save(c);
+
+        store.setSensitive(java.util.List.of(a.id(), b.id(), UUID.randomUUID()), true);
+
+        var s = store.snapshot();
+        assertThat(s.find(a.id())).get().extracting(HostProfile::sensitive).isEqualTo(true);
+        assertThat(s.find(b.id())).get().extracting(HostProfile::sensitive).isEqualTo(true);
+        assertThat(s.find(c.id())).get().extracting(HostProfile::sensitive).isNull();
+
+        store.setSensitive(java.util.List.of(a.id()), null);
+
+        assertThat(store.snapshot().find(a.id())).get().extracting(HostProfile::sensitive).isNull();
+    }
+
+    @Test
+    void setSensitiveTanpaPerubahanTidakMenulisFile() {
+        Path file = dir.resolve("profiles.json");
+        var store = new ProfileStore(file);
+        store.save(HostProfile.create("a", "h", "u").withGroup("G").withSensitive(true));
+        var before = store.snapshot();
+
+        assertThat(store.setGroupSensitive("G", true)).isSameAs(before);
+        assertThat(store.setGroupSensitive("Kosong", true)).isSameAs(before);
+        assertThat(store.setSensitive(java.util.List.of(UUID.randomUUID()), true)).isSameAs(before);
+    }
+
+    @Test
     void renameGroupMemindahkanSubgrupDanProfil() {
         var store = new ProfileStore(dir.resolve("profiles.json"));
         var p = HostProfile.create("a", "h", "u").withGroup("Old/Sub");

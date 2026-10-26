@@ -71,6 +71,14 @@ public record ProfileSnapshot(int version, List<String> groups, List<HostProfile
                 .toList();
     }
 
+    /** Profil di grup {@code group} beserta semua subgrupnya ({@code ""} = semua profil). */
+    public List<HostProfile> profilesUnder(String group) {
+        String g = HostProfile.normalizeGroup(group);
+        return profiles.stream()
+                .filter(p -> g.isEmpty() || p.group().equals(g) || p.group().startsWith(g + "/"))
+                .toList();
+    }
+
     public boolean isFavorite(UUID id) {
         return favorites.contains(id);
     }

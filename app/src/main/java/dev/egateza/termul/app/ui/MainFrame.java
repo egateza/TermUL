@@ -3155,6 +3155,9 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         UiAsync.run(io, change, err -> Dialogs.error(this, errorTitle, err));
     }
 
+    /** Membuka lebih dari ini sekaligus (multi-seleksi tree) perlu konfirmasi. */
+    private static final int OPEN_ALL_CONFIRM_ABOVE = 5;
+
     // --- HostTreePanel.Actions ---
 
     @Override
@@ -3511,6 +3514,49 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         if (Dialogs.confirm(this, I18n.t("main.group.delete.title"), I18n.t("main.group.delete.confirm", group))) {
             mutate(I18n.t("main.error.deleteGroup"), () -> store.deleteGroup(group));
         }
+    }
+
+    @Override
+    public void setGroupSensitive(String group, Boolean sensitive) {
+        var profiles = store.snapshot().profilesUnder(group);
+        if (profiles.isEmpty()) {
+            return;
+        }
+        String message = sensitive != null
+                ? I18n.t("main.group.sensitive.markConfirm", profiles.size(), group)
+                : I18n.t("main.group.sensitive.resetConfirm", profiles.size(), group);
+        confirmSensitive(profiles, sensitive, message, () -> store.setGroupSensitive(group, sensitive));
+    }
+
+    @Override
+    public void setSensitive(List<HostProfile> profiles, Boolean sensitive) {
+        if (profiles.isEmpty()) {
+            return;
+        }
+        String message = sensitive != null
+                ? I18n.t("main.sensitive.markConfirm", profiles.size())
+                : I18n.t("main.sensitive.resetConfirm", profiles.size());
+        var ids = profiles.stream().map(HostProfile::id).toList();
+        confirmSensitive(profiles, sensitive, message, () -> store.setSensitive(ids, sensitive));
+    }
+
+    /** Konfirmasi perubahan flag sensitif massal (plus peringatan auto-sudo), lalu simpan di thread io. */
+    private void confirmSensitive(List<HostProfile> profiles, Boolean sensitive, String message, Runnable change) {
+        if (Boolean.TRUE.equals(sensitive) && profiles.stream().anyMatch(HostProfile::autoSudo)) {
+            message += "\n\n" + I18n.t("main.group.sensitive.autoSudo");
+        }
+        if (Dialogs.confirm(this, I18n.t("main.group.sensitive.title"), message)) {
+            mutate(I18n.t("main.error.groupSensitive"), change);
+        }
+    }
+
+    @Override
+    public void openAll(List<HostProfile> profiles) {
+        if (profiles.size() > OPEN_ALL_CONFIRM_ABOVE && !Dialogs.confirm(this, I18n.t("main.openAll.title"),
+                I18n.t("main.openAll.confirm", profiles.size()))) {
+            return;
+        }
+        profiles.forEach(this::open);
     }
 
     @Override
