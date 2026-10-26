@@ -21,17 +21,22 @@ import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Objects;
+import java.util.function.Consumer;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * Satu instance TermUL per folder data. Instance pertama memegang {@link FileLock} di {@value #LOCK_FILE} dan
  * mendengarkan di socket loopback; instance berikutnya (mis. user membuka shortcut lagi saat TermUL ada di tray) cukup
- * meminta instance pertama menampilkan window, lalu keluar. Dengan begitu vault, known_hosts, dan profil tidak dipakai
- * dua proses sekaligus.
+ * meminta instance pertama menampilkan window (atau menjalankan {@link Request} lain, mis. membuka tab dari menu klik
+ * kanan Explorer), lalu keluar. Dengan begitu vault, known_hosts, dan profil tidak dipakai dua proses sekaligus.
  *
  * <p>Port dan token acak ditulis di {@value #PORT_FILE} (folder data milik user). Permintaan tanpa token yang cocok
  * diabaikan, jadi proses lain di mesin yang sama tidak bisa sembarangan mengirim perintah. Token bukan credential
@@ -46,11 +51,60 @@ public final class SingleInstance implements AutoCloseable {
     static final String CMD_SHOW = "show";
     static final String REPLY_OK = "ok";
     private static final int TOKEN_BYTES = 32;
-    private static final int MAX_REQUEST_BYTES = 256;
+    /** Cukup untuk token + perintah + argumen berisi path panjang (Windows long path, Base64). */
+    private static final int MAX_REQUEST_BYTES = 16 * 1024;
+    /** Batas argumen sebelum di-encode (karakter UTF-16). */
+    static final int MAX_ARGUMENT_CHARS = 8 * 1024;
+    /** Permintaan yang diantre selama aplikasi masih memuat; sisanya dibuang. */
+    static final int MAX_PENDING = 8;
+    private static final Pattern COMMAND = Pattern.compile("[a-z][a-z0-9-]{0,31}");
     static final int IO_TIMEOUT_MS = 2000;
     /** Instance pertama mungkin baru memegang lock tapi belum menulis file port: tunggu sebentar. */
     static final int PORT_WAIT_MS = 3000;
     private static final int PORT_POLL_MS = 100;
+
+    /**
+     * Permintaan dari instance kedua. Makna perintah ditentukan aplikasi; modul ini hanya mengantarkannya.
+     *
+     * @param command  huruf kecil, angka, dan {@code -}, mis. {@value #CMD_SHOW}
+     * @param argument teks bebas (boleh kosong), mis. path folder; dikirim sebagai Base64 UTF-8
+     */
+    public record Request(String command, String argument) {
+
+        public Request {
+            Objects.requireNonNull(command, "command");
+            if (!COMMAND.matcher(command).matches()) {
+                throw new IllegalArgumentException("Perintah single-instance tidak sah");
+            }
+            argument = argument == null ? "" : argument;
+            if (argument.length() > MAX_ARGUMENT_CHARS) {
+                throw new IllegalArgumentException("Argumen single-instance terlalu panjang");
+            }
+        }
+
+        /** Tampilkan window instance yang sedang berjalan. */
+        public static Request show() {
+            return new Request(CMD_SHOW, "");
+        }
+
+        String encode() {
+            return argument.isEmpty() ? command
+                    : command + " " + Base64.getEncoder().encodeToString(argument.getBytes(StandardCharsets.UTF_8));
+        }
+
+        /** @return null kalau baris perintah tidak sah */
+        static Request decode(String line) {
+            int space = line.indexOf(' ');
+            String command = space < 0 ? line : line.substring(0, space);
+            try {
+                String argument = space < 0 ? ""
+                        : new String(Base64.getDecoder().decode(line.substring(space + 1)), StandardCharsets.UTF_8);
+                return new Request(command, argument);
+            } catch (IllegalArgumentException e) {
+                return null;
+            }
+        }
+    }
 
     /** Hasil {@link #acquire}. */
     public sealed interface Result {
@@ -60,7 +114,7 @@ public final class SingleInstance implements AutoCloseable {
     public record Primary(SingleInstance instance) implements Result {
     }
 
-    /** Instance lain sudah ada dan sudah diminta menampilkan window; proses ini sebaiknya keluar. */
+    /** Instance lain sudah ada dan sudah menerima permintaan; proses ini sebaiknya keluar. */
     public record Signaled() implements Result {
     }
 
@@ -78,8 +132,8 @@ public final class SingleInstance implements AutoCloseable {
     private final byte[] token;
     private final Path portFile;
     private final Object handlerLock = new Object();
-    private Runnable onShow; // guarded by handlerLock
-    private boolean pendingShow; // guarded by handlerLock
+    private Consumer<Request> handler; // guarded by handlerLock
+    private final List<Request> pending = new ArrayList<>(); // guarded by handlerLock
 
     private SingleInstance(FileChannel lockChannel, FileLock lock, ServerSocket server, byte[] token, Path portFile) {
         this.lockChannel = lockChannel;
@@ -95,7 +149,17 @@ public final class SingleInstance implements AutoCloseable {
      * @throws IOException kalau folder/lock/socket tidak bisa dibuat sama sekali
      */
     public static Result acquire(Path dir) throws IOException {
+        return acquire(dir, Request.show());
+    }
+
+    /**
+     * Ambil lock instance di {@code dir}, atau kirim {@code request} ke instance yang sudah berjalan.
+     *
+     * @throws IOException kalau folder/lock/socket tidak bisa dibuat sama sekali
+     */
+    public static Result acquire(Path dir, Request request) throws IOException {
         Objects.requireNonNull(dir, "dir");
+        Objects.requireNonNull(request, "request");
         Files.createDirectories(dir);
         var channel = FileChannel.open(dir.resolve(LOCK_FILE), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
         FileLock lock;
@@ -109,7 +173,7 @@ public final class SingleInstance implements AutoCloseable {
         }
         if (lock == null) {
             channel.close();
-            return signal(dir.resolve(PORT_FILE));
+            return signal(dir.resolve(PORT_FILE), request);
         }
         try {
             var server = new ServerSocket();
@@ -128,20 +192,19 @@ public final class SingleInstance implements AutoCloseable {
     }
 
     /**
-     * Pasang handler permintaan "tampilkan window". Permintaan yang datang sebelum handler terpasang (selama aplikasi
-     * masih memuat) dijalankan sekali saat handler dipasang. Handler dipanggil di thread socket, bukan EDT.
+     * Pasang handler permintaan dari instance kedua. Permintaan yang datang sebelum handler terpasang (selama aplikasi
+     * masih memuat) diantre lalu dijalankan berurutan saat handler dipasang; permintaan yang sama persis cukup sekali.
+     * Handler dipanggil di thread socket (atau thread pemanggil method ini), bukan EDT.
      */
-    public void listen(Runnable handler) {
+    public void listen(Consumer<Request> handler) {
         Objects.requireNonNull(handler, "handler");
-        boolean deliver;
+        List<Request> deliver;
         synchronized (handlerLock) {
-            onShow = handler;
-            deliver = pendingShow;
-            pendingShow = false;
+            this.handler = handler;
+            deliver = List.copyOf(pending);
+            pending.clear();
         }
-        if (deliver) {
-            handler.run();
-        }
+        deliver.forEach(handler);
     }
 
     int port() {
@@ -189,22 +252,23 @@ public final class SingleInstance implements AutoCloseable {
             log.warn("Permintaan single-instance dengan token salah diabaikan");
             return;
         }
-        if (!CMD_SHOW.equals(lines[1])) {
-            log.debug("Perintah single-instance tidak dikenal diabaikan");
+        Request request = Request.decode(lines[1]);
+        if (request == null) {
+            log.debug("Perintah single-instance tidak sah diabaikan");
             return;
         }
-        Runnable handler;
+        Consumer<Request> current;
         synchronized (handlerLock) {
-            handler = onShow;
-            if (handler == null) {
-                pendingShow = true;
+            current = handler;
+            if (current == null && pending.size() < MAX_PENDING && !pending.contains(request)) {
+                pending.add(request);
             }
         }
         OutputStream out = client.getOutputStream();
         out.write((REPLY_OK + "\n").getBytes(StandardCharsets.US_ASCII));
         out.flush();
-        if (handler != null) {
-            handler.run();
+        if (current != null) {
+            current.accept(request);
         }
     }
 
@@ -251,12 +315,12 @@ public final class SingleInstance implements AutoCloseable {
     }
 
     /** Hubungi instance yang sedang berjalan lewat data di {@code portFile}. */
-    static Result signal(Path portFile) {
+    static Result signal(Path portFile, Request request) {
         long deadline = System.nanoTime() + PORT_WAIT_MS * 1_000_000L;
         String lastError;
         while (true) {
             try {
-                return send(portFile);
+                return send(portFile, request);
             } catch (NoSuchFileException e) {
                 lastError = "file port belum ada";
             } catch (IOException | RuntimeException e) {
@@ -274,7 +338,7 @@ public final class SingleInstance implements AutoCloseable {
         }
     }
 
-    private static Result send(Path portFile) throws IOException {
+    private static Result send(Path portFile, Request request) throws IOException {
         String[] parts = Files.readString(portFile, StandardCharsets.US_ASCII).strip().split("\n");
         if (parts.length != 2) {
             throw new IOException("format file port tidak sah");
@@ -289,7 +353,7 @@ public final class SingleInstance implements AutoCloseable {
             socket.connect(new InetSocketAddress(InetAddress.getLoopbackAddress(), port), IO_TIMEOUT_MS);
             socket.setSoTimeout(IO_TIMEOUT_MS);
             OutputStream out = socket.getOutputStream();
-            out.write((parts[1].strip() + "\n" + CMD_SHOW + "\n").getBytes(StandardCharsets.US_ASCII));
+            out.write((parts[1].strip() + "\n" + request.encode() + "\n").getBytes(StandardCharsets.US_ASCII));
             out.flush();
             byte[] reply = socket.getInputStream().readNBytes(REPLY_OK.length());
             if (!REPLY_OK.equals(new String(reply, StandardCharsets.US_ASCII))) {

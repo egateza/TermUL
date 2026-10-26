@@ -18,6 +18,7 @@ import dev.egateza.termul.app.sftp.SftpColumns;
 import dev.egateza.termul.app.sftp.SftpPanel;
 import dev.egateza.termul.app.sftp.SystemFileIcons;
 import dev.egateza.termul.app.startup.AutoStart;
+import dev.egateza.termul.app.startup.ExplorerMenu;
 import dev.egateza.termul.app.terminal.BackgroundImages;
 import dev.egateza.termul.app.terminal.SplitPanes;
 import dev.egateza.termul.app.terminal.TerminalSettings;
@@ -193,6 +194,11 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     /** Run at startup; null di OS yang tidak didukung (opsinya disembunyikan). */
     private final AutoStart autoStart = AutoStart.forCurrentOs();
     private JCheckBoxMenuItem miRunAtStartup; // EDT; null kalau autoStart null
+    /** Menu klik kanan Explorer; null di luar Windows (opsinya disembunyikan). */
+    private final ExplorerMenu explorerMenu = ExplorerMenu.forCurrentOs();
+    private JCheckBoxMenuItem miExplorerMenu; // EDT; null kalau explorerMenu null
+    /** Daftar shell terakhir yang dikirim ke registry, supaya tidak ditulis ulang tanpa perubahan. EDT. */
+    private List<ExplorerMenu.Entry> explorerEntriesSynced;
     private boolean trayHintShown; // EDT; notifikasi "tetap berjalan di tray" sekali per sesi
     /** Start tersembunyi ({@code --tray}): streak baru dihitung saat window pertama kali dibuka user. EDT. */
     private boolean streakPending;
@@ -250,6 +256,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         this.hostTree = new HostTreePanel(this);
         hostTree.setLocalChoices(localChoices());
         ctx.locals().store().addListener(s -> SwingUtilities.invokeLater(this::refreshLocalChoices));
+        syncExplorerMenu(); // label ikut bahasa & daftar shell saat ini
         this.highlightSettings = ctx.highlights().snapshot();
         ctx.highlights().addListener(s -> SwingUtilities.invokeLater(() -> highlightChanged(s)));
         ctx.shortcuts().addListener(o -> SwingUtilities.invokeLater(
@@ -1018,6 +1025,13 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             menu.add(miRunAtStartup);
             refreshRunAtStartup();
         }
+        if (explorerMenu != null) {
+            miExplorerMenu = new JCheckBoxMenuItem(I18n.t("menu.settings.tray.explorerMenu"));
+            miExplorerMenu.setEnabled(false); // sampai status dari registry terbaca
+            miExplorerMenu.addActionListener(e -> setExplorerMenu(miExplorerMenu.isSelected()));
+            menu.add(miExplorerMenu);
+            refreshExplorerMenu();
+        }
         menu.addMenuListener(new javax.swing.event.MenuListener() {
             @Override
             public void menuSelected(javax.swing.event.MenuEvent e) {
@@ -1025,6 +1039,9 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                 syncSubOptions.run();
                 if (autoStart != null) {
                     refreshRunAtStartup();
+                }
+                if (explorerMenu != null) {
+                    refreshExplorerMenu();
                 }
             }
 
@@ -1064,6 +1081,66 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         }, this::showRunAtStartup, err -> {
             Dialogs.error(this, I18n.t("menu.settings.tray.runAtStartup.failed"), err);
             refreshRunAtStartup();
+        });
+    }
+
+    /** Baca status menu klik kanan Explorer dari registry di io, tampilkan di EDT. */
+    private void refreshExplorerMenu() {
+        UiAsync.run(io, explorerMenu::status, this::showExplorerMenu,
+                err -> showExplorerMenu(ExplorerMenu.Status.DISABLED));
+    }
+
+    private void setExplorerMenu(boolean on) {
+        miExplorerMenu.setEnabled(false); // cegah klik ganda selama registry ditulis
+        var entries = explorerEntries();
+        UiAsync.run(io, () -> {
+            try {
+                explorerMenu.setEnabled(on, entries);
+            } catch (IOException e) {
+                throw new java.io.UncheckedIOException(e);
+            }
+            return explorerMenu.status();
+        }, status -> {
+            explorerEntriesSynced = entries;
+            showExplorerMenu(status);
+        }, err -> {
+            Dialogs.error(this, I18n.t("menu.settings.tray.explorerMenu.failed"), err);
+            refreshExplorerMenu();
+        });
+    }
+
+    private void showExplorerMenu(ExplorerMenu.Status status) {
+        miExplorerMenu.setSelected(status == ExplorerMenu.Status.ENABLED);
+        miExplorerMenu.setEnabled(status != ExplorerMenu.Status.UNSUPPORTED);
+        miExplorerMenu.setToolTipText(status == ExplorerMenu.Status.UNSUPPORTED
+                ? I18n.t("menu.settings.tray.runAtStartup.unsupported")
+                : I18n.t("menu.settings.tray.explorerMenu.tooltip"));
+    }
+
+    /** Item submenu Explorer: satu per pilihan terminal lokal, default dulu. EDT. */
+    private List<ExplorerMenu.Entry> explorerEntries() {
+        return localChoices().stream()
+                .map(c -> new ExplorerMenu.Entry(c.id(), I18n.t("explorerMenu.open", c.name())))
+                .toList();
+    }
+
+    /** Samakan submenu Explorer dengan daftar terminal lokal (kalau menu terpasang). EDT. */
+    private void syncExplorerMenu() {
+        if (explorerMenu == null) {
+            return;
+        }
+        var entries = explorerEntries();
+        if (entries.equals(explorerEntriesSynced)) {
+            return;
+        }
+        explorerEntriesSynced = entries;
+        io.execute(() -> {
+            try {
+                explorerMenu.sync(entries);
+            } catch (IOException | RuntimeException e) {
+                org.slf4j.LoggerFactory.getLogger(MainFrame.class)
+                        .warn("Menu klik kanan Explorer tidak bisa diperbarui: {}", e.toString());
+            }
         });
     }
 
@@ -3146,6 +3223,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
     private void refreshLocalChoices() {
         hostTree.setLocalChoices(localChoices());
+        syncExplorerMenu();
     }
 
     /** Tab terminal lokal baru dengan profil default (ADR 0005). EDT. */
@@ -3160,6 +3238,30 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         var choices = localChoices();
         choices.stream().filter(c -> c.id().equals(id)).findFirst().or(() -> choices.stream().findFirst())
                 .ifPresent(this::openLocal);
+    }
+
+    /**
+     * Tab terminal lokal yang dimulai di {@code directory} (menu klik kanan Explorer). Shell yang sudah tidak ada =
+     * default. EDT.
+     */
+    public void openLocalIn(java.util.UUID shell, java.nio.file.Path directory) {
+        showWindow();
+        var choices = localChoices();
+        choices.stream().filter(c -> c.id().equals(shell)).findFirst().or(() -> choices.stream().findFirst())
+                .map(c -> startingIn(c, directory))
+                .ifPresent(this::openLocal);
+    }
+
+    /**
+     * Salinan pilihan dengan folder awal lain. {@code CHERE_INVOKING} mencegah login shell MSYS (Git Bash) pindah ke
+     * home; shell lain mengabaikannya.
+     */
+    private static dev.egateza.termul.app.terminal.LocalProfiles.Choice startingIn(
+            dev.egateza.termul.app.terminal.LocalProfiles.Choice c, java.nio.file.Path directory) {
+        var env = new java.util.LinkedHashMap<>(c.environment());
+        env.putIfAbsent("CHERE_INVOKING", "1");
+        return new dev.egateza.termul.app.terminal.LocalProfiles.Choice(c.id(), c.name(), c.command(),
+                directory.toString(), java.util.Map.copyOf(env), c.terminalTheme(), c.detected(), c.isDefault());
     }
 
     @Override

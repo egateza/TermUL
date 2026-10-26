@@ -8,6 +8,7 @@ import dev.egateza.termul.app.ssh.SwingFtpsCertPrompt;
 import dev.egateza.termul.app.ssh.SwingHostKeyPrompt;
 import dev.egateza.termul.app.startup.AutoStart;
 import dev.egateza.termul.app.startup.ForegroundPermission;
+import dev.egateza.termul.app.startup.OpenLocalRequest;
 import dev.egateza.termul.app.terminal.BackgroundImages;
 import dev.egateza.termul.app.terminal.TerminalSettings;
 import dev.egateza.termul.app.update.AppUpdates;
@@ -53,6 +54,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -82,8 +84,10 @@ public final class TermULApp {
         Thread.setDefaultUncaughtExceptionHandler((t, e) -> log.error("Uncaught exception di thread {}", t.getName(), e));
 
         // satu instance per folder data: membuka TermUL lagi (mis. saat di tray) menampilkan window yang sudah ada
-        SingleInstance instance = acquireInstance(paths, log);
-        boolean startHidden = List.of(args).contains(AutoStart.ARG_TRAY);
+        Optional<OpenLocalRequest> openLocal = OpenLocalRequest.parse(args); // menu klik kanan Explorer
+        SingleInstance instance = acquireInstance(paths, log,
+                openLocal.map(OpenLocalRequest::toRequest).orElseGet(SingleInstance.Request::show));
+        boolean startHidden = openLocal.isEmpty() && List.of(args).contains(AutoStart.ARG_TRAY);
 
         ExecutorService io = Executors.newSingleThreadExecutor(Thread.ofPlatform().name("io").daemon().factory());
         ExecutorService sshOps = Executors.newThreadPerTaskExecutor(Thread.ofVirtual().name("ssh-ops-", 0).factory());
@@ -175,8 +179,10 @@ public final class TermULApp {
                 frame.startStreak();
             }
             frame.startUpdateChecks();
+            openLocal.ifPresent(o -> frame.openLocalIn(o.shell(), o.directory()));
             if (instance != null) {
-                instance.listen(() -> SwingUtilities.invokeLater(frame::showWindow));
+                instance.listen(request -> SwingUtilities.invokeLater(() -> OpenLocalRequest.from(request)
+                        .ifPresentOrElse(o -> frame.openLocalIn(o.shell(), o.directory()), frame::showWindow)));
             }
             io.execute(() -> AppUpdates.markHealthy(paths, log)); // rollback otomatis tidak dipicu untuk versi ini
             UiAsync.run(io, store::load, frame::showSnapshot,
@@ -189,11 +195,11 @@ public final class TermULApp {
      *
      * @return null kalau pemeriksaan gagal (lanjut tanpa single instance, seperti sebelum fitur ini ada)
      */
-    private static SingleInstance acquireInstance(AppPaths paths, Logger log) {
+    private static SingleInstance acquireInstance(AppPaths paths, Logger log, SingleInstance.Request request) {
         ForegroundPermission.allowAny(); // instance kedua: izinkan instance pertama membawa window-nya ke depan
         SingleInstance.Result result;
         try {
-            result = SingleInstance.acquire(paths.configDir());
+            result = SingleInstance.acquire(paths.configDir(), request);
         } catch (IOException | RuntimeException e) {
             log.warn("Pemeriksaan single instance gagal, lanjut tanpa: {}", e.toString());
             return null;
@@ -202,7 +208,7 @@ public final class TermULApp {
             case SingleInstance.Primary(var instance) -> {
                 return instance;
             }
-            case SingleInstance.Signaled() -> log.info("TermUL sudah berjalan: window instance itu ditampilkan");
+            case SingleInstance.Signaled() -> log.info("TermUL sudah berjalan: permintaan diteruskan ke instance itu");
             case SingleInstance.Unreachable(var reason) -> {
                 log.warn("TermUL sudah berjalan tetapi tidak merespons: {}", reason);
                 var config = new ConfigStore(paths.configFile());

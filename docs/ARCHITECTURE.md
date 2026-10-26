@@ -240,3 +240,15 @@ distro (`localhost:<port>`). Profilnya `HostProfile` dengan field `wslDistro`, j
 - Latar terminal: `ZoomableTermWidget` mengisi latar (warna default JediTerm + gambar latar tema) dengan
   `AlphaComposite.Src` × `TerminalTranslucency.percent()`, lalu teks lewat `FillFilterGraphics2D`.
 - macOS: window tanpa dekorasi hanya kalau transparansi aktif saat start; dari 100% butuh restart.
+
+## Menu klik kanan Explorer (ADR 0009)
+- `ExplorerMenu` / `WindowsExplorerMenu` (app, `startup`) menulis cascading menu "TermUL" di
+  `HKCU\Software\Classes\{Directory\Background, Directory, Drive}\shell\TermUL`. Ada satu item per pilihan terminal
+  lokal, dan tiap item menjalankan `TermUL.exe --open-local=<id> --cwd "%V"`. `MainFrame.syncExplorerMenu` menulis ulang
+  daftarnya di io saat daftar terminal lokal berubah, kalau menu terpasang.
+- `OpenLocalRequest.parse` membaca argumen tersebut di `TermULApp.main`, sebelum `SingleInstance.acquire`.
+  - Kalau TermUL sudah berjalan, permintaan dikirim sebagai `SingleInstance.Request("open-local", "<id>\n<folder>")`.
+    Proses baru langsung keluar, dan instance utama memanggil `MainFrame.openLocalIn` di EDT.
+  - Kalau TermUL belum berjalan, tab dibuka setelah window tampil.
+- `openLocalIn` menyalin `LocalProfiles.Choice` dengan `directory` = folder, ditambah `CHERE_INVOKING=1` di
+  environment.

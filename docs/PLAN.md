@@ -84,6 +84,11 @@ Catatan implementasi: satu `sudo sh -c` per upload (backup ke `/var/backups/term
 - [ ] Acceptance manual macOS + Windows (ConPTY)
 - [x] Tahap 2: profil terminal lokal (deteksi PowerShell/cmd/Git Bash/WSL/`/etc/shells`, profil custom, default)
 - [ ] Acceptance manual tahap 2 (Windows: PowerShell 7, cmd, Git Bash, WSL)
+- [x] Menu klik kanan Explorer "TermUL ▸ Buka &lt;shell&gt; di sini" (ADR 0009): opt-in di Pengaturan → Tray & startup,
+  registry HKCU, diteruskan ke instance yang berjalan lewat `SingleInstance`
+- [ ] Acceptance manual menu Explorer (folder, area kosong folder, root drive `C:\`, path dengan spasi/Unicode, TermUL
+  belum jalan vs sudah jalan di tray, Git Bash tetap di folder, WSL, Windows 11 "Show more options")
+- [ ] Padanan macOS (Quick Action Finder + folder dijatuhkan ke ikon Dock)
 
 ## Fase 8: Highlight teks
 - [x] Profil keyword (teks/regex, warna Tabby 0–255/#RRGGBB/nama, gaya), penugasan host/grup/terminal lokal/global,

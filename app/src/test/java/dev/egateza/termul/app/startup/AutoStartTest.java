@@ -42,6 +42,11 @@ class AutoStartTest {
         public void delete(String key, String name) {
             values.remove(key + "|" + name);
         }
+
+        @Override
+        public void deleteTree(String key) {
+            values.keySet().removeIf(k -> k.startsWith(key + "|") || k.startsWith(key + "\\"));
+        }
     }
 
     @Test

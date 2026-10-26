@@ -120,5 +120,5 @@ Arah dependensi: `app → terminal, sftp → ssh → core`, `vault → core`, `a
 | `docs/SETUP.md` | Tools, dependensi, environment dev & test |
 | `docs/RELEASE.md` | Menerbitkan rilis baru ke GitHub Releases (update lewat menu); Windows: `tools/release.ps1`, Mac: `tools/release-mac.sh` |
 | `docs/RELEASE-CROSS-PLATFORM.md` | Satu tag rilis berisi aset Windows + macOS: draft dari satu mesin, aset dari mesin lain (`-AssetsOnly` / `--dmg-only`) |
-| `docs/adr/` | Architecture Decision Records (0003: update via GitHub Releases, 0004: WSL lewat SSH + WSL Manager, 0005: terminal lokal lewat pty4j, 0006: Ingat di Mac ini via Keychain, 0007: FTP/FTPS, 0008: transparansi + bingkai Windows sendiri) |
+| `docs/adr/` | Architecture Decision Records (0003: update via GitHub Releases, 0004: WSL lewat SSH + WSL Manager, 0005: terminal lokal lewat pty4j, 0006: Ingat di Mac ini via Keychain, 0007: FTP/FTPS, 0008: transparansi + bingkai Windows sendiri, 0009: menu klik kanan Explorer) |
 | `docs/local-terminal-plan.md` | Rencana & progres terminal lokal (ADR 0005) |
