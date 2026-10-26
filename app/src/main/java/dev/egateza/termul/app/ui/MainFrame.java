@@ -3272,9 +3272,21 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         mutate(I18n.t("localProfiles.saveFailed", ""), () -> ctx.locals().store().setDefault(id));
     }
 
+    /** Sembunyikan profil/shell dari daftar terminal lokal (aktifkan lagi lewat Profil terminal lokal). EDT. */
+    @Override
+    public void disableLocalProfile(java.util.UUID id) {
+        var choices = localChoices();
+        if (choices.stream().noneMatch(c -> !c.id().equals(id))) {
+            Dialogs.info(this, I18n.t("localProfiles.title"), I18n.t("localProfiles.lastEnabled"));
+            return;
+        }
+        mutate(I18n.t("localProfiles.saveFailed", ""), () -> ctx.locals().store().setDisabled(id, true));
+    }
+
     @Override
     public void manageLocalProfiles() {
-        new LocalProfilesDialog(this, ctx.locals().store(), this::localChoices,
+        new LocalProfilesDialog(this, ctx.locals().store(),
+                () -> ctx.locals().allChoices(wsl == null ? List.of() : wsl.installedNames()),
                 HostTerminalColors.choices(customThemes), io).setVisible(true);
     }
 

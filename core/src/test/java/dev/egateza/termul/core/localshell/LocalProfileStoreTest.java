@@ -58,6 +58,68 @@ class LocalProfileStoreTest {
     }
 
     @Test
+    void nonaktifTersimpanDanBisaDiaktifkanLagi() {
+        Path file = dir.resolve("p.json");
+        var store = new LocalProfileStore(file);
+        var custom = LocalProfile.create("Proyek", List.of("zsh"));
+        UUID detected = UUID.randomUUID(); // id shell terdeteksi: tidak ada di daftar profil
+        store.save(custom);
+
+        store.setDisabled(detected, true);
+        store.setDisabled(custom.id(), true);
+
+        var reloaded = new LocalProfileStore(file).load();
+        assertThat(reloaded.isDisabled(detected)).isTrue();
+        assertThat(reloaded.isDisabled(custom.id())).isTrue();
+        assertThat(reloaded.profiles()).extracting(LocalProfile::id).containsExactly(custom.id()); // tidak terhapus
+
+        store.setDisabled(detected, false);
+
+        assertThat(store.snapshot().isDisabled(detected)).isFalse();
+        assertThat(store.snapshot().isDisabled(custom.id())).isTrue();
+    }
+
+    @Test
+    void menonaktifkanDefaultMengembalikanDefaultOtomatis() {
+        var store = new LocalProfileStore(dir.resolve("p.json"));
+        var custom = LocalProfile.create("Proyek", List.of("zsh"));
+        store.save(custom);
+        store.setDefault(custom.id());
+
+        store.setDisabled(custom.id(), true);
+
+        assertThat(store.snapshot().defaultId()).isNull();
+    }
+
+    @Test
+    void jadikanDefaultDanHapusMembersihkanTandaNonaktif() {
+        var store = new LocalProfileStore(dir.resolve("p.json"));
+        var a = LocalProfile.create("A", List.of("zsh"));
+        var b = LocalProfile.create("B", List.of("bash"));
+        store.save(a);
+        store.save(b);
+        store.setDisabled(a.id(), true);
+        store.setDisabled(b.id(), true);
+
+        store.setDefault(a.id());
+        store.delete(b.id());
+
+        assertThat(store.snapshot().disabled()).isEmpty();
+        assertThat(store.snapshot().defaultId()).isEqualTo(a.id());
+    }
+
+    @Test
+    void fileLamaTanpaDaftarNonaktifTetapTerbaca() throws Exception {
+        Path file = dir.resolve("p.json");
+        Files.writeString(file, "{\"format\":1,\"defaultId\":null,\"profiles\":[]}");
+
+        var state = new LocalProfileStore(file).load();
+
+        assertThat(state.disabled()).isEmpty();
+        assertThat(Files.exists(file)).isTrue(); // tidak dianggap rusak
+    }
+
+    @Test
     void fileRusakDisisihkan() throws Exception {
         Path file = dir.resolve("local-profiles.json");
         Files.writeString(file, "{ rusak");

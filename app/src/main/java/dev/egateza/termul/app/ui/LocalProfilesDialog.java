@@ -64,6 +64,7 @@ public final class LocalProfilesDialog extends JDialog {
     private final JButton duplicate = new JButton(I18n.t("localProfiles.duplicate"));
     private final JButton delete = new JButton(I18n.t("localProfiles.delete"));
     private final JButton makeDefault = new JButton(I18n.t("localProfiles.makeDefault"));
+    private final JButton toggleDisabled = new JButton(I18n.t("localProfiles.disable"));
     private final JButton save = new JButton(I18n.t("localProfiles.save"));
     private final List<JComponent> editable = new ArrayList<>();
     private UUID editing; // EDT; null = profil baru (belum disimpan)
@@ -93,11 +94,18 @@ public final class LocalProfilesDialog extends JDialog {
                 if (c.detected()) {
                     tags.add(I18n.t("localProfiles.detected"));
                 }
-                String html = "<html><b>" + escape(c.name()) + "</b>"
+                boolean off = isDisabled(c);
+                if (off) {
+                    tags.add(I18n.t("localProfiles.disabled"));
+                }
+                String html = "<html>" + (off ? "<s>" : "<b>") + escape(c.name()) + (off ? "</s>" : "</b>")
                         + (tags.isEmpty() ? "" : " <font color='gray'>· " + escape(String.join(" · ", tags)) + "</font>")
                         + "<br><span style='font-size:90%'>" + escape(c.commandLine()) + "</span></html>";
                 var label = (JLabel) super.getListCellRendererComponent(l, html, index, selected, focus);
                 label.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
+                if (off && !selected) {
+                    label.setForeground(UIManager.getColor("Label.disabledForeground"));
+                }
                 return label;
             }
         });
@@ -152,6 +160,8 @@ public final class LocalProfilesDialog extends JDialog {
         duplicate.addActionListener(e -> duplicateSelected());
         delete.addActionListener(e -> deleteSelected());
         makeDefault.addActionListener(e -> makeDefaultSelected());
+        toggleDisabled.addActionListener(e -> toggleDisabledSelected());
+        toggleDisabled.setToolTipText(I18n.t("localProfiles.disable.tooltip"));
         save.addActionListener(e -> save());
         var close = new JButton(I18n.t("localProfiles.close"));
         close.addActionListener(e -> dispose());
@@ -160,6 +170,7 @@ public final class LocalProfilesDialog extends JDialog {
         left.add(duplicate);
         left.add(delete);
         left.add(makeDefault);
+        left.add(toggleDisabled);
         var right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
         right.add(save);
         right.add(close);
@@ -226,8 +237,15 @@ public final class LocalProfilesDialog extends JDialog {
         readOnlyNote.setText(c.detected() ? I18n.t("localProfiles.detectedNote") : " ");
         duplicate.setEnabled(true);
         delete.setEnabled(!c.detected());
-        makeDefault.setEnabled(!c.isDefault());
+        boolean off = isDisabled(c);
+        makeDefault.setEnabled(!c.isDefault() && !off);
+        toggleDisabled.setEnabled(true);
+        toggleDisabled.setText(I18n.t(off ? "localProfiles.enable" : "localProfiles.disable"));
         error.setText(" ");
+    }
+
+    private boolean isDisabled(LocalProfiles.Choice c) {
+        return store.snapshot().isDisabled(c.id());
     }
 
     private void startNew() {
@@ -244,6 +262,7 @@ public final class LocalProfilesDialog extends JDialog {
         duplicate.setEnabled(false);
         delete.setEnabled(false);
         makeDefault.setEnabled(false);
+        toggleDisabled.setEnabled(false);
         error.setText(" ");
         name.requestFocusInWindow();
     }
@@ -263,6 +282,7 @@ public final class LocalProfilesDialog extends JDialog {
         duplicate.setEnabled(false);
         delete.setEnabled(false);
         makeDefault.setEnabled(false);
+        toggleDisabled.setEnabled(false);
         name.requestFocusInWindow();
         name.selectAll();
     }
@@ -320,6 +340,27 @@ public final class LocalProfilesDialog extends JDialog {
         UiAsync.run(io, () -> store.setDefault(c.id()),
                         err -> error.setText(I18n.t("localProfiles.saveFailed", err.getMessage())))
                 .thenRun(() -> SwingUtilities.invokeLater(() -> reload(c.id())));
+    }
+
+    /** Nonaktifkan/aktifkan pilihan terpilih; minimal satu pilihan harus tetap aktif. */
+    private void toggleDisabledSelected() {
+        LocalProfiles.Choice c = list.getSelectedValue();
+        if (c == null) {
+            return;
+        }
+        boolean disable = !isDisabled(c);
+        if (disable && !canDisable(c, choices.get(), store.snapshot())) {
+            error.setText(I18n.t("localProfiles.lastEnabled"));
+            return;
+        }
+        UiAsync.run(io, () -> store.setDisabled(c.id(), disable),
+                        err -> error.setText(I18n.t("localProfiles.saveFailed", err.getMessage())))
+                .thenRun(() -> SwingUtilities.invokeLater(() -> reload(c.id())));
+    }
+
+    /** @return false kalau {@code c} satu-satunya pilihan yang masih aktif */
+    static boolean canDisable(LocalProfiles.Choice c, List<LocalProfiles.Choice> all, LocalProfileStore.State state) {
+        return all.stream().anyMatch(o -> !o.id().equals(c.id()) && !state.isDisabled(o.id()));
     }
 
     private void selectColor(String id) {

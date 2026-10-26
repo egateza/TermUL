@@ -40,6 +40,32 @@ class LocalProfilesTest {
     }
 
     @Test
+    void pilihanNonaktifDisembunyikanTapiTetapAdaDiSemuaPilihan() {
+        var store = new LocalProfileStore(dir.resolve("p.json"));
+        var custom = LocalProfile.create("Proyek", List.of("/bin/zsh", "-l"));
+        store.save(custom);
+        store.setDisabled(zsh.id(), true);
+
+        var p = profiles(store);
+
+        assertThat(p.choices(List.of())).extracting(LocalProfiles.Choice::name).containsExactly("bash", "Proyek");
+        assertThat(p.choices(List.of()).getFirst().isDefault()).isTrue(); // default pindah ke pilihan aktif pertama
+        assertThat(p.allChoices(List.of())).extracting(LocalProfiles.Choice::name)
+                .containsExactly("bash", "zsh", "Proyek");
+        assertThat(p.find(zsh.id(), List.of())).isEmpty(); // menu Explorer lama: jatuh ke default
+    }
+
+    @Test
+    void kalauSemuaNonaktifSemuaTetapDitawarkan() {
+        var store = new LocalProfileStore(dir.resolve("p.json"));
+        store.setDisabled(zsh.id(), true);
+        store.setDisabled(bash.id(), true);
+
+        assertThat(profiles(store).choices(List.of())).extracting(LocalProfiles.Choice::name)
+                .containsExactly("zsh", "bash");
+    }
+
+    @Test
     void defaultTersimpanDitaruhPalingAtas() {
         var store = new LocalProfileStore(dir.resolve("p.json"));
         var custom = LocalProfile.create("Proyek", List.of("/bin/zsh", "-l"));

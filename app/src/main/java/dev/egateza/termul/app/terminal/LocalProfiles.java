@@ -64,12 +64,21 @@ public final class LocalProfiles {
     }
 
     /**
-     * Default dulu, lalu shell terdeteksi, lalu profil buatan user (urut nama). Default = pilihan tersimpan kalau masih
-     * ada; selain itu shell terdeteksi pertama ($SHELL / PowerShell 7).
+     * Pilihan yang aktif (untuk tree, Tab baru, Quick Open, menu Explorer): default dulu, lalu shell terdeteksi, lalu
+     * profil buatan user (urut nama). Default = pilihan tersimpan kalau masih ada dan aktif; selain itu pilihan aktif
+     * pertama. Kalau semuanya nonaktif (mis. file diedit manual), semua tetap ditawarkan supaya selalu ada terminal.
      *
      * @param wslDistros distro WSL terpasang (kosong kalau Manajemen WSL mati)
      */
     public List<Choice> choices(List<String> wslDistros) {
+        var all = allChoices(wslDistros);
+        var state = store.snapshot();
+        var enabled = all.stream().filter(c -> !state.isDisabled(c.id())).toList();
+        return enabled.isEmpty() ? all : enabled;
+    }
+
+    /** Semua pilihan termasuk yang nonaktif (dialog Profil terminal lokal), dengan urutan yang sama. */
+    public List<Choice> allChoices(List<String> wslDistros) {
         var shells = new ArrayList<>(detected);
         shells.addAll(wslShells.apply(wslDistros));
         var state = store.snapshot();
@@ -81,8 +90,10 @@ public final class LocalProfiles {
             all.add(new Choice(p.id(), p.name(), p.command(), p.directory(), p.environment(), p.terminalTheme(),
                     false, false));
         }
-        UUID defaultId = all.stream().map(Choice::id).filter(id -> id.equals(state.defaultId())).findFirst()
-                .orElse(all.isEmpty() ? null : all.getFirst().id());
+        var enabled = all.stream().map(Choice::id).filter(id -> !state.isDisabled(id)).toList();
+        var candidates = enabled.isEmpty() ? all.stream().map(Choice::id).toList() : enabled;
+        UUID defaultId = candidates.stream().filter(id -> id.equals(state.defaultId())).findFirst()
+                .orElse(candidates.isEmpty() ? null : candidates.getFirst());
         var result = new ArrayList<Choice>(all.size());
         all.stream().filter(c -> c.id().equals(defaultId)).map(LocalProfiles::asDefault).forEach(result::add);
         all.stream().filter(c -> !c.id().equals(defaultId)).forEach(result::add);

@@ -58,6 +58,9 @@ public final class HostTreePanel extends JPanel {
         /** Jadikan profil/shell ini default untuk Terminal lokal baru. */
         void setDefaultLocalProfile(java.util.UUID id);
 
+        /** Sembunyikan profil/shell dari daftar terminal lokal; tidak menghapus apa pun. */
+        void disableLocalProfile(java.util.UUID id);
+
         /** Buka dialog kelola profil terminal lokal. */
         void manageLocalProfiles();
 
@@ -480,6 +483,11 @@ public final class HostTreePanel extends JPanel {
                         () -> actions.setDefaultLocalProfile(n.choice().id()));
                 makeDefault.setEnabled(!n.choice().isDefault());
                 menu.add(makeDefault);
+                var disable = item(null, I18n.t("tree.menu.localDisable"),
+                        () -> actions.disableLocalProfile(n.choice().id()));
+                disable.setToolTipText(I18n.t("localProfiles.disable.tooltip"));
+                disable.setEnabled(localChoices.size() > 1);
+                menu.add(disable);
                 menu.addSeparator();
                 menu.add(item(null, I18n.t("tree.menu.manageLocal"), actions::manageLocalProfiles));
             }

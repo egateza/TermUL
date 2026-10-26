@@ -15,9 +15,11 @@ import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
@@ -40,17 +42,28 @@ public final class LocalProfileStore {
      * Isi store.
      *
      * @param defaultId profil yang dibuka Ctrl+Shift+O / ⇧⌘O (profil buatan user atau shell terdeteksi); null = otomatis
+     * @param disabled  id profil/shell terdeteksi yang dinonaktifkan: tidak ditawarkan di tree, Tab baru, dan menu
+     *                  Explorer, tetapi tetap ada di Pengaturan → Profil terminal lokal
      */
-    public record State(List<LocalProfile> profiles, UUID defaultId) {
+    public record State(List<LocalProfile> profiles, UUID defaultId, Set<UUID> disabled) {
         public State {
             profiles = List.copyOf(profiles);
+            disabled = disabled == null ? Set.of() : Set.copyOf(disabled);
+        }
+
+        public State(List<LocalProfile> profiles, UUID defaultId) {
+            this(profiles, defaultId, Set.of());
+        }
+
+        public boolean isDisabled(UUID id) {
+            return disabled.contains(id);
         }
 
         static final State EMPTY = new State(List.of(), null);
     }
 
-    /** Isi file di disk. */
-    record FileContent(int format, UUID defaultId, List<LocalProfile> profiles) {
+    /** Isi file di disk; {@code disabled} terurut supaya file stabil. */
+    record FileContent(int format, UUID defaultId, List<LocalProfile> profiles, List<UUID> disabled) {
     }
 
     private final Path file;
@@ -71,7 +84,8 @@ public final class LocalProfileStore {
             try {
                 FileContent content = mapper.readValue(Files.readAllBytes(file), new TypeReference<FileContent>() { });
                 state = new State(sorted(content.profiles() == null ? List.of() : content.profiles()),
-                        content.defaultId());
+                        content.defaultId(),
+                        content.disabled() == null ? Set.of() : Set.copyOf(content.disabled()));
                 log.info("Memuat {} profil terminal lokal dari {}", state.profiles().size(), file);
             } catch (NoSuchFileException e) {
                 state = State.EMPTY;
@@ -93,19 +107,45 @@ public final class LocalProfileStore {
             var list = new ArrayList<>(s.profiles());
             list.removeIf(p -> p.id().equals(profile.id()));
             list.add(profile);
-            return new State(list, s.defaultId());
+            return new State(list, s.defaultId(), s.disabled());
         });
     }
 
     /** Hapus profil; kalau profil itu default, default kembali otomatis. */
     public void delete(UUID id) {
         mutate(s -> new State(s.profiles().stream().filter(p -> !p.id().equals(id)).toList(),
-                id.equals(s.defaultId()) ? null : s.defaultId()));
+                id.equals(s.defaultId()) ? null : s.defaultId(), without(s.disabled(), id)));
     }
 
-    /** @param id profil buatan user atau id shell terdeteksi; null = otomatis */
+    /** @param id profil buatan user atau id shell terdeteksi; null = otomatis. Profil nonaktif diaktifkan lagi. */
     public void setDefault(UUID id) {
-        mutate(s -> new State(s.profiles(), id));
+        mutate(s -> new State(s.profiles(), id, without(s.disabled(), id)));
+    }
+
+    /**
+     * Nonaktifkan atau aktifkan lagi profil/shell terdeteksi. Profil default yang dinonaktifkan membuat default kembali
+     * otomatis. Tidak ada yang dihapus, termasuk shell di sistem.
+     */
+    public void setDisabled(UUID id, boolean disabled) {
+        Objects.requireNonNull(id, "id");
+        mutate(s -> {
+            var set = new HashSet<>(s.disabled());
+            if (disabled) {
+                set.add(id);
+            } else {
+                set.remove(id);
+            }
+            return new State(s.profiles(), disabled && id.equals(s.defaultId()) ? null : s.defaultId(), set);
+        });
+    }
+
+    private static Set<UUID> without(Set<UUID> set, UUID id) {
+        if (id == null || !set.contains(id)) {
+            return set;
+        }
+        var copy = new HashSet<>(set);
+        copy.remove(id);
+        return copy;
     }
 
     /** @param listener dipanggil (di thread penulis) setelah isi berubah dan tersimpan */
@@ -117,9 +157,10 @@ public final class LocalProfileStore {
         State next;
         synchronized (lock) {
             State changed = change.apply(state);
-            next = new State(sorted(changed.profiles()), changed.defaultId());
+            next = new State(sorted(changed.profiles()), changed.defaultId(), changed.disabled());
             try {
-                AtomicFiles.write(file, mapper.writeValueAsBytes(new FileContent(1, next.defaultId(), next.profiles())));
+                AtomicFiles.write(file, mapper.writeValueAsBytes(new FileContent(1, next.defaultId(), next.profiles(),
+                        next.disabled().stream().sorted().toList())));
             } catch (IOException e) {
                 throw new UncheckedIOException("Profil terminal lokal tidak bisa disimpan ke " + file, e);
             }
