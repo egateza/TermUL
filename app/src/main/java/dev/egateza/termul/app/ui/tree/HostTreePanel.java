@@ -117,9 +117,15 @@ public final class HostTreePanel extends JPanel {
 
         /** Periksa sshd di distro WSL profil ini dan tampilkan perbaikannya. */
         void checkWslSsh(HostProfile profile);
+
+        /** User membuka/menutup grup: {@code collapsed} = kunci grup yang tertutup (lihat {@link #foldKey}). */
+        void collapsedGroupsChanged(Set<String> collapsed);
     }
 
     private final Actions actions;
+    /** Kunci grup yang ditutup user; hanya diubah oleh buka/tutup dari user, bukan oleh pencarian. EDT. */
+    private final Set<String> collapsed = new HashSet<>();
+    private boolean rebuilding; // EDT; buka/tutup selama rebuild bukan pilihan user
     private final JTextField search = new JTextField();
     private final DefaultTreeModel model = new DefaultTreeModel(new DefaultMutableTreeNode());
     private final JTree tree = new JTree(model);
@@ -156,6 +162,17 @@ public final class HostTreePanel extends JPanel {
         tree.getSelectionModel().setSelectionMode(TreeSelectionModel.DISCONTIGUOUS_TREE_SELECTION);
         tree.setCellRenderer(new Renderer(this::isWslStopped));
         tree.setToggleClickCount(0);
+        tree.addTreeExpansionListener(new javax.swing.event.TreeExpansionListener() {
+            @Override
+            public void treeExpanded(javax.swing.event.TreeExpansionEvent e) {
+                folded(e.getPath(), false);
+            }
+
+            @Override
+            public void treeCollapsed(javax.swing.event.TreeExpansionEvent e) {
+                folded(e.getPath(), true);
+            }
+        });
         javax.swing.ToolTipManager.sharedInstance().registerComponent(tree);
         tree.addMouseListener(new MouseAdapter() {
             @Override
@@ -318,8 +335,47 @@ public final class HostTreePanel extends JPanel {
         search.putClientProperty("FlatLaf.style", "arc: " + arc);
     }
 
+    /** Grup yang tertutup saat start (dari config); grup lain terbuka. */
+    public void setCollapsedGroups(java.util.Collection<String> keys) {
+        collapsed.clear();
+        collapsed.addAll(keys);
+        rebuild();
+    }
+
+    /**
+     * Kunci status buka/tutup sebuah node grup: {@code group:<path>}, {@code builtin:<nama>}, atau {@code local};
+     * null untuk node yang bukan grup.
+     */
+    static String foldKey(Object userObject) {
+        return switch (userObject) {
+            case GroupNode g -> "group:" + g.path();
+            case BuiltinGroup b -> "builtin:" + b.name().toLowerCase(Locale.ROOT);
+            case LocalTerminalNode n -> "local";
+            case null, default -> null;
+        };
+    }
+
+    /** Catat buka/tutup dari user (bukan saat rebuild atau saat pencarian membuka semua grup). */
+    private void folded(TreePath path, boolean closed) {
+        String key = foldKey(userObject(path));
+        if (rebuilding || key == null || !search.getText().isBlank()) {
+            return;
+        }
+        if (closed ? collapsed.add(key) : collapsed.remove(key)) {
+            actions.collapsedGroupsChanged(Set.copyOf(collapsed));
+        }
+    }
+
     private void rebuild() {
-        Set<Object> expanded = expandedGroups();
+        rebuilding = true;
+        try {
+            rebuildTree();
+        } finally {
+            rebuilding = false;
+        }
+    }
+
+    private void rebuildTree() {
         TreePath[] selectedPaths = tree.getSelectionPaths();
         var selected = new java.util.ArrayList<Object[]>(); // {user object node, user object parent-nya}
         for (TreePath p : selectedPaths == null ? new TreePath[0] : selectedPaths) {
@@ -327,18 +383,23 @@ public final class HostTreePanel extends JPanel {
         }
         var reselect = new java.util.ArrayList<TreePath>();
         boolean filtering = !search.getText().isBlank();
-        boolean hadWsl = hasChild((DefaultMutableTreeNode) model.getRoot(), BuiltinGroup.WSL);
 
         var root = HostTreeModelBuilder.build(snapshot, search.getText(), wslRunning, localChoices);
         model.setRoot(root);
 
+        // postorder: subgrup lebih dulu, lalu induknya. Subgrup yang terbuka di dalam induk yang tertutup tetap
+        // diingat JTree, jadi terbuka lagi saat induknya dibuka.
         for (var node : Collections.list(root.depthFirstEnumeration())) {
             var n = (DefaultMutableTreeNode) node;
             var path = new TreePath(n.getPath());
             Object uo = n.getUserObject();
-            if ((uo instanceof GroupNode || uo instanceof BuiltinGroup || uo instanceof LocalTerminalNode)
-                    && (filtering || expanded.contains(uo) || expanded.isEmpty() || (uo == BuiltinGroup.WSL && !hadWsl))) {
-                tree.expandPath(path);
+            String key = foldKey(uo);
+            if (key != null && n != root) {
+                if (filtering || !collapsed.contains(key)) {
+                    tree.expandPath(path);
+                } else {
+                    tree.collapsePath(path);
+                }
             }
             // profil bisa muncul dua kali (grup asli + Favorites/Last used): cocokkan juga parent-nya
             var parent = (DefaultMutableTreeNode) n.getParent();
@@ -356,31 +417,6 @@ public final class HostTreePanel extends JPanel {
     private boolean isWslStopped(HostProfile p) {
         return p.wslDistro() != null && wslRunning != null
                 && wslRunning.stream().noneMatch(d -> d.equalsIgnoreCase(p.wslDistro()));
-    }
-
-    private static boolean hasChild(DefaultMutableTreeNode node, Object userObject) {
-        for (int i = 0; i < node.getChildCount(); i++) {
-            if (((DefaultMutableTreeNode) node.getChildAt(i)).getUserObject() == userObject) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /** User object grup ({@link GroupNode}/{@link BuiltinGroup}) yang sedang terbuka. */
-    private Set<Object> expandedGroups() {
-        var result = new HashSet<Object>();
-        var root = (DefaultMutableTreeNode) model.getRoot();
-        var e = tree.getExpandedDescendants(new TreePath(root.getPath()));
-        if (e != null) {
-            for (var p : Collections.list(e)) {
-                Object uo = userObject(p);
-                if (uo instanceof GroupNode || uo instanceof BuiltinGroup || uo instanceof LocalTerminalNode) {
-                    result.add(uo);
-                }
-            }
-        }
-        return result;
     }
 
     private static boolean isSame(Object a, Object b) {

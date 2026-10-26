@@ -254,6 +254,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         this.updatePrompter = new UpdatePrompter(() -> modalDialogShowing() || !isShowing(),
                 () -> updateDialog != null && updateDialog.isShowing(), version -> openUpdateDialog(true));
         this.hostTree = new HostTreePanel(this);
+        hostTree.setCollapsedGroups(ctx.config().current().collapsedHostGroups());
         hostTree.setLocalChoices(localChoices());
         ctx.locals().store().addListener(s -> SwingUtilities.invokeLater(this::refreshLocalChoices));
         syncExplorerMenu(); // label ikut bahasa & daftar shell saat ini
@@ -3600,5 +3601,12 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     @Override
     public void checkWslSsh(HostProfile profile) {
         wsl.checkProfile(profile);
+    }
+
+    /** Status buka/tutup grup panel host disimpan, supaya sama lagi setelah restart. */
+    @Override
+    public void collapsedGroupsChanged(java.util.Set<String> collapsed) {
+        mutate(I18n.t("error.saveSettings"),
+                () -> ctx.config().save(ctx.config().current().withCollapsedHostGroups(collapsed)));
     }
 }
