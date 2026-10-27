@@ -110,7 +110,7 @@ Lokasi per OS (`AppPaths`): Windows `%APPDATA%` / `%LOCALAPPDATA%`; macOS `~/Lib
   local-profiles.json profil terminal lokal + pilihan default (ADR 0005; teks biasa, tanpa secret); file rusak disisihkan ke .corrupt-<waktu>
   highlight.json      profil highlight teks (keyword format Tabby) + penugasan host/grup/lokal/global; file rusak disisihkan ke .corrupt-<waktu>
   shortcuts.json      shortcut yang diganti user (id aksi → "mod+shift+T", kosong = tanpa shortcut); sisanya default; file rusak disisihkan ke .corrupt-<waktu>
-  snippets.json       snippet perintah (teks biasa, satu baris, tanpa secret); file rusak disisihkan ke .corrupt-<waktu>
+  snippets.json       snippet perintah, format ekspor version 2 + nilai variabel per host (teks biasa, tanpa secret); file rusak disisihkan ke .corrupt-<waktu>
   streak.json         streak api harian (jumlah hari + tanggal terakhir dihitung); file rusak disisihkan ke .corrupt-<waktu>
   instance.lock       FileLock single instance (dipegang selama TermUL berjalan)
   instance.port       port loopback + token acak untuk instance kedua ("tampilkan window"); dihapus saat keluar

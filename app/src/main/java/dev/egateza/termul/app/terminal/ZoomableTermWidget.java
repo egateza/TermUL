@@ -98,6 +98,11 @@ public final class ZoomableTermWidget extends JediTermWidget {
         ((ZoomPanel) getTerminalPanel()).pasteFilter = filter;
     }
 
+    /** true kalau program di terminal meminta bracketed paste (DECSET 2004), mis. bash ≥ 5.1 di prompt. */
+    public boolean isBracketedPaste() {
+        return ((ZoomPanel) getTerminalPanel()).bracketedPaste;
+    }
+
     /** Ganti clipboard sistem (untuk test, yang bisa berjalan headless). */
     void useClipboard(TerminalCopyPasteHandler clipboard) {
         ((ZoomPanel) getTerminalPanel()).clipboard = clipboard;
@@ -117,6 +122,13 @@ public final class ZoomableTermWidget extends JediTermWidget {
         // tanpa initializer: createCopyPasteHandler() dipanggil dari constructor TerminalPanel
         private volatile UnaryOperator<String> pasteFilter;
         private volatile TerminalCopyPasteHandler clipboard; // null = clipboard sistem
+        private volatile boolean bracketedPaste;             // ditulis thread emulator
+
+        @Override
+        public void setBracketedPasteMode(boolean on) {
+            super.setBracketedPasteMode(on);
+            bracketedPaste = on;
+        }
 
         @Override
         protected TerminalCopyPasteHandler createCopyPasteHandler() {

@@ -36,6 +36,8 @@ public enum ShortcutAction {
     EDIT_TRACKER("terminal.editTracker", Category.TERMINAL, "mod+shift+E"),
     INJECT_SUDO("inject.sudo", Category.TERMINAL, "mod+shift+P"),
     INJECT_ROOT("inject.root", Category.TERMINAL, "mod+shift+R"),
+    SNIPPETS("snippet.manage", Category.TERMINAL, "mod+shift+S"),
+    SNIPPET_QUICK("snippet.quick", Category.TERMINAL, "mod+shift+SPACE"),
 
     GROUP("split.group", Category.SPLIT, "mod+G"),
     UNGROUP("split.ungroup", Category.SPLIT, "mod+shift+G"),

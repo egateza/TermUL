@@ -160,6 +160,11 @@ public record AppPaths(Path configDir, Path cacheDir) {
         return configDir.resolve("shortcuts.json");
     }
 
+    /** Bookmark folder panel SFTP/FTP (remote & lokal, per host atau bersama); hanya path, tanpa secret. */
+    public Path bookmarksFile() {
+        return configDir.resolve("bookmarks.json");
+    }
+
     /** Streak harian (berapa hari berturut-turut aplikasi dibuka); bukan tempat secret. */
     public Path streakFile() {
         return configDir.resolve("streak.json");

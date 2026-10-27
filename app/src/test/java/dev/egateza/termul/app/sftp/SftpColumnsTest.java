@@ -2,6 +2,7 @@ package dev.egateza.termul.app.sftp;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.IntStream;
@@ -52,6 +53,20 @@ class SftpColumnsTest {
         assertThat(visible(local, LocalTableModel.COLUMN_IDS)).containsExactly("name", "size", "type", "modified");
         assertThat(remote.getColumnModel().getColumn(2).getPreferredWidth()).as("lebar kolom tetap").isEqualTo(155);
         assertThat(saved).containsExactly(List.of("modified"), List.of("modified", "mode"), List.of("mode"));
+    }
+
+    @Test
+    void tabelYangSudahTidakDipakaiBisaDiGc() throws InterruptedException {
+        var table = new JTable(new SftpTableModel());
+        SftpColumns.install(table, SftpTableModel.COLUMN_IDS);
+        var ref = new WeakReference<>(table);
+        table = null;
+
+        for (int i = 0; i < 50 && ref.get() != null; i++) {
+            System.gc();
+            Thread.sleep(20);
+        }
+        assertThat(ref.get()).as("SftpColumns tidak boleh menahan tabel (dan panel SFTP-nya)").isNull();
     }
 
     @Test

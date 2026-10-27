@@ -2,7 +2,6 @@ package dev.egateza.termul.app.terminal;
 
 import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.app.sftp.ActivityBar;
-import dev.egateza.termul.core.snippet.Snippet;
 import dev.egateza.termul.app.sftp.SftpPanel;
 import dev.egateza.termul.app.ui.AppIcon;
 import dev.egateza.termul.app.ui.fab.FloatingOverlay;
@@ -234,9 +233,66 @@ public final class TerminalTab extends TermPane {
         if (snippetButton != null) {
             snippetButton.dispose();
         }
-        snippetButton = new SnippetButton(center, host.corner(), () -> host.snippetsFor(latestProfile().group()),
-                this::typeText, host::manage, host::cornerChanged);
+        snippetButton = new SnippetButton(center, host.corner(), snippetTarget(), host.sender(), host::manage,
+                host::cornerChanged);
         refreshSnippetButton();
+    }
+
+    @Override
+    public void openSnippetMenu() {
+        if (snippetButton != null && widget != null) {
+            snippetButton.showMenu();
+        }
+    }
+
+    @Override
+    public dev.egateza.termul.app.snippet.SnippetTarget snippetTarget() {
+        return new dev.egateza.termul.app.snippet.SnippetTarget() {
+            @Override
+            public String name() {
+                return latestProfile().name();
+            }
+
+            @Override
+            public String address() {
+                return latestProfile().address();
+            }
+
+            @Override
+            public String hostKey() {
+                return "host:" + profile.id();
+            }
+
+            @Override
+            public String hostName() {
+                return latestProfile().name();
+            }
+
+            @Override
+            public String hostGroup() {
+                return latestProfile().group();
+            }
+
+            @Override
+            public boolean canPaste() {
+                return !sftpOnly && connector != null && connector.isConnected();
+            }
+
+            @Override
+            public boolean bracketedPaste() {
+                return widget != null && widget.isBracketedPaste();
+            }
+
+            @Override
+            public void paste(String text) {
+                typeText(text);
+            }
+
+            @Override
+            public void focus() {
+                focusTerminal();
+            }
+        };
     }
 
     /** Baca ulang pengaturan tombol snippet (tampil/sembunyi, sudut). EDT. */
@@ -249,8 +305,8 @@ public final class TerminalTab extends TermPane {
     }
 
     /**
-     * Ketik teks ke shell <b>tanpa Enter</b> (snippet). Snippet selalu satu baris tanpa karakter kontrol (dijamin
-     * {@link Snippet}), jadi tidak ada yang berjalan sebelum user menekan Enter sendiri.
+     * Kirim teks snippet apa adanya ke shell. Isinya disusun {@link dev.egateza.termul.core.snippet.SnippetPayload}
+     * (Enter hanya kalau snippet memintanya; konfirmasi untuk snippet berbahaya sudah dilakukan pemanggil).
      */
     public void typeText(String text) {
         if (connector == null || !connector.isConnected() || text.isEmpty()) {

@@ -7,6 +7,8 @@ import dev.egateza.termul.app.ui.Dialogs;
 import dev.egateza.termul.app.ui.Shortcuts;
 import dev.egateza.termul.app.ui.UiAsync;
 import dev.egateza.termul.core.Os;
+import dev.egateza.termul.core.bookmark.BookmarkStore;
+import dev.egateza.termul.core.profile.HostProfile;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Desktop;
@@ -76,14 +78,27 @@ final class LocalFilePane extends JPanel {
     private final TypeAhead typeAhead = new TypeAhead();
     private final SystemFileIcons fileIcons;
     private final Consumer<List<Path>> upload;
+    private final SftpBookmarks bookmarks;
+    private final HostProfile profile;
+    private final Consumer<String> notice;
+    /** Folder yang baru dibuka di panel ini, terbaru dulu (dropdown dialog "Buka folder"). EDT. */
+    private final java.util.Deque<String> recentDirs = new java.util.ArrayDeque<>();
     private Path currentDir;   // EDT
     private long generation;   // EDT; listing yang lebih lama dari navigasi terakhir diabaikan
 
-    /** @param upload mengupload file lokal ke direktori remote yang sedang dibuka */
-    LocalFilePane(SystemFileIcons fileIcons, Consumer<List<Path>> upload) {
+    /**
+     * @param upload    mengupload file lokal ke direktori remote yang sedang dibuka
+     * @param bookmarks bookmark folder lokal (per host {@code profile} dan bersama)
+     * @param notice    keterangan singkat untuk baris aktivitas panel SFTP (mis. bookmark ditambahkan)
+     */
+    LocalFilePane(SystemFileIcons fileIcons, Consumer<List<Path>> upload, SftpBookmarks bookmarks, HostProfile profile,
+                  Consumer<String> notice) {
         super(new BorderLayout());
         this.fileIcons = fileIcons;
         this.upload = upload;
+        this.bookmarks = bookmarks;
+        this.profile = profile;
+        this.notice = notice;
 
         var bar = toolbar;
         if (Os.current().isWindows()) {
@@ -105,6 +120,9 @@ final class LocalFilePane extends JPanel {
         bar.add(SftpPanel.button(AppIcon.ARROW_UP, null, I18n.t("sftp.toolbar.up"), this::goUp));
         bar.add(SftpPanel.button(AppIcon.HOME, null, I18n.t("sftp.toolbar.home"), () -> navigate(home())));
         bar.add(SftpPanel.button(AppIcon.REFRESH, null, I18n.t("sftp.toolbar.refresh"), this::refresh));
+        bar.add(SftpPanel.button(AppIcon.BOOKMARK, null, I18n.t("sftp.toolbar.bookmark.tip",
+                Shortcuts.text(Shortcuts.menu(KeyEvent.VK_O)), Shortcuts.text(Shortcuts.menu(KeyEvent.VK_B))),
+                this::openBookmarks));
         bar.addSeparator();
         bar.add(SftpPanel.button(AppIcon.UPLOAD, I18n.t("sftp.toolbar.upload"), I18n.t("sftp.local.upload.tip"),
                 this::uploadSelected));
@@ -113,6 +131,10 @@ final class LocalFilePane extends JPanel {
         bar.add(SftpPanel.button(AppIcon.PEN, null, I18n.t("sftp.toolbar.rename.tip"), this::renameSelected));
         bar.add(SftpPanel.button(AppIcon.TRASH, null, I18n.t("sftp.local.delete.tip"), this::deleteSelected));
         installFilter(bar);
+        getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(Shortcuts.menu(KeyEvent.VK_O), "openBookmarks");
+        getActionMap().put("openBookmarks", action(this::openBookmarks));
+        getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(Shortcuts.menu(KeyEvent.VK_B), "addBookmark");
+        getActionMap().put("addBookmark", action(this::bookmarkCurrent));
         // susunan sama dengan panel remote: toolbar, lalu path
         var top = new JPanel(new BorderLayout());
         top.add(bar, BorderLayout.NORTH);
@@ -217,6 +239,7 @@ final class LocalFilePane extends JPanel {
         filterField.getInputMap().put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "clearOrBack");
         filterField.getActionMap().put("clearOrBack", action(() -> {
             if (filterField.getText().isEmpty()) {
+                toolbar.hideOverflow();
                 table.requestFocusInWindow();
             } else {
                 filterField.setText("");
@@ -228,6 +251,7 @@ final class LocalFilePane extends JPanel {
             if (table.getRowCount() > 0 && table.getSelectedRow() < 0) {
                 table.setRowSelectionInterval(0, 0);
             }
+            toolbar.hideOverflow(); // kolom filter di popup » (panel sempit): popup menutupi hasil dan menahan fokus
             table.requestFocusInWindow();
         }));
     }
@@ -304,6 +328,29 @@ final class LocalFilePane extends JPanel {
         navigate(dir, null);
     }
 
+    /** Dialog "Buka folder" (bookmark host & bersama untuk folder lokal); path yang dipilih dibuka, {@code ~} = home. */
+    private void openBookmarks() {
+        var request = new BookmarkDialog.Request(BookmarkStore.Side.LOCAL, profile.id(), profile.name(),
+                currentDir == null ? null : currentDir.toString(), List.copyOf(recentDirs));
+        BookmarkDialog.show(this, bookmarks, request).ifPresent(text -> {
+            try {
+                navigate(Path.of(text.startsWith("~") ? System.getProperty("user.home") + text.substring(1) : text));
+            } catch (InvalidPathException e) {
+                Dialogs.error(this, I18n.t("sftp.local.title"), I18n.t("sftp.local.invalidPath", text));
+            }
+        });
+    }
+
+    /** Ctrl/Cmd+B: folder ini ke bookmark host. */
+    private void bookmarkCurrent() {
+        if (currentDir == null) {
+            return;
+        }
+        String dir = currentDir.toString();
+        bookmarks.add(this, BookmarkStore.Side.LOCAL, profile.id(), dir,
+                added -> notice.accept(I18n.t(added ? "sftp.bookmark.added" : "sftp.bookmark.exists", dir)));
+    }
+
     /** @param select nama entri yang dipilih setelah dimuat (mis. folder asal saat naik satu tingkat), atau null */
     private void navigate(Path dir, String select) {
         navigate(dir, select, null);
@@ -328,6 +375,7 @@ final class LocalFilePane extends JPanel {
             }
             currentDir = target;
             lastDir = target;
+            BookmarkDialog.remember(recentDirs, target.toString());
             pathBar.setPath(target.toString(), PathBar.localCrumbs(target));
             if (target.getRoot() != null && Os.current().isWindows()) {
                 drives.setSelectedItem(target.getRoot());

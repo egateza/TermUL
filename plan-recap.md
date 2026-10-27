@@ -202,6 +202,23 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [ ] Uji manual user (lihat acceptance Fase 12 di `docs/PLAN.md`)
 - Catatan: 3 test gagal di macOS juga di `master` (`EditorLauncherTest` ×2, `InstallGuideTest`), bukan dari perubahan ini
 
+### Snippet manager (permintaan user 2026-10-27, prototipe artifact "TermUL Desktop")
+- [x] Tahap 1: format `snippets.json` v2 (migrasi otomatis), multi-baris + Enter opsional, variabel `${nama}` (nilai
+  diingat per host), kategori, favorit, berbahaya + konfirmasi, cakupan semua/grup/satu host, bracketed paste.
+  `app.snippet.SnippetManagerDialog` (Ctrl/⌘+Shift+S) menggantikan `SnippetDialog`; `SnippetQuickPick` di tombol petir
+  (Ctrl/⌘+Shift+Space). Detail & keputusan: `docs/fab-release-plan.md` Rilis D
+- [x] Tampilan disamakan dengan prototipe (permintaan user 2026-10-27, aturan baru di CLAUDE.md): `SnippetUi`
+  memetakan palet prototipe ke tema aktif; dialog tanpa dekorasi + latar redup, header/toolbar/navigasi/daftar/detail/
+  status bar sesuai ukuran prototipe, saklar, badge, ikon dari path SVG prototipe, konfirmasi `SnippetConfirm`, tombol
+  petir berbentuk pil. Font mengikuti Pengaturan font (keputusan user): teks UI = Font aplikasi (`Label.font`), teks
+  biasa ukuran default seperti dialog lain (Bold hanya judul +2; badge -1); teks perintah = Font terminal termasuk
+  ukurannya (persis seperti di terminal). Dicek lewat render PNG
+  terang/gelap + audit font (default dan Calibri/Consolas)
+- [ ] Tahap 2: Reorder, Export JSON, Kelola kategori
+- [ ] Uji manual user
+- Catatan: `LocalShellsTest` ×2 dan `EditManagerTest.fileYangDibukaLihatSajaDitanyaLagiSaatDibukaUlang` juga gagal di
+  `master` (07833ad) di Windows, bukan dari perubahan ini
+
 ### Tambahan dari uji manual user (setelah Fase 4)
 - [x] Auth "Default": coba key `~/.ssh`, lalu jatuh ke password (sebelumnya error kalau tidak ada key)
 - [x] Terminal tidak lagi terlihat hang setelah logout: banner Reconnect + Enter untuk reconnect
@@ -384,6 +401,7 @@ Yang tersisa: merge branch, uji installer `.msi` (butuh WiX), keputusan `MaxSess
 | Ctrl+Shift+F | Panel SFTP |
 | Ctrl+Shift+E | File yang sedang diedit |
 | Ctrl+Shift+P / Ctrl+Shift+R | Inject password sudo / root dari vault |
+| Ctrl+Shift+S / Ctrl+Shift+Space | Snippet manager / menu snippet untuk host ini |
 | Ctrl++ (atau Ctrl+=) / Ctrl+- / Ctrl+0 | Zoom in / zoom out / ukuran default (per tab) |
 | Ctrl+D di prompt, `exit`/`logout` | Konfirmasi keluar sesi |
 | Enter setelah sesi berakhir | Reconnect |

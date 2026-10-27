@@ -28,6 +28,7 @@ import java.util.concurrent.ExecutorService;
  * @param locals     shell terdeteksi + profil terminal lokal (ADR 0005)
  * @param highlights profil highlight teks dan penugasannya ke host/grup/terminal lokal
  * @param shortcuts  shortcut yang diganti user (sisanya default)
+ * @param bookmarks  bookmark folder panel SFTP/FTP (remote & lokal)
  */
 public record AppContext(AppPaths paths, ConfigStore config, ProfileStore profiles, ExecutorService io,
                          ExecutorService sshOps,
@@ -36,5 +37,6 @@ public record AppContext(AppPaths paths, ConfigStore config, ProfileStore profil
                          KnownHostsStore knownHosts, FtpsCertStore ftpsCerts, WslManager wsl, SnippetStore snippets,
                          dev.egateza.termul.app.terminal.LocalProfiles locals,
                          dev.egateza.termul.core.highlight.HighlightStore highlights,
-                         dev.egateza.termul.core.shortcut.ShortcutStore shortcuts) {
+                         dev.egateza.termul.core.shortcut.ShortcutStore shortcuts,
+                         dev.egateza.termul.core.bookmark.BookmarkStore bookmarks) {
 }

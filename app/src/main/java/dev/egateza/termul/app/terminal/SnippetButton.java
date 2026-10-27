@@ -1,28 +1,38 @@
 package dev.egateza.termul.app.terminal;
 
 import dev.egateza.termul.app.i18n.I18n;
+import dev.egateza.termul.app.snippet.SnippetQuickPick;
+import dev.egateza.termul.app.snippet.SnippetSender;
+import dev.egateza.termul.app.snippet.SnippetTarget;
 import dev.egateza.termul.app.ui.AppIcon;
+import dev.egateza.termul.app.ui.ShortcutAction;
+import dev.egateza.termul.app.ui.Shortcuts;
 import dev.egateza.termul.app.ui.fab.FloatingButton;
 import dev.egateza.termul.app.ui.fab.FloatingOverlay;
 import dev.egateza.termul.app.ui.fab.FloatingStyle;
 import dev.egateza.termul.core.config.AppConfig;
-import dev.egateza.termul.core.snippet.Snippet;
+import java.awt.Color;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
 import java.awt.Point;
+import java.awt.RenderingHints;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.util.List;
 import java.util.function.Consumer;
-import java.util.function.Supplier;
-import javax.swing.JMenuItem;
-import javax.swing.JPopupMenu;
+import javax.swing.BorderFactory;
+import javax.swing.JLabel;
 import javax.swing.SwingUtilities;
+import javax.swing.Timer;
+import javax.swing.UIManager;
 
 /**
- * Tombol mengambang "Snippet" di atas terminal. Klik membuka daftar snippet untuk host ini; snippet yang dipilih
- * diketik ke prompt <b>tanpa Enter</b>. Tombol bisa diseret dan menempel ke sudut terdekat (disimpan di config untuk
- * semua tab), supaya tidak menutupi bagian output yang sedang dibaca. EDT.
+ * Tombol mengambang "Snippet" di atas terminal. Klik membuka menu snippet untuk host ini ({@link SnippetQuickPick});
+ * hasil tempel/salin tampil sebentar di dekat tombol. Tombol bisa diseret dan menempel ke sudut terdekat (disimpan di
+ * config untuk semua tab), supaya tidak menutupi bagian output yang sedang dibaca. EDT.
  */
 final class SnippetButton {
+
+    static final int TOAST_MS = 2600;
 
     /**
      * Geseran minimum (per sumbu) sebelum tekan-lepas dianggap seret, bukan klik. Ambang lama (5 px, dx+dy) terlalu
@@ -32,31 +42,34 @@ final class SnippetButton {
     /** Seret yang berakhir di sudut asal dengan geseran sekecil ini dianggap klik (menu tetap dibuka). */
     static final int CLICK_SLOP = 24;
 
-    final FloatingButton button = new FloatingButton(AppIcon.BOLT, null, FloatingStyle.Kind.PRIMARY,
-            FloatingButton.Size.MINI);
+    /** Pil "⚡ Snippet" seperti prototipe; petir kuning, badan tombol mengikuti gaya tombol sekunder tema. */
+    final FloatingButton button = new FloatingButton(AppIcon.BOLT, I18n.t("fab.snippet"),
+            FloatingStyle.Kind.SECONDARY, FloatingButton.Size.MINI);
     private final FloatingOverlay overlay;
-    private final Supplier<List<Snippet>> snippets;
-    private final Consumer<String> type;
+    private final SnippetTarget target;
+    private final SnippetSender sender;
     private final Runnable manage;
     private final Consumer<String> cornerChanged;
     private Point pressOnScreen;  // EDT; null = tidak sedang ditekan
     private Point pressTopLeft;   // EDT; posisi tombol saat ditekan, koordinat overlay
     private boolean dragging;     // EDT; true sejak seret dimulai sampai setelah klik dilepas diproses
+    private JLabel toast;         // EDT; pesan hasil yang sedang tampil
+    private Timer toastTimer;     // EDT
 
     /**
-     * @param snippets      snippet untuk host tab ini (dibaca saat tombol diklik)
-     * @param type          ketik teks ke terminal tanpa Enter
-     * @param manage        buka dialog kelola snippet
+     * @param target        terminal tab ini
+     * @param manage        buka Snippet manager
      * @param cornerChanged sudut baru (nilai {@code AppConfig.SNIPPET_*}) setelah tombol diseret
      */
-    SnippetButton(FloatingOverlay overlay, String corner, Supplier<List<Snippet>> snippets, Consumer<String> type,
-                  Runnable manage, Consumer<String> cornerChanged) {
+    SnippetButton(FloatingOverlay overlay, String corner, SnippetTarget target, SnippetSender sender, Runnable manage,
+                  Consumer<String> cornerChanged) {
         this.overlay = overlay;
-        this.snippets = snippets;
-        this.type = type;
+        this.target = target;
+        this.sender = sender;
         this.manage = manage;
         this.cornerChanged = cornerChanged;
-        button.setToolTipText(I18n.t("fab.snippet.tooltip"));
+        button.setIcon(AppIcon.BOLT.icon(14, () -> new Color(0xE0AF68)));
+        button.setToolTipText(I18n.t("fab.snippet.tooltip", Shortcuts.text(ShortcutAction.SNIPPET_QUICK)));
         button.getAccessibleContext().setAccessibleName(I18n.t("fab.snippet"));
         button.addActionListener(e -> {
             if (!dragging) {
@@ -136,33 +149,70 @@ final class SnippetButton {
         }
     }
 
-    private void showMenu() {
-        var menu = new JPopupMenu();
-        menu.setFocusable(false);
-        List<Snippet> list = snippets.get();
-        if (list.isEmpty()) {
-            var empty = new JMenuItem(I18n.t("fab.snippet.empty"));
-            empty.setEnabled(false);
-            menu.add(empty);
+    /** Buka menu snippet di dekat tombol; kalau tombol disembunyikan, di sudut kanan atas terminal. */
+    void showMenu() {
+        if (!overlay.isShowing()) {
+            return;
         }
-        for (Snippet s : list) {
-            var item = new JMenuItem(s.name());
-            item.setToolTipText(s.command());
-            item.addActionListener(e -> type.accept(s.command()));
-            menu.add(item);
+        if (!button.isVisible()) {
+            SnippetQuickPick.show(overlay, overlay.getWidth() - 16, 8, true, false, target, sender, manage,
+                    this::showToast);
+            return;
         }
-        menu.addSeparator();
-        var manageItem = new JMenuItem(I18n.t("fab.snippet.manage"));
-        manageItem.addActionListener(e -> manage.run());
-        menu.add(manageItem);
-        var size = menu.getPreferredSize();
-        boolean top = overlay.anchorOf(button) == FloatingOverlay.Anchor.TOP_LEFT
-                || overlay.anchorOf(button) == FloatingOverlay.Anchor.TOP_RIGHT;
-        boolean right = overlay.anchorOf(button) == FloatingOverlay.Anchor.TOP_RIGHT
-                || overlay.anchorOf(button) == FloatingOverlay.Anchor.BOTTOM_RIGHT;
-        int x = right ? button.getWidth() - size.width : 0;
-        int y = top ? button.getHeight() + 4 : -size.height - 4;
-        menu.show(button, x, y);
+        var anchor = overlay.anchorOf(button);
+        boolean top = anchor == FloatingOverlay.Anchor.TOP_LEFT || anchor == FloatingOverlay.Anchor.TOP_RIGHT;
+        boolean right = anchor == FloatingOverlay.Anchor.TOP_RIGHT || anchor == FloatingOverlay.Anchor.BOTTOM_RIGHT;
+        SnippetQuickPick.show(button, right ? button.getWidth() : 0, top ? button.getHeight() + 4 : -4, right, !top,
+                target, sender, manage, this::showToast);
+    }
+
+    /** Pesan hasil di dekat tombol (atau sudut kanan atas), hilang sendiri setelah {@link #TOAST_MS}. */
+    void showToast(String message) {
+        hideToast();
+        toast = new Toast(message);
+        var anchor = button.isVisible() ? overlay.anchorOf(button) : FloatingOverlay.Anchor.TOP_RIGHT;
+        overlay.addFloating(toast, anchor);
+        overlay.revalidate();
+        overlay.repaint();
+        toastTimer = new Timer(TOAST_MS, e -> hideToast());
+        toastTimer.setRepeats(false);
+        toastTimer.start();
+    }
+
+    private void hideToast() {
+        if (toastTimer != null) {
+            toastTimer.stop();
+            toastTimer = null;
+        }
+        if (toast != null) {
+            overlay.removeFloating(toast);
+            toast = null;
+        }
+    }
+
+    /** Label membulat dengan tanda centang hijau. */
+    private static final class Toast extends JLabel {
+        private static final Color OK = new Color(0x3DD68C);
+
+        Toast(String text) {
+            super("✓ " + text);
+            setForeground(OK);
+            setOpaque(false);
+            setBorder(BorderFactory.createEmptyBorder(4, 12, 4, 12));
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            var g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            Color bg = UIManager.getColor("Panel.background");
+            g2.setColor(bg != null ? bg : Color.DARK_GRAY);
+            g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, getHeight(), getHeight());
+            g2.setColor(OK.darker());
+            g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, getHeight(), getHeight());
+            g2.dispose();
+            super.paintComponent(g);
+        }
     }
 
     /** true kalau geseran (dx, dy) melewati {@code threshold} di salah satu sumbu. */
@@ -189,6 +239,7 @@ final class SnippetButton {
     }
 
     void dispose() {
+        hideToast();
         overlay.removeFloating(button);
     }
 }

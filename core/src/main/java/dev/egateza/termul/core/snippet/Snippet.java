@@ -1,31 +1,42 @@
 package dev.egateza.termul.core.snippet;
 
-import dev.egateza.termul.core.profile.HostProfile;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
 /**
- * Perintah tersimpan yang bisa diketik ke terminal dengan sekali klik. Snippet selalu <b>satu baris tanpa karakter
- * kontrol</b> (termasuk Enter/baris baru dan ESC), jadi mengetik snippet tidak pernah menjalankan apa pun sendiri:
- * user yang menekan Enter setelah memeriksanya. Snippet bukan tempat secret (tersimpan sebagai teks biasa).
+ * Perintah tersimpan yang bisa ditempel ke terminal. Perintah boleh beberapa baris (dipisah {@code \n}), tapi tanpa
+ * karakter kontrol lain (ESC, Tab, CR, ...), supaya snippet tidak bisa mengirim urutan escape atau tombol tersembunyi.
+ * Enter di akhir hanya dikirim kalau {@link #enter()} (di file: perintah diakhiri baris baru). Snippet bukan tempat
+ * secret (tersimpan sebagai teks biasa).
  *
- * @param group grup host tempat snippet berlaku (mis. {@code Prod/DB}, juga untuk subgrupnya); kosong = semua host
+ * @param category  id {@link SnippetCategory}; {@code ""} = tanpa kategori
+ * @param dangerous ditandai berbahaya oleh user; lihat juga {@link #isDangerous()}
+ * @param variables nilai default variabel {@code ${nama}} (boleh tidak lengkap)
  */
-public record Snippet(UUID id, String name, String command, String group) {
+public record Snippet(UUID id, String title, String command, boolean enter, String category, boolean favorite,
+                      boolean dangerous, SnippetScope scope, Map<String, String> variables) {
 
-    public static final int MAX_NAME = 80;
-    public static final int MAX_COMMAND = 2000;
+    public static final int MAX_TITLE = 80;
+    public static final int MAX_COMMAND = 8000;
 
     public Snippet {
         Objects.requireNonNull(id, "id");
-        name = name == null ? "" : name.strip();
-        command = command == null ? "" : command.strip();
-        group = HostProfile.normalizeGroup(group == null ? "" : group);
-        if (name.isEmpty()) {
-            throw new IllegalArgumentException("Nama snippet wajib diisi.");
+        title = title == null ? "" : title.strip();
+        command = command == null ? "" : command.replace("\r\n", "\n").replace('\r', '\n');
+        if (!command.isBlank() && command.substring(command.stripTrailing().length()).contains("\n")) {
+            enter = true; // format file: perintah diakhiri baris baru = langsung dijalankan
         }
-        if (name.length() > MAX_NAME) {
-            throw new IllegalArgumentException("Nama snippet maksimal " + MAX_NAME + " karakter.");
+        command = command.strip();
+        category = category == null ? "" : category.strip();
+        scope = scope == null ? SnippetScope.ALL : scope;
+        if (title.isEmpty()) {
+            throw new IllegalArgumentException("Judul snippet wajib diisi.");
+        }
+        if (title.length() > MAX_TITLE) {
+            throw new IllegalArgumentException("Judul snippet maksimal " + MAX_TITLE + " karakter.");
         }
         if (command.isEmpty()) {
             throw new IllegalArgumentException("Perintah snippet wajib diisi.");
@@ -33,27 +44,56 @@ public record Snippet(UUID id, String name, String command, String group) {
         if (command.length() > MAX_COMMAND) {
             throw new IllegalArgumentException("Perintah snippet maksimal " + MAX_COMMAND + " karakter.");
         }
-        if (hasControlCharacter(command) || hasControlCharacter(name)) {
+        if (hasControlCharacter(command.replace("\n", "")) || hasControlCharacter(title)
+                || hasControlCharacter(category)) {
             throw new IllegalArgumentException(
-                    "Snippet harus satu baris tanpa karakter kontrol (Enter, Tab, ESC), supaya tidak pernah berjalan sendiri.");
+                    "Snippet tidak boleh berisi karakter kontrol (Tab, ESC, dll.); hanya baris baru yang diizinkan.");
         }
-    }
-
-    public static Snippet create(String name, String command, String group) {
-        return new Snippet(UUID.randomUUID(), name, command, group);
-    }
-
-    public boolean isGlobal() {
-        return group.isEmpty();
-    }
-
-    /** true kalau snippet ini berlaku untuk host di {@code hostGroup} (global, grup yang sama, atau grup induknya). */
-    public boolean appliesTo(String hostGroup) {
-        if (isGlobal()) {
-            return true;
+        var vars = new LinkedHashMap<String, String>();
+        if (variables != null) {
+            variables.forEach((name, value) -> {
+                if (SnippetVariables.isValidName(name) && value != null && !hasControlCharacter(value)
+                        && value.length() <= SnippetVariables.MAX_VALUE) {
+                    vars.put(name, value);
+                }
+            });
         }
-        String host = HostProfile.normalizeGroup(hostGroup == null ? "" : hostGroup);
-        return host.equals(group) || host.startsWith(group + "/");
+        variables = java.util.Collections.unmodifiableMap(vars);
+    }
+
+    /** Snippet baru tanpa kategori, untuk semua host. */
+    public static Snippet create(String title, String command) {
+        return new Snippet(UUID.randomUUID(), title, command, false, "", false, false, SnippetScope.ALL, Map.of());
+    }
+
+    public Snippet withFavorite(boolean on) {
+        return new Snippet(id, title, command, enter, category, on, dangerous, scope, variables);
+    }
+
+    public Snippet withCategory(String categoryId) {
+        return new Snippet(id, title, command, enter, categoryId, favorite, dangerous, scope, variables);
+    }
+
+    /** Ditandai user, atau perintahnya cocok dengan pola berbahaya ({@link DangerousCommands}). */
+    public boolean isDangerous() {
+        return dangerous || DangerousCommands.detect(command).isPresent();
+    }
+
+    public boolean appliesTo(String hostName, String hostGroup) {
+        return scope.appliesTo(hostName, hostGroup);
+    }
+
+    public List<String> variableNames() {
+        return SnippetVariables.names(command);
+    }
+
+    public List<String> lines() {
+        return List.of(command.split("\n", -1));
+    }
+
+    /** Teks perintah seperti di file: diakhiri baris baru kalau {@link #enter()}. */
+    public String commandWithEnter() {
+        return enter ? command + "\n" : command;
     }
 
     static boolean hasControlCharacter(String text) {

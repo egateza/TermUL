@@ -105,6 +105,8 @@ public final class TermULApp {
         locals.detect(); // baca /etc/shells & cek file di sini, bukan di EDT
         var highlights = new dev.egateza.termul.core.highlight.HighlightStore(paths.highlightFile());
         highlights.load();
+        var bookmarks = new dev.egateza.termul.core.bookmark.BookmarkStore(paths.bookmarksFile());
+        bookmarks.load();
         var shortcuts = new dev.egateza.termul.core.shortcut.ShortcutStore(paths.shortcutsFile());
         dev.egateza.termul.app.ui.Shortcuts.use(dev.egateza.termul.app.ui.KeyBindings.of(shortcuts.load(),
                 dev.egateza.termul.core.Os.current().isMac())); // sebelum menu dibuat
@@ -168,7 +170,7 @@ public final class TermULApp {
                     config.current().cursorBlink()));
             var ctx = new AppContext(paths, config, store, io, sshOps, sessions, new SshTerminalFactory(sessions),
                     terminalSettings, vault, edits, sftpLinks, themes, knownHosts, ftpsCerts, wsl, snippets, locals,
-                    highlights, shortcuts);
+                    highlights, shortcuts, bookmarks);
             var frame = new MainFrame(ctx, customThemes,
                     () -> shutdown(io, sshOps, sessions, vault, edits, wsl, instance, log));
             frameRef.set(frame);

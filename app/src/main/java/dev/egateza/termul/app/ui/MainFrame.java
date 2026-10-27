@@ -105,6 +105,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private final ProfileStore store;
     private final ExecutorService io;
     private final SystemFileIcons fileIcons;
+    private final dev.egateza.termul.app.sftp.SftpBookmarks sftpBookmarks;
     private final HostTreePanel hostTree;
     private final JTabbedPane tabs = new JTabbedPane(JTabbedPane.TOP, JTabbedPane.SCROLL_TAB_LAYOUT);
     /** Tab yang dipilih dengan Ctrl+klik untuk digabung (Ctrl+G), urutan pilih. EDT. */
@@ -247,6 +248,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         this.store = ctx.profiles();
         this.io = ctx.io();
         this.fileIcons = new SystemFileIcons(ctx.paths().cacheDir().resolve("file-icons"), AppIcon.SIZE);
+        this.sftpBookmarks = new dev.egateza.termul.app.sftp.SftpBookmarks(ctx.bookmarks(), io);
         this.onExit = onExit;
         this.updateNotifier = UpdateNotifier.forGitHub(ctx.paths(), () -> ctx.config().current().autoUpdateCheck(),
                 this::showUpdateState);
@@ -830,7 +832,10 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         var sftpColumns = SftpColumns.menu(I18n.t("main.menu.terminal.sftpColumns"));
         sftpColumns.setToolTipText(I18n.t("main.menu.terminal.sftpColumns.tooltip"));
         terminal.add(sftpColumns);
-        terminal.add(menuItem(AppIcon.BOLT, I18n.t("main.menu.terminal.snippets"), null, this::openSnippets));
+        terminal.add(actionItem(AppIcon.BOLT, I18n.t("main.menu.terminal.snippets"), ShortcutAction.SNIPPETS,
+                this::openSnippets));
+        terminal.add(actionItem(null, I18n.t("main.menu.terminal.snippetQuick"), ShortcutAction.SNIPPET_QUICK,
+                () -> currentTab().ifPresent(TermPane::openSnippetMenu)));
         terminal.addSeparator();
         terminal.add(miGroup = actionItem(null, I18n.t("main.menu.terminal.group"), ShortcutAction.GROUP,
                 this::groupMarkedTabs));
@@ -2172,9 +2177,15 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
     /** Tombol snippet di atas terminal (semua jenis tab): snippet global + grup host. EDT. */
     private final TermPane.SnippetHost snippetHost = new TermPane.SnippetHost() {
+        private dev.egateza.termul.app.snippet.SnippetSender sender; // EDT; dibuat saat pertama dipakai
+
         @Override
-        public List<dev.egateza.termul.core.snippet.Snippet> snippetsFor(String hostGroup) {
-            return ctx.snippets().forGroup(hostGroup);
+        public dev.egateza.termul.app.snippet.SnippetSender sender() {
+            if (sender == null) {
+                sender = new dev.egateza.termul.app.snippet.SnippetSender(ctx.snippets(), io,
+                        () -> ctx.terminalSettings().getTerminalFont());
+            }
+            return sender;
         }
 
         @Override
@@ -2896,6 +2907,9 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         if (center.getComponentCount() == 0 || center.getComponent(0) != wanted) {
             if (wanted == homeView) {
                 home.reshuffle(); // animasi acak: berganti setiap beranda tampil lagi
+                // UI tab masih memegang panel tab terakhir (visibleComponent) sampai layout berikutnya, padahal tabs
+                // dilepas dari layar: layout sekarang supaya tab yang sudah ditutup bisa di-GC.
+                tabs.doLayout();
             }
             center.removeAll();
             center.add(wanted, BorderLayout.CENTER);
@@ -3077,10 +3091,12 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         }
     }
 
-    /** Terminal → Snippet: kelola snippet; snippet baru default ke grup host tab yang aktif. EDT. */
+    /** Terminal → Snippet manager: snippet ditempel ke terminal tab yang aktif (kalau ada). EDT. */
     private void openSnippets() {
-        String group = currentSsh().map(t -> t.profile().group()).orElse("");
-        new SnippetDialog(this, ctx.snippets(), io, store.snapshot().allGroups(), group).setVisible(true);
+        var target = currentTab().filter(TermPane::hasTerminal).map(TermPane::snippetTarget).orElse(null);
+        new dev.egateza.termul.app.snippet.SnippetManagerDialog(this, snippetHost.sender(), io, target,
+                store.snapshot().allGroups()).setVisible(true);
+        currentTab().ifPresent(TermPane::focusTerminal);
     }
 
     /** Simpan pengaturan tombol snippet, lalu terapkan ke semua tab. EDT. */
@@ -3392,7 +3408,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                                                java.util.function.BiConsumer<ActivityBar.Level, String> sink) {
                         return ctx.edits().addActivityListener(profileId, sink);
                     }
-                }, fileIcons, AppConfig.SFTP_DUAL.equals(ctx.config().current().sftpLayout()), on -> {
+                }, fileIcons, sftpBookmarks, AppConfig.SFTP_DUAL.equals(ctx.config().current().sftpLayout()), on -> {
                     sftpDualToggle.setSelected(on); // tombol toolbar panel juga mengganti default panel berikutnya
                     saveSftpLayout(on);
                 })));
@@ -3519,7 +3535,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     @Override
     public void delete(HostProfile profile) {
         if (Dialogs.confirm(this, I18n.t("main.profile.delete.title"), I18n.t("main.profile.delete.confirm", profile.name()))) {
-            mutate(I18n.t("main.error.deleteProfile"), () -> store.delete(profile.id()));
+            mutate(I18n.t("main.error.deleteProfile"), () -> pruneBookmarks(store.delete(profile.id())));
             UiAsync.run(ctx.sshOps(), () -> {
                 if (!storedSecrets(profile).isEmpty() && ctx.vault().ensureUnlocked()) {
                     ctx.vault().vault().removeProfile(profile.id());
@@ -3549,8 +3565,14 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     @Override
     public void deleteGroup(String group) {
         if (Dialogs.confirm(this, I18n.t("main.group.delete.title"), I18n.t("main.group.delete.confirm", group))) {
-            mutate(I18n.t("main.error.deleteGroup"), () -> store.deleteGroup(group));
+            mutate(I18n.t("main.error.deleteGroup"), () -> pruneBookmarks(store.deleteGroup(group)));
         }
+    }
+
+    /** Bookmark folder milik profil yang sudah dihapus ikut dibuang (thread I/O). */
+    private void pruneBookmarks(dev.egateza.termul.core.profile.ProfileSnapshot snapshot) {
+        ctx.bookmarks().retainHosts(snapshot.profiles().stream().map(HostProfile::id)
+                .collect(java.util.stream.Collectors.toSet()));
     }
 
     @Override

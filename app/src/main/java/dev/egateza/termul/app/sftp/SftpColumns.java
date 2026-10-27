@@ -3,6 +3,7 @@ package dev.egateza.termul.app.sftp;
 import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.core.config.AppConfig;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -32,8 +33,13 @@ public final class SftpColumns {
 
     private static final Set<String> hidden = new LinkedHashSet<>(); // EDT
     private static Consumer<List<String>> save = list -> { };     // EDT
-    /** Tabel yang terpasang; weak supaya panel yang sudah ditutup bisa di-GC. EDT. */
-    private static final Map<JTable, Table> tables = new WeakHashMap<>();
+    /**
+     * Tabel yang terpasang; weak supaya panel yang sudah ditutup bisa di-GC. {@link Table} disimpan sebagai client
+     * property tabelnya, bukan value map: value WeakHashMap yang memegang key-nya membuat entry tidak pernah dilepas
+     * (panel SFTP, dan tab terminal tempatnya, tertahan selamanya). EDT.
+     */
+    private static final Set<JTable> tables = Collections.newSetFromMap(new WeakHashMap<>());
+    private static final String TABLE_KEY = SftpColumns.class.getName();
 
     private SftpColumns() {
     }
@@ -58,7 +64,15 @@ public final class SftpColumns {
         hidden.clear();
         hidden.addAll(initiallyHidden);
         SftpColumns.save = save;
-        tables.values().forEach(Table::apply);
+        applyAll();
+    }
+
+    private static void applyAll() {
+        for (var table : tables) {
+            if (table.getClientProperty(TABLE_KEY) instanceof Table t) {
+                t.apply();
+            }
+        }
     }
 
     public static boolean isHidden(String id) {
@@ -70,7 +84,7 @@ public final class SftpColumns {
         if (AppConfig.SFTP_COLUMN_NAME.equals(id) || (hide ? !hidden.add(id) : !hidden.remove(id))) {
             return;
         }
-        tables.values().forEach(Table::apply);
+        applyAll();
         save.accept(List.copyOf(hidden));
     }
 
@@ -82,7 +96,8 @@ public final class SftpColumns {
      */
     static void install(JTable table, String[] ids) {
         var t = new Table(table, ids);
-        tables.put(table, t);
+        table.putClientProperty(TABLE_KEY, t);
+        tables.add(table);
         t.apply();
         var popup = new JPopupMenu();
         popup.addPopupMenuListener(new PopupMenuListener() {

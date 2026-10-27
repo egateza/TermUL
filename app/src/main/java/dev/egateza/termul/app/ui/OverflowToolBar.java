@@ -92,6 +92,16 @@ public class OverflowToolBar extends JToolBar {
         }
     }
 
+    /**
+     * Tutup popup » kalau sedang terbuka (item kembali ke toolbar). Dipakai sebelum memindahkan fokus keluar dari item
+     * di popup, mis. Enter di kolom filter: popup menutupi bagian atas tabel dan menahan fokus selama terbuka.
+     */
+    public void hideOverflow() {
+        if (popup.isVisible()) {
+            popup.setVisible(false);
+        }
+    }
+
     private void showOverflow() {
         if (overflow.isEmpty() || popup.isVisible()) {
             return;

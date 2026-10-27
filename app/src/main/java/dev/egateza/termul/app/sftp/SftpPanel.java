@@ -10,6 +10,7 @@ import dev.egateza.termul.app.ui.Dialogs;
 import dev.egateza.termul.app.ui.Edt;
 import dev.egateza.termul.app.ui.Shortcuts;
 import dev.egateza.termul.app.ui.UiAsync;
+import dev.egateza.termul.core.bookmark.BookmarkStore;
 import dev.egateza.termul.core.profile.HostProfile;
 import dev.egateza.termul.sftp.RemoteEntry;
 import dev.egateza.termul.sftp.RemoteFileService;
@@ -108,6 +109,9 @@ public class SftpPanel extends JPanel {
 
     private final EditActions editActions;
     private final SystemFileIcons fileIcons;
+    private final SftpBookmarks bookmarks;
+    /** Folder yang baru dibuka di panel ini, terbaru dulu (dropdown dialog "Buka folder"). EDT. */
+    private final java.util.Deque<String> recentDirs = new java.util.ArrayDeque<>();
     private final Consumer<Boolean> layoutChanged;
     /** Isi panel: panel remote saja, atau split lokal | remote; tiap panel membawa toolbar + path sendiri. */
     private final JPanel body = new JPanel(new BorderLayout());
@@ -152,11 +156,13 @@ public class SftpPanel extends JPanel {
     }
 
     /**
+     * @param bookmarks     bookmark folder (dialog "Buka folder", Ctrl/Cmd+O dan Ctrl/Cmd+B)
      * @param dual          mulai dengan tampilan dua panel (file lokal di kiri)
      * @param layoutChanged dipanggil di EDT saat user mengganti tampilan lewat tombol toolbar (true = dua panel)
      */
     public SftpPanel(HostProfile profile, SftpLinks links, ExecutorService sshOps, EditActions editActions,
-                     SystemFileIcons fileIcons, boolean dual, Consumer<Boolean> layoutChanged) {
+                     SystemFileIcons fileIcons, SftpBookmarks bookmarks, boolean dual,
+                     Consumer<Boolean> layoutChanged) {
         super(new BorderLayout());
         OPEN_PANELS.add(this);
         this.profile = profile;
@@ -164,11 +170,15 @@ public class SftpPanel extends JPanel {
         this.sshOps = sshOps;
         this.editActions = editActions;
         this.fileIcons = fileIcons;
+        this.bookmarks = bookmarks;
         this.layoutChanged = layoutChanged;
 
         toolbar.add(button(AppIcon.ARROW_UP, null, I18n.t("sftp.toolbar.up"), this::goUp));
         toolbar.add(button(AppIcon.HOME, null, I18n.t("sftp.toolbar.home"), this::goHome));
         toolbar.add(button(AppIcon.REFRESH, null, I18n.t("sftp.toolbar.refresh"), this::refresh));
+        toolbar.add(button(AppIcon.BOOKMARK, null, I18n.t("sftp.toolbar.bookmark.tip",
+                Shortcuts.text(Shortcuts.menu(KeyEvent.VK_O)), Shortcuts.text(Shortcuts.menu(KeyEvent.VK_B))),
+                this::openBookmarks));
         followToggle.setToolTipText(I18n.t("sftp.toolbar.follow.tip"));
         followToggle.setFocusable(false);
         followToggle.setVisible(false); // hanya panel di samping terminal (lihat setFollowHandler)
@@ -247,6 +257,10 @@ public class SftpPanel extends JPanel {
         bind(KeyEvent.VK_DELETE, 0, "delete", this::deleteSelected);
         bind(KeyEvent.VK_ESCAPE, 0, "clearFilter", () -> filterField.setText(""));
         installFilter();
+        getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(Shortcuts.menu(KeyEvent.VK_O), "openBookmarks");
+        getActionMap().put("openBookmarks", action(this::openBookmarks));
+        getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(Shortcuts.menu(KeyEvent.VK_B), "addBookmark");
+        getActionMap().put("addBookmark", action(this::bookmarkCurrent));
         table.setComponentPopupMenu(buildPopup());
 
         var scroll = new JScrollPane(table);
@@ -260,22 +274,30 @@ public class SftpPanel extends JPanel {
         tableArea.setMargins(24, 16); // jangan menutupi scrollbar tabel
         transferBadge = new TransferBadge(transfers, tableArea);
         remotePane.add(tableArea, BorderLayout.CENTER);
-        remotePane.add(new SelectionStatus(table, row -> model.entryAt(row).isDirectory(),
-                row -> model.entryAt(row).size()), BorderLayout.SOUTH);
+        // garis tepi kanan di bawah tabel menyambung bingkai tabel ke garis pemisah log aktivitas (sudut tertutup)
+        var status = edged(0);
+        status.add(new SelectionStatus(table, row -> model.entryAt(row).isDirectory(),
+                row -> model.entryAt(row).size()), BorderLayout.CENTER);
+        remotePane.add(status, BorderLayout.SOUTH);
         body.add(remotePane, BorderLayout.CENTER);
         add(body, BorderLayout.CENTER);
         // garis pemisah antara info seleksi di bawah tabel dan antrean transfer + log aktivitas
-        var bottom = new JPanel(new BorderLayout()) {
-            @Override
-            public void updateUI() {
-                super.updateUI();
-                setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, UIManager.getColor("Component.borderColor")));
-            }
-        };
+        var bottom = edged(1);
         bottom.add(transfers, BorderLayout.NORTH);
         bottom.add(activity, BorderLayout.SOUTH);
         add(bottom, BorderLayout.SOUTH);
         setDualPane(dual);
+    }
+
+    /** Panel dengan garis di tepi kanan (dan garis atas setebal {@code top}); warnanya ikut tema. */
+    private static JPanel edged(int top) {
+        return new JPanel(new BorderLayout()) {
+            @Override
+            public void updateUI() {
+                super.updateUI();
+                setBorder(BorderFactory.createMatteBorder(top, 0, 0, 1, UIManager.getColor("Component.borderColor")));
+            }
+        };
     }
 
     private final TransferQueue transfers;
@@ -303,7 +325,8 @@ public class SftpPanel extends JPanel {
         body.removeAll();
         if (on) {
             if (local == null) {
-                local = new LocalFilePane(fileIcons, this::upload);
+                local = new LocalFilePane(fileIcons, this::upload, bookmarks, profile,
+                        message -> activity.report(Level.INFO, message));
             }
             dualSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, local, remotePane);
             dualSplit.setContinuousLayout(true);
@@ -366,6 +389,7 @@ public class SftpPanel extends JPanel {
         filterField.getInputMap().put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "clearOrBack");
         filterField.getActionMap().put("clearOrBack", action(() -> {
             if (filterField.getText().isEmpty()) {
+                toolbar.hideOverflow();
                 table.requestFocusInWindow();
             } else {
                 filterField.setText("");
@@ -377,6 +401,7 @@ public class SftpPanel extends JPanel {
             if (table.getRowCount() > 0 && table.getSelectedRow() < 0) {
                 table.setRowSelectionInterval(0, 0);
             }
+            toolbar.hideOverflow(); // kolom filter di popup » (panel sempit): popup menutupi hasil dan menahan fokus
             table.requestFocusInWindow();
         }));
     }
@@ -1285,6 +1310,7 @@ public class SftpPanel extends JPanel {
             filterField.setText(""); // refresh folder yang sama mempertahankan filter
         }
         currentDir = listing.dir();
+        BookmarkDialog.remember(recentDirs, currentDir);
         pathBar.setPath(listing.dir(), PathBar.remoteCrumbs(listing.dir()));
         model.setEntries(listing.entries());
     }
@@ -1331,6 +1357,41 @@ public class SftpPanel extends JPanel {
     }
 
     private record Listing(String dir, List<RemoteEntry> entries) {
+    }
+
+    /** Dialog "Buka folder" (bookmark host & bersama); path yang dipilih dibuka, {@code ~} = home. */
+    public void openBookmarks() {
+        var request = new BookmarkDialog.Request(BookmarkStore.Side.REMOTE, profile.id(), profile.name(), currentDir,
+                List.copyOf(recentDirs));
+        BookmarkDialog.show(this, bookmarks, request).ifPresent(this::openTyped);
+    }
+
+    /** Ctrl/Cmd+B: folder ini ke bookmark host. */
+    private void bookmarkCurrent() {
+        if (currentDir == null) {
+            return;
+        }
+        String dir = currentDir;
+        bookmarks.add(this, BookmarkStore.Side.REMOTE, profile.id(), dir, added -> activity.report(Level.INFO,
+                I18n.t(added ? "sftp.bookmark.added" : "sftp.bookmark.exists", dir)));
+    }
+
+    /** Buka path ketikan/bookmark; gagal = dialog error seperti navigasi biasa. */
+    private void openTyped(String text) {
+        if (link == null) {
+            return;
+        }
+        activity.progress(I18n.t("sftp.navigate.loading", text));
+        call(() -> {
+            String dir = text.equals("~") || text.startsWith("~/")
+                    ? RemotePaths.join(svc().home(), text.length() > 2 ? text.substring(2) : "")
+                    : text;
+            String canonical = svc().canonicalize(dir);
+            return new Listing(canonical, svc().list(canonical));
+        }, listing -> {
+            show(listing);
+            activity.report(Level.INFO, I18n.t("sftp.navigate.count", listing.dir(), String.valueOf(listing.entries().size())));
+        });
     }
 
     public void refresh() {

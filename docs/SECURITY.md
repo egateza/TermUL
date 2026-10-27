@@ -181,6 +181,18 @@ Detail di `docs/adr/0003-self-update.md`.
   waktu per baris dan panjang baris maksimum, jadi terminal dan UI tetap responsif. Keyword JavaScript dari Tabby tidak
   pernah dijalankan.
 
+## Snippet
+
+- `snippets.json` berisi teks biasa (perintah, kategori, nilai variabel terakhir per host). Bukan tempat secret; UI
+  mengingatkan untuk tidak mengisi password di perintah maupun variabel.
+- Perintah boleh beberapa baris, tapi karakter kontrol lain (ESC, Tab, CR, C1) ditolak, termasuk di nilai variabel,
+  jadi snippet tidak bisa menyelipkan escape sequence (mis. `ESC[201~` untuk keluar dari bracketed paste) atau Enter
+  tersembunyi. Enter di akhir hanya dikirim kalau snippet memintanya (toggle eksplisit, badge "↵ jalan").
+- Snippet berbahaya (ditandai user, atau cocok pola `rm -rf`, `dd if=`, `mkfs`, `shutdown/reboot`, `chmod -R 777`,
+  `DROP/TRUNCATE`) selalu dikonfirmasi sebelum ditempel atau disalin. Daftar pola hanya pengaman tambahan.
+- Snippet beberapa baris dibungkus bracketed paste kalau shell memintanya (DECSET 2004), sehingga tidak ada baris yang
+  berjalan sebelum Enter. Tanpa bracketed paste, baris awal akan langsung berjalan: user dikonfirmasi dulu.
+
 ## WSL (opsional)
 
 - Hanya aktif kalau dinyalakan di Pengaturan. Profil WSL adalah koneksi SSH biasa, jadi verifikasi host key (TOFU) dan

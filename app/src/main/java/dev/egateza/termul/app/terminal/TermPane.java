@@ -14,8 +14,8 @@ public abstract sealed class TermPane extends JPanel permits TerminalTab, LocalT
 
     /** Sumber snippet dan pengaturan tombol snippet (dari MainFrame). Semua method dipanggil di EDT. */
     public interface SnippetHost {
-        /** Snippet global + snippet grup host ini ({@code ""} = hanya global, mis. tab lokal). */
-        java.util.List<dev.egateza.termul.core.snippet.Snippet> snippetsFor(String hostGroup);
+        /** Menempel/menyalin snippet (berisi store snippet). */
+        dev.egateza.termul.app.snippet.SnippetSender sender();
 
         boolean buttonVisible();
 
@@ -25,9 +25,15 @@ public abstract sealed class TermPane extends JPanel permits TerminalTab, LocalT
         /** Tombol diseret ke sudut lain; simpan untuk semua tab. */
         void cornerChanged(String corner);
 
-        /** Buka dialog kelola snippet. */
+        /** Buka Snippet manager. */
         void manage();
     }
+
+    /** Terminal ini sebagai tempat menempel snippet. */
+    public abstract dev.egateza.termul.app.snippet.SnippetTarget snippetTarget();
+
+    /** Buka menu snippet untuk host ini (tombol snippet / shortcut); tidak apa-apa kalau tidak ada terminal. */
+    public abstract void openSnippetMenu();
 
     protected TermPane() {
         super(new BorderLayout());

@@ -90,18 +90,75 @@ public final class LocalTerminalTab extends TermPane {
         this.stateListener = listener;
     }
 
-    /** Pasang tombol snippet: snippet global saja (tab lokal tidak punya grup host). */
+    /** Pasang tombol snippet: snippet untuk semua host saja (tab lokal tidak punya host atau grup). */
     public void setSnippetHost(SnippetHost host) {
         this.snippetHost = host;
         if (snippetButton != null) {
             snippetButton.dispose();
         }
-        snippetButton = new SnippetButton(center, host.corner(), () -> host.snippetsFor(""), this::typeText,
-                host::manage, host::cornerChanged);
+        snippetButton = new SnippetButton(center, host.corner(), snippetTarget(), host.sender(), host::manage,
+                host::cornerChanged);
         refreshSnippetButton();
     }
 
-    /** Ketik teks ke shell tanpa Enter (snippet). */
+    @Override
+    public void openSnippetMenu() {
+        if (snippetButton != null && widget != null) {
+            snippetButton.showMenu();
+        }
+    }
+
+    @Override
+    public dev.egateza.termul.app.snippet.SnippetTarget snippetTarget() {
+        return new dev.egateza.termul.app.snippet.SnippetTarget() {
+            @Override
+            public String name() {
+                return displayName();
+            }
+
+            @Override
+            public String address() {
+                return displayAddress();
+            }
+
+            @Override
+            public String hostKey() {
+                return "local:" + profile.id();
+            }
+
+            @Override
+            public String hostName() {
+                return "";
+            }
+
+            @Override
+            public String hostGroup() {
+                return "";
+            }
+
+            @Override
+            public boolean canPaste() {
+                return connector != null && connector.isConnected();
+            }
+
+            @Override
+            public boolean bracketedPaste() {
+                return widget != null && widget.isBracketedPaste();
+            }
+
+            @Override
+            public void paste(String text) {
+                typeText(text);
+            }
+
+            @Override
+            public void focus() {
+                focusTerminal();
+            }
+        };
+    }
+
+    /** Kirim teks snippet apa adanya ke shell (disusun {@link dev.egateza.termul.core.snippet.SnippetPayload}). */
     public void typeText(String text) {
         if (connector == null || !connector.isConnected() || text.isEmpty()) {
             return;

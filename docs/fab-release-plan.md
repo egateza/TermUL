@@ -56,6 +56,25 @@ atau per grup host (termasuk subgrup), dan speed dial tidak dibuat.
 **Catatan:** snippet yang terikat ke grup tidak ikut berpindah kalau grupnya di-rename; ubah grupnya lewat dialog
 snippet.
 
+## Rilis D: Snippet manager (prototipe "TermUL Desktop", permintaan user 2026-10-27)
+
+Keputusan (2026-10-27, menggantikan keputusan Rilis C soal Enter dan variabel): snippet boleh **beberapa baris** dan
+boleh **langsung dijalankan** kalau diakhiri baris baru (toggle "Tekan Enter setelah ditempel"). Pengaman: karakter
+kontrol selain baris baru tetap ditolak (juga di nilai variabel); snippet berbahaya (ditandai user atau cocok pola
+`rm -rf`, `dd`, `mkfs`, `reboot`, `DROP`, ...) selalu minta konfirmasi sebelum ditempel/disalin; snippet beberapa baris
+dibungkus bracketed paste kalau shell memintanya, dan kalau tidak, user dikonfirmasi dulu karena baris awal langsung
+berjalan. Lihat `docs/SECURITY.md` → Snippet.
+
+| | Item | Detail |
+|---|---|---|
+| ✅ | Format `snippets.json` version 2 | Sama dengan file ekspor (juga mobile): `categories`, `snippets` (`title`, `command` + `\n` = jalan, `category`, `favorite`, `appliesTo.hosts/folders`, `dangerous`, `variables`), plus `remembered` (nilai variabel per host). Format lama dimigrasi otomatis |
+| ✅ | Variabel `${nama}` | Default per snippet, nilai terakhir diingat per host |
+| ✅ | **Snippet manager** (Ctrl/⌘+Shift+S) | Kategori \| daftar (favorit, badge berbahaya/var/↵) \| detail (isi variabel, Tempel/Jalankan, Salin) atau form edit. Kategori baru dibuat dengan mengetik namanya |
+| ✅ | **Menu snippet** di terminal (Ctrl/⌘+Shift+Space, tombol petir) | Hanya snippet untuk host ini, dikelompokkan favorit/kategori, filter; snippet bervariabel/berbahaya dibuka dulu; toast hasil |
+| ✅ | Unit test | `SnippetTest`, `SnippetStoreTest`, `SnippetVariablesTest`, `SnippetPayloadTest`, `DangerousCommandsTest`, `SnippetListsTest` |
+| ⬜ | Tahap 2 | Reorder (seret), Export JSON (+ Salin JSON), Kelola kategori (rename/hapus/urutkan) |
+| ⬜ | Uji manual user | Tempel satu/multi baris di bash ≥ 5.1 (bracketed) dan `sh` (tanpa), snippet berbahaya, variabel, tab lokal |
+
 ## Riwayat
 
 | Tanggal | Rilis | Versi | Catatan |

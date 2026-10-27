@@ -89,6 +89,15 @@ Arah dependensi: `app → terminal, sftp → ssh → core`, `vault → core`, `a
 - JNA (DPAPI) butuh native access. Jalankan dengan `--enable-native-access=ALL-UNNAMED` (atau nama module), supaya tidak muncul warning dan tetap kompatibel saat JDK nanti memblokir secara default.
 - Error handling: exception domain yang jelas (`SshConnectException`, `RemoteConflictException`, dll.), dan pesan error untuk user dalam Bahasa Indonesia.
 - Constructor injection manual (tanpa framework DI). Wiring dilakukan di modul `app`.
+
+### Desain UI mengikuti prototipe
+- Kalau sebuah fitur/layar sudah punya prototipe (artifact desain user, mis. canvas "TermUL Desktop" / "TermUL Mobile"),
+  implementasi **wajib mengikuti prototipe** semirip mungkin: tata letak, ukuran, jarak, teks, ikon, warna, state
+  (kosong, edit, konfirmasi), dan perilaku. Baca artboard terkait dulu sebelum membuat atau mengubah UI-nya.
+- Warna prototipe dipetakan ke warna tema aktif (peran yang sama: latar, panel, bar, border, aksen, seleksi), supaya
+  tema lain tetap rapi; warna semantik (merah berbahaya, kuning variabel, hijau sukses) boleh tetap.
+- Kalau ada bagian yang tidak bisa dibuat persis di Swing, atau menyimpang karena alasan keamanan, sebutkan bedanya ke
+  user, jangan diam-diam diganti.
 - Setiap fitur baru disertai unit test. Fitur SSH/SFTP juga disertai integration test (Testcontainers).
 
 ## Menjalankan perintah di PowerShell (Windows)

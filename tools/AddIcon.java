@@ -26,6 +26,9 @@ import java.util.regex.Pattern;
  * </pre>
  *
  * Contoh: {@code java tools/AddIcon.java TERMINAL terminal terminal}
+ * <p>Ikon yang tidak ada di Font Awesome Free bisa digambar sendiri dengan gaya FA: tulis nama FA berawalan
+ * {@code termul-} (mis. {@code java tools/AddIcon.java BOOKMARK termul-bookmark folder_special}). Sumber itu tidak
+ * diunduh; gambar {@code fa/<nama>.svg} secara manual seperti set orisinal.
  * Nama Font Awesome: https://fontawesome.com/search?ic=free (default gaya solid; tulis {@code regular/nama} untuk
  * gaya regular). Nama Material: https://fonts.google.com/icons (pakai huruf kecil + underscore, mis. folder_open).
  * Setelah itu pakai di kode sebagai {@code AppIcon.NAMA.icon()}.
@@ -44,6 +47,8 @@ public class AddIcon {
     static final List<String> SETS = List.of("fa", "material");
     /** Set orisinal TermUL (IconSet.GARIS/DUOTON/PIKSEL): tidak diunduh, SVG digambar manual. */
     static final List<String> ORIGINAL_SETS = List.of("garis", "duoton", "piksel");
+    /** Awalan nama FA untuk ikon gaya Font Awesome buatan TermUL (lihat {@link Source#customFa()}). */
+    static final String CUSTOM_FA_PREFIX = "termul-";
 
     static final Pattern NAME = Pattern.compile("[A-Z][A-Z0-9_]*");
     static final Pattern FA_NAME = Pattern.compile("((solid|regular|brands)/)?[a-z0-9-]+");
@@ -53,8 +58,13 @@ public class AddIcon {
     static final HttpClient HTTP = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build();
 
     record Source(String fa, String material) {
+        /** Ikon gaya Font Awesome yang digambar untuk TermUL (tidak ada di FA Free), tidak diunduh. */
+        boolean customFa() {
+            return fa.startsWith(CUSTOM_FA_PREFIX);
+        }
+
         String faPath() {
-            return fa.contains("/") ? fa : "solid/" + fa;
+            return fa.contains("/") || customFa() ? fa : "solid/" + fa;
         }
 
         @Override
@@ -132,12 +142,17 @@ public class AddIcon {
     }
 
     static void download(String name, Source source) throws IOException, InterruptedException {
-        String fa = get("https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@" + FA_VERSION
-                + "/svgs/" + source.faPath() + ".svg", "Font Awesome '" + source.fa() + "'");
+        String fa = source.customFa() ? null : get("https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@"
+                + FA_VERSION + "/svgs/" + source.faPath() + ".svg", "Font Awesome '" + source.fa() + "'");
         String m = source.material();
         String material = get("https://raw.githubusercontent.com/google/material-design-icons/" + MATERIAL_COMMIT
                 + "/symbols/web/" + m + "/materialsymbolsrounded/" + m + "_24px.svg", "Material '" + m + "'");
-        write(file("fa", name), squareViewBox(fa));
+        if (fa != null) {
+            write(file("fa", name), squareViewBox(fa));
+        } else if (!Files.isRegularFile(file("fa", name))) {
+            System.out.println("Perlu digambar manual: " + file("fa", name) + " (" + source.fa()
+                    + ": gaya Font Awesome buatan TermUL; AppIconTest gagal sampai file ini ada)");
+        }
         write(file("material", name), squareViewBox(material));
         System.out.println("OK " + name + " <- " + source);
     }
@@ -201,6 +216,7 @@ public class AddIcon {
         lines.add("# Sumber ikon per konstanta AppIcon. Dikelola oleh tools/AddIcon.java; jangan edit manual.");
         lines.add("# fa = Font Awesome Free " + FA_VERSION + " (CC BY 4.0), material = Material Symbols Rounded "
                 + "(Apache 2.0, google/material-design-icons@" + MATERIAL_COMMIT.substring(0, 7) + ")");
+        lines.add("# fa:" + CUSTOM_FA_PREFIX + "* = gaya Font Awesome yang digambar untuk TermUL (tidak ada di FA Free, tidak diunduh)");
         icons.forEach((name, source) -> lines.add(name + " = " + source));
         Files.writeString(MANIFEST, String.join("\n", lines) + "\n", StandardCharsets.UTF_8);
     }
