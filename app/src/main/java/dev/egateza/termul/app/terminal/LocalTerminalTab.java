@@ -97,7 +97,7 @@ public final class LocalTerminalTab extends TermPane {
             snippetButton.dispose();
         }
         snippetButton = new SnippetButton(center, host.corner(), snippetTarget(), host.sender(), host::manage,
-                host::cornerChanged);
+                host::cornerChanged, host::hideButton);
         refreshSnippetButton();
     }
 

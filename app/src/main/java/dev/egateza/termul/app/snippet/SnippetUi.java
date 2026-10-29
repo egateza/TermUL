@@ -639,7 +639,14 @@ final class SnippetUi {
             int iw = icon == null ? 0 : icon.getIconWidth();
             int gap = icon != null && !text.isEmpty() ? getIconTextGap() : 0;
             int w = iw + gap + fm.stringWidth(text);
+            var in = getInsets();
+            int room = getWidth() - in.left - in.right;
             int x = (getWidth() - w) / 2;
+            if (w > room) {
+                // tombol menyempit (mis. "Tempel ke <host panjang>"): tetap berpadding, teks dipotong dengan elipsis
+                x = in.left;
+                text = elide(text, fm, Math.max(0, room - iw - gap));
+            }
             if (icon != null) {
                 icon.paintIcon(null, g2, x, (getHeight() - icon.getIconHeight()) / 2);
             }
@@ -649,6 +656,19 @@ final class SnippetUi {
                 g2.drawString(text, x + iw + gap, (getHeight() - fm.getHeight()) / 2 + fm.getAscent());
             }
         }
+    }
+
+    /** {@code text} yang dipotong dengan "…" supaya lebarnya paling banyak {@code width}. */
+    static String elide(String text, FontMetrics fm, int width) {
+        if (fm.stringWidth(text) <= width) {
+            return text;
+        }
+        String dots = "…";
+        int end = text.length();
+        while (end > 0 && fm.stringWidth(text.substring(0, end).stripTrailing() + dots) > width) {
+            end--;
+        }
+        return end == 0 ? "" : text.substring(0, end).stripTrailing() + dots;
     }
 
     /**
@@ -827,6 +847,101 @@ final class SnippetUi {
         public boolean getScrollableTracksViewportHeight() {
             return getParent() != null && getPreferredSize().height < getParent().getHeight();
         }
+    }
+
+    /** Sudut window dialog snippet; sama dengan sudut kartu {@link RoundPanel} di dalamnya. */
+    static final int WINDOW_ARC = 16;
+
+    /**
+     * Sudut membulat untuk dialog snippet tanpa dekorasi.
+     *
+     * <p>Windows: window biasa yang dipotong dengan {@link Window#setShape}, diterapkan ulang saat ukuran atau layar
+     * berubah. Window transparan per piksel tidak dipakai di sana karena Java tidak menyesuaikannya saat dipindah ke
+     * monitor dengan scaling lain (gambar bergaris / window hilang; lihat juga {@code StreakWidget}). macOS / Linux:
+     * latar transparan per piksel kalau didukung.
+     *
+     * @return true kalau sudutnya membulat (kartu digambar dengan sudut), false = kotak biasa
+     */
+    static boolean roundWindow(Window w) {
+        if (dev.egateza.termul.core.Os.current().isWindows()) {
+            if (!shapeSupported(w)) {
+                return false;
+            }
+            w.setBackground(panel());
+            Runnable apply = () -> w.setShape(windowShape(w.getWidth(), w.getHeight()));
+            w.addComponentListener(new java.awt.event.ComponentAdapter() {
+                @Override
+                public void componentResized(java.awt.event.ComponentEvent e) {
+                    apply.run();
+                }
+
+                @Override
+                public void componentShown(java.awt.event.ComponentEvent e) {
+                    apply.run();
+                }
+            });
+            w.addPropertyChangeListener("graphicsConfiguration",
+                    e -> javax.swing.SwingUtilities.invokeLater(apply));
+            return true;
+        }
+        if (!SnippetConfirm.translucent(w)) {
+            return false;
+        }
+        w.setBackground(new Color(0, 0, 0, 0));
+        return true;
+    }
+
+    /**
+     * Pertahankan ukuran {@code w} saat ini ketika window dipindah antar monitor. Di Windows, Java mengalikan ukuran
+     * window besar yang melintasi batas monitor dengan scaling berbeda (mis. 100% ↔ 125%) berkali-kali tanpa
+     * mengembalikannya (dialog 1120×680 jadi 4271×2592), sehingga ukuran dikembalikan setiap kali layar atau ukuran
+     * berubah. Panggil setelah ukuran akhir diset; dialog snippet tidak bisa di-resize user.
+     */
+    static void keepSizeAcrossScreens(Window w) {
+        if (!dev.egateza.termul.core.Os.current().isWindows()) {
+            return;
+        }
+        var wanted = w.getSize();
+        Runnable restore = () -> {
+            if (!w.getSize().equals(wanted)) {
+                w.setSize(wanted);
+            }
+        };
+        w.addPropertyChangeListener("graphicsConfiguration", e -> javax.swing.SwingUtilities.invokeLater(() -> {
+            restore.run();
+            // lebar teks berubah per skala layar padahal ukuran logis tetap: susun ulang (seperti MainFrame)
+            if (w instanceof RootPaneContainer rpc) {
+                invalidateTree(rpc.getRootPane());
+            }
+            w.validate();
+            w.repaint();
+        }));
+        w.addComponentListener(new java.awt.event.ComponentAdapter() {
+            @Override
+            public void componentResized(java.awt.event.ComponentEvent e) {
+                javax.swing.SwingUtilities.invokeLater(restore);
+            }
+        });
+    }
+
+    private static void invalidateTree(Component c) {
+        c.invalidate();
+        if (c instanceof java.awt.Container parent) {
+            for (Component child : parent.getComponents()) {
+                invalidateTree(child);
+            }
+        }
+    }
+
+    static Shape windowShape(int width, int height) {
+        return new RoundRectangle2D.Double(0, 0, width, height, WINDOW_ARC, WINDOW_ARC);
+    }
+
+    private static boolean shapeSupported(Window w) {
+        var gc = w.getGraphicsConfiguration();
+        var device = gc != null ? gc.getDevice()
+                : java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice();
+        return device.isWindowTranslucencySupported(java.awt.GraphicsDevice.WindowTranslucency.PERPIXEL_TRANSPARENT);
     }
 
     /**

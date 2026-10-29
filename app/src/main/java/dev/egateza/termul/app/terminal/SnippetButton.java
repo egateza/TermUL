@@ -21,6 +21,8 @@ import java.awt.event.MouseEvent;
 import java.util.function.Consumer;
 import javax.swing.BorderFactory;
 import javax.swing.JLabel;
+import javax.swing.JMenuItem;
+import javax.swing.JPopupMenu;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import javax.swing.UIManager;
@@ -50,6 +52,7 @@ final class SnippetButton {
     private final SnippetSender sender;
     private final Runnable manage;
     private final Consumer<String> cornerChanged;
+    private final Runnable hide;
     private Point pressOnScreen;  // EDT; null = tidak sedang ditekan
     private Point pressTopLeft;   // EDT; posisi tombol saat ditekan, koordinat overlay
     private boolean dragging;     // EDT; true sejak seret dimulai sampai setelah klik dilepas diproses
@@ -60,17 +63,18 @@ final class SnippetButton {
      * @param target        terminal tab ini
      * @param manage        buka Snippet manager
      * @param cornerChanged sudut baru (nilai {@code AppConfig.SNIPPET_*}) setelah tombol diseret
+     * @param hide          sembunyikan tombol di semua tab (menu klik kanan)
      */
     SnippetButton(FloatingOverlay overlay, String corner, SnippetTarget target, SnippetSender sender, Runnable manage,
-                  Consumer<String> cornerChanged) {
+                  Consumer<String> cornerChanged, Runnable hide) {
         this.overlay = overlay;
         this.target = target;
         this.sender = sender;
         this.manage = manage;
         this.cornerChanged = cornerChanged;
+        this.hide = hide;
         button.setIcon(AppIcon.BOLT.icon(14, () -> new Color(0xE0AF68)));
-        button.setToolTipText(I18n.t("fab.snippet.tooltip", Shortcuts.text(ShortcutAction.SNIPPET_QUICK)));
-        button.getAccessibleContext().setAccessibleName(I18n.t("fab.snippet"));
+        button.setToolTipText(I18n.t("fab.snippet.tooltip", Shortcuts.text(ShortcutAction.SNIPPET_QUICK)));        button.getAccessibleContext().setAccessibleName(I18n.t("fab.snippet"));
         button.addActionListener(e -> {
             if (!dragging) {
                 showMenu();
@@ -79,6 +83,10 @@ final class SnippetButton {
         var drag = new MouseAdapter() {
             @Override
             public void mousePressed(MouseEvent e) {
+                if (e.isPopupTrigger()) { // macOS: saat ditekan
+                    showContextMenu(e);
+                    return;
+                }
                 if (SwingUtilities.isLeftMouseButton(e)) {
                     pressOnScreen = e.getLocationOnScreen();
                     pressTopLeft = button.getLocation();
@@ -102,6 +110,10 @@ final class SnippetButton {
 
             @Override
             public void mouseReleased(MouseEvent e) {
+                if (e.isPopupTrigger()) { // Windows: saat dilepas
+                    showContextMenu(e);
+                    return;
+                }
                 Point press = pressOnScreen;
                 pressOnScreen = null;
                 if (!dragging) {
@@ -164,6 +176,27 @@ final class SnippetButton {
         boolean right = anchor == FloatingOverlay.Anchor.TOP_RIGHT || anchor == FloatingOverlay.Anchor.BOTTOM_RIGHT;
         SnippetQuickPick.show(button, right ? button.getWidth() : 0, top ? button.getHeight() + 4 : -4, right, !top,
                 target, sender, manage, this::showToast);
+    }
+
+    private void showContextMenu(MouseEvent e) {
+        contextMenu().show(button, e.getX(), e.getY());
+    }
+
+    /** Menu klik kanan tombol: buka menu snippet, Kelola snippet, sembunyikan tombol. */
+    JPopupMenu contextMenu() {
+        var menu = new JPopupMenu();
+        var open = new JMenuItem(I18n.t("fab.snippet.open"));
+        open.addActionListener(a -> showMenu());
+        menu.add(open);
+        var manageItem = new JMenuItem(I18n.t("snippet.quick.manage"));
+        manageItem.addActionListener(a -> manage.run());
+        menu.add(manageItem);
+        menu.addSeparator();
+        var hideItem = new JMenuItem(I18n.t("fab.snippet.hide"));
+        hideItem.setToolTipText(I18n.t("fab.snippet.hide.tooltip", Shortcuts.text(ShortcutAction.SNIPPET_QUICK)));
+        hideItem.addActionListener(a -> hide.run());
+        menu.add(hideItem);
+        return menu;
     }
 
     /** Pesan hasil di dekat tombol (atau sudut kanan atas), hilang sendiri setelah {@link #TOAST_MS}. */

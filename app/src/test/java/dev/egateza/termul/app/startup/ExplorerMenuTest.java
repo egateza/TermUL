@@ -81,6 +81,25 @@ class ExplorerMenuTest {
         assertThat(registry.readString(root + "%02d".formatted(ExplorerMenu.MAX_ENTRIES + 1), "MUIVerb")).isNull();
     }
 
+    @Test
+    void ikonMenuMengikutiFileIkonDariJar() throws Exception {
+        var registry = new AutoStartTest.FakeRegistry();
+        var menu = windows(registry);
+        assertThat(menu.refreshIcon()).as("menu belum dipasang: tidak disentuh").isFalse();
+        menu.setEnabled(true, List.of());
+        try {
+            AppIconFile.use(java.nio.file.Path.of("C:\\Users\\u\\AppData\\Local\\TermUL\\app-icon\\termul-abc.ico"));
+            assertThat(menu.refreshIcon()).isTrue();
+            for (String root : WindowsExplorerMenu.ROOT_KEYS) {
+                assertThat(registry.readString(root, "Icon"))
+                        .isEqualTo("C:\\Users\\u\\AppData\\Local\\TermUL\\app-icon\\termul-abc.ico");
+            }
+            assertThat(menu.refreshIcon()).as("sudah benar: tidak ditulis ulang").isFalse();
+        } finally {
+            AppIconFile.use(null);
+        }
+    }
+
     private static WindowsExplorerMenu windows(WinRegistry registry) {
         return new WindowsExplorerMenu(registry, EXE);
     }

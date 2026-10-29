@@ -1,9 +1,7 @@
 import java.awt.BasicStroke;
 import java.awt.Color;
-import java.awt.GradientPaint;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
-import java.awt.geom.Path2D;
 import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
@@ -17,17 +15,18 @@ import java.util.List;
 import javax.imageio.ImageIO;
 
 /**
- * Menggambar ikon aplikasi TermUL ({@code >_} di kotak bulat) dan menulis:
+ * Menggambar ikon aplikasi TermUL ("T-cursor", sama dengan TermUL Mobile) dan menulis:
  * <ul>
- *   <li>{@code app/src/main/packaging/termul.ico} (16..256 px, entry PNG) untuk jpackage;</li>
- *   <li>{@code app/src/main/resources/dev/egateza/termul/app/icons/app-<ukuran>.png} untuk ikon window.</li>
+ *   <li>{@code app/src/main/packaging/termul.ico} (16..256 px, entry PNG) dan {@code termul.icns} untuk jpackage;</li>
+ *   <li>{@code app/src/main/resources/dev/egateza/termul/app/icons/app-<ukuran>.png} untuk ikon window;</li>
+ *   <li>{@code .../icons/termul.ico} di jar, untuk ikon shortcut yang ikut update lewat menu (ADR 0010).</li>
  * </ul>
  * Jalankan dari root repo: {@code java tools/MakeAppIcon.java}
  */
 public class MakeAppIcon {
 
     private static final int[] ICO_SIZES = {16, 20, 24, 32, 40, 48, 64, 128, 256};
-    private static final int[] WINDOW_SIZES = {16, 32, 48, 64, 128, 256};
+    private static final int[] WINDOW_SIZES = {16, 20, 24, 32, 40, 48, 64, 128, 256};
 
     public static void main(String[] args) throws IOException {
         Path ico = Path.of("app/src/main/packaging/termul.ico");
@@ -40,6 +39,8 @@ public class MakeAppIcon {
             entries.add(png(draw(size)));
         }
         Files.write(ico, ico(ICO_SIZES, entries));
+        // salinan di jar: ikon shortcut / menu Explorer ikut berganti lewat update menu (ADR 0010)
+        Files.write(pngDir.resolve("termul.ico"), ico(ICO_SIZES, entries));
         Path icns = ico.resolveSibling("termul.icns");
         Files.write(icns, icns());
         for (int size : WINDOW_SIZES) {
@@ -48,33 +49,29 @@ public class MakeAppIcon {
         System.out.println("Ditulis: " + ico + ", " + icns + " dan " + WINDOW_SIZES.length + " PNG di " + pngDir);
     }
 
+    /**
+     * Ikon "T-cursor" (sama dengan TermUL Mobile, prototipe "TermUL Desktop" → Ikon): kotak bulat {@code #0F1316}
+     * bergaris {@code #2F3549} (1 px di 16 px, supaya tidak hilang di title bar gelap), palang T terang dan batang T
+     * berupa kursor blok amber. Koordinat dari SVG prototipe, viewBox {@code 18 18 72 72}.
+     */
     static BufferedImage draw(int size) {
         var img = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = img.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
-        double s = size;
-        double pad = s * 0.04;
-        var box = new RoundRectangle2D.Double(pad, pad, s - 2 * pad, s - 2 * pad, s * 0.36, s * 0.36);
-        g.setPaint(new GradientPaint(0, 0, new Color(0x2B3245), 0, (float) s, new Color(0x151923)));
+        double k = size / 72.0;
+        g.scale(k, k);
+        g.translate(-18, -18);
+        var box = new RoundRectangle2D.Double(20.25, 20.25, 67.5, 67.5, 28, 28); // rx 14 = diameter sudut 28
+        g.setColor(new Color(0x0F1316));
         g.fill(box);
-        g.setStroke(new BasicStroke((float) Math.max(1, s * 0.03)));
-        g.setColor(new Color(0x3A4460));
+        g.setStroke(new BasicStroke(4.5f));
+        g.setColor(new Color(0x2F3549));
         g.draw(box);
-
-        float stroke = (float) Math.max(1.5, s * 0.11);
-        g.setStroke(new BasicStroke(stroke, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-        g.setColor(new Color(0x3DDC84));
-        var chevron = new Path2D.Double();
-        chevron.moveTo(s * 0.24, s * 0.30);
-        chevron.lineTo(s * 0.46, s * 0.50);
-        chevron.lineTo(s * 0.24, s * 0.70);
-        g.draw(chevron);
-        g.setColor(new Color(0xE6EAF2));
-        var cursor = new Path2D.Double();
-        cursor.moveTo(s * 0.54, s * 0.70);
-        cursor.lineTo(s * 0.76, s * 0.70);
-        g.draw(cursor);
+        g.setColor(new Color(0xE8EEF0));
+        g.fill(new RoundRectangle2D.Double(33, 35, 42, 9, 4, 4));
+        g.setColor(new Color(0xF0B34A));
+        g.fill(new RoundRectangle2D.Double(48, 48, 12, 27, 4, 4));
         g.dispose();
         return img;
     }

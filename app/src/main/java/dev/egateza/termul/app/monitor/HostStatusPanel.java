@@ -17,7 +17,7 @@ import javax.swing.SwingConstants;
 
 /**
  * "Host status" di kanan baris menu: CPU proses dan heap JVM (persen terhadap batas {@code -Xmx}) serta jumlah
- * thread, sebagai grafik, teks, atau keduanya ({@link Mode}). Klik kanan: GC manual atau sembunyikan. Tanggal/waktu
+ * thread, sebagai meter ({@link Meter}), teks, atau keduanya ({@link Mode}). Klik kanan: GC manual atau sembunyikan. Tanggal/waktu
  * ada di panel bawah. EDT.
  */
 public final class HostStatusPanel extends JPanel {
@@ -53,20 +53,19 @@ public final class HostStatusPanel extends JPanel {
         }
     }
 
-    private static final int GRAPH_WIDTH = 80;
-    private static final int GRAPH_HEIGHT = 16;
-    private static final Color TEXT_WARN = new Color(0xE0A000);
-    private static final Color TEXT_CRITICAL = new Color(0xE5484D);
+    /** Warna teks persen / MB saat tinggi dan kritis, sama dengan meter (prototipe). */
+    private static final Color TEXT_WARN = Meter.Palette.of(Level.WARN).fill();
+    private static final Color TEXT_CRITICAL = Meter.Palette.of(Level.CRITICAL).fill();
 
-    private final Sparkline cpuGraph;
-    private final Sparkline heapGraph;
+    private final Meter cpuGraph = new Meter(I18n.t("monitor.cpu"));
+    private final Meter heapGraph = new Meter(I18n.t("monitor.heap"));
     private final JLabel cpuCaption = caption(I18n.t("monitor.cpu"));
     private final JLabel heapCaption = caption(I18n.t("monitor.heap"));
     private final JLabel cpuPercent = new JLabel();  // mode teks
     private final JLabel heapPercent = new JLabel(); // mode teks
     private final JLabel heapText = new JLabel();
     private final JLabel threadsText = new JLabel();
-    private final JSeparator divider = verticalDivider(GRAPH_HEIGHT);
+    private final JSeparator divider = verticalDivider(14);
     private Mode mode; // EDT
 
     /** @param onHide dipanggil saat user memilih "Sembunyikan" dari menu klik kanan */
@@ -75,8 +74,6 @@ public final class HostStatusPanel extends JPanel {
         setLayout(new BoxLayout(this, BoxLayout.X_AXIS));
         setBorder(BorderFactory.createEmptyBorder(0, 8, 0, 0));
         getAccessibleContext().setAccessibleName(I18n.t("monitor.hostStatus"));
-        cpuGraph = new Sparkline(monitor.cpuHistory(), GRAPH_WIDTH, GRAPH_HEIGHT);
-        heapGraph = new Sparkline(monitor.heapHistory(), GRAPH_WIDTH, GRAPH_HEIGHT);
 
         var popup = new JPopupMenu();
         var gc = new JMenuItem(I18n.t("monitor.runGc"));
@@ -106,9 +103,10 @@ public final class HostStatusPanel extends JPanel {
         }
         this.mode = mode;
         removeAll();
+        // jarak prototipe: 8 px antar bagian, 14 px sebelum "Heap" dan "Threads"
         add(cpuCaption);
         add(mode == Mode.TEXT ? cpuPercent : cpuGraph);
-        add(Box.createHorizontalStrut(12));
+        add(Box.createHorizontalStrut(14));
         add(heapCaption);
         if (mode == Mode.TEXT) {
             add(heapPercent);
@@ -116,12 +114,12 @@ public final class HostStatusPanel extends JPanel {
             add(heapGraph);
         }
         if (mode != Mode.GRAPH) {
-            add(Box.createHorizontalStrut(6));
+            add(Box.createHorizontalStrut(8));
             add(heapText);
-            add(Box.createHorizontalStrut(12));
+            add(Box.createHorizontalStrut(14));
             add(threadsText);
         }
-        add(Box.createHorizontalStrut(10));
+        add(Box.createHorizontalStrut(8));
         add(divider); // pemisah dari tombol di kanannya (terang/gelap, update)
         add(Box.createHorizontalStrut(4));
         revalidate();
@@ -149,7 +147,7 @@ public final class HostStatusPanel extends JPanel {
 
     private static JLabel caption(String text) {
         var label = new JLabel(text);
-        label.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 5));
+        label.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 8));
         return label;
     }
 
@@ -159,23 +157,24 @@ public final class HostStatusPanel extends JPanel {
             c.setToolTipText(tip);
         }
         if (s == null) {
-            cpuGraph.update("–", Level.NORMAL);
-            heapGraph.update("–", Level.NORMAL);
+            cpuGraph.update(Double.NaN, "–", Level.NORMAL);
+            heapGraph.update(Double.NaN, "–", Level.NORMAL);
             cpuPercent.setText("–");
             heapPercent.setText("–");
             heapText.setText(" ");
             threadsText.setText(" ");
             return;
         }
-        cpuGraph.update(ResourceMonitor.percent(s.processCpu()), Level.of(s.processCpu()));
-        heapGraph.update(ResourceMonitor.percent(s.heapRatio()), Level.of(s.heapRatio()));
+        cpuGraph.update(s.processCpu(), ResourceMonitor.percent(s.processCpu()), Level.of(s.processCpu()));
+        heapGraph.update(s.heapRatio(), ResourceMonitor.percent(s.heapRatio()), Level.of(s.heapRatio()));
         setLevelText(cpuPercent, ResourceMonitor.percent(s.processCpu()), Level.of(s.processCpu()));
         setLevelText(heapPercent, ResourceMonitor.percent(s.heapRatio()), Level.of(s.heapRatio()));
-        heapText.setText(ResourceMonitor.size(s.heapUsed()) + " / " + ResourceMonitor.size(s.heapLimit()));
+        setLevelText(heapText, ResourceMonitor.size(s.heapUsed()) + " / " + ResourceMonitor.size(s.heapLimit()),
+                Level.of(s.heapRatio())); // MB ikut warna level heap (prototipe)
         threadsText.setText(I18n.t("monitor.threads", String.valueOf(s.threads())));
     }
 
-    /** Teks persen; warna ikut tema saat normal, kuning/merah saat mendekati batas (seperti grafik). */
+    /** Teks persen / MB; warna ikut tema saat normal, amber/merah saat mendekati batas (seperti meter). */
     private static void setLevelText(JLabel label, String text, Level level) {
         label.setText(text);
         label.setForeground(switch (level) {

@@ -188,6 +188,7 @@ public final class TermULApp {
                         .ifPresentOrElse(o -> frame.openLocalIn(o.shell(), o.directory()), frame::showWindow)));
             }
             io.execute(() -> AppUpdates.markHealthy(paths, log)); // rollback otomatis tidak dipicu untuk versi ini
+            dev.egateza.termul.app.startup.WindowsAppIcon.refreshInBackground(paths); // ikon shortcut ikut update
             UiAsync.run(io, store::load, frame::showSnapshot,
                     err -> Dialogs.error(frame, "Gagal memuat profil", err));
         });

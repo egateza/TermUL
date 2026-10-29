@@ -16,19 +16,16 @@ import org.slf4j.LoggerFactory;
 /**
  * Sampler resource JVM yang untuk bar "Host status". Sampel diambil
  * tiap detik di thread daemon sendiri (tepat setelah pergantian detik, supaya jam di bar bawah tidak melompat), lalu
- * diteruskan ke EDT. Sampler hanya jalan selama bar terlihat ({@link #setActive}). Riwayat grafik dibatasi
- * {@value #HISTORY} sampel. Semua method dipanggil di EDT kecuali disebut lain.
+ * diteruskan ke EDT. Sampler hanya jalan selama bar terlihat ({@link #setActive}). Semua method dipanggil di EDT
+ * kecuali disebut lain.
  */
 public final class ResourceMonitor implements AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(ResourceMonitor.class);
 
-    static final int HISTORY = 60;
     private static final long PERIOD_MS = 1000;
 
     private final Executor io;
-    private final History cpu = new History(HISTORY);
-    private final History heap = new History(HISTORY);
     private final List<Consumer<JvmSample>> views = new ArrayList<>(); // EDT
     private ScheduledExecutorService timer; // EDT; null = berhenti
     private JvmSample last; // EDT
@@ -36,14 +33,6 @@ public final class ResourceMonitor implements AutoCloseable {
     /** @param io executor untuk GC manual (supaya tidak di EDT) */
     public ResourceMonitor(Executor io) {
         this.io = io;
-    }
-
-    History cpuHistory() {
-        return cpu;
-    }
-
-    History heapHistory() {
-        return heap;
     }
 
     /** Sampel terakhir, atau null kalau belum ada. */
@@ -90,8 +79,6 @@ public final class ResourceMonitor implements AutoCloseable {
             return; // sampel yang terlambat datang setelah dihentikan
         }
         last = sample;
-        cpu.add(sample.processCpu());
-        heap.add(sample.heapRatio());
         for (var v : views) {
             v.accept(sample);
         }

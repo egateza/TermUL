@@ -4,7 +4,7 @@ package dev.egateza.termul.app.monitor;
 enum Level {
     NORMAL, WARN, CRITICAL;
 
-    static final double WARN_AT = 0.75;
+    static final double WARN_AT = 0.70; // prototipe: amber dari 70%, merah dari 90%
     static final double CRITICAL_AT = 0.90;
 
     /** @param ratio 0..1; NaN = normal (tidak diketahui) */

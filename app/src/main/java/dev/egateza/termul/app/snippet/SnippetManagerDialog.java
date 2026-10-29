@@ -76,6 +76,8 @@ public final class SnippetManagerDialog extends JDialog {
     private static final String EDIT = "edit";
     private static final String TABLE = "table";
     private static final String EMPTY = "empty";
+    private static final String EXPORT = "M12 15V4M7 9l5-5 5 5M5 20h14";
+    private static final String SORT = "M8 4v16M4 8l4-4 4 4M16 20V4M12 16l4 4 4-4";
 
     /** Item navigasi kiri: semua, favorit, satu kategori, atau tanpa kategori. */
     record Nav(Kind kind, String categoryId, String label, int count) {
@@ -99,7 +101,15 @@ public final class SnippetManagerDialog extends JDialog {
         }
     }
 
-    record EditorState(String title, String command, boolean enter, String categoryName, SnippetScope scope,
+    /** Pilihan "Kategori" di form edit; {@code id} kosong = Tanpa kategori. */
+    record CategoryChoice(String id, String label) {
+        @Override
+        public String toString() {
+            return label;
+        }
+    }
+
+    record EditorState(String title, String command, boolean enter, String categoryId, SnippetScope scope,
                        boolean favorite, boolean dangerous, Map<String, String> variables) {
     }
 
@@ -131,6 +141,10 @@ public final class SnippetManagerDialog extends JDialog {
     private boolean editing;                // EDT
     private Timer toastTimer;               // EDT
     private boolean reloading;              // EDT; abaikan event seleksi saat daftar diisi ulang
+    private boolean sorting;                // EDT; mode Atur urutan: semua snippet, urutan manual, seret baris
+    private final SnippetUi.Button sortButton = new SnippetUi.Button(I18n.t("snippet.manager.reorder"),
+            SnippetUi.stroke(SORT, 14, SnippetUi::fg, 2), SnippetUi.Variant.DEFAULT);
+    private final JLabel sortBanner = new JLabel();
     private final Runnable undim;
 
     /**
@@ -146,10 +160,7 @@ public final class SnippetManagerDialog extends JDialog {
         this.target = target;
         this.groups = groups;
         setUndecorated(true);
-        boolean round = SnippetConfirm.translucent(this);
-        if (round) {
-            setBackground(new Color(0, 0, 0, 0));
-        }
+        boolean round = SnippetUi.roundWindow(this);
 
         var root = new SnippetUi.RoundPanel(new BorderLayout(), SnippetUi::panel, SnippetUi::frame, round ? 16 : 0);
         root.setBorder(BorderFactory.createEmptyBorder(1, 1, 1, 1));
@@ -187,6 +198,7 @@ public final class SnippetManagerDialog extends JDialog {
         int w = owner == null ? 1120 : Math.min(1120, owner.getWidth() - 32);
         int h = owner == null ? 680 : Math.min(680, owner.getHeight() - 32);
         setSize(Math.max(760, w), Math.max(460, h));
+        SnippetUi.keepSizeAcrossScreens(this);
         setLocationRelativeTo(owner);
         undim = SnippetUi.dim(owner);
     }
@@ -246,7 +258,9 @@ public final class SnippetManagerDialog extends JDialog {
 
     private JComponent targetChip() {
         if (target == null) {
-            return new SnippetUi.Chip(22, 10, SnippetUi.mutedLabel(I18n.t("snippet.manager.noTarget")));
+            var chip = new SnippetUi.Chip(22, 10, SnippetUi.mutedLabel(I18n.t("snippet.manager.noTarget")));
+            chip.setMaximumSize(chip.getPreferredSize()); // jangan melar memenuhi header (BoxLayout)
+            return chip;
         }
         var dot = new JLabel(SnippetUi.dot(7, target.canPaste() ? SnippetUi::success : SnippetUi::muted));
         var chip = new SnippetUi.Chip(22, 10, dot, SnippetUi.mutedLabel(I18n.t("snippet.manager.target")),
@@ -256,7 +270,7 @@ public final class SnippetManagerDialog extends JDialog {
         return chip;
     }
 
-    /** Toolbar 48 px: cari (320 px), jumlah, Snippet baru. */
+    /** Toolbar 48 px: cari (320 px), jumlah, Ekspor, Atur urutan, Snippet baru. */
     private JComponent toolbar() {
         SnippetUi.styleField(search, 30);
         search.setFont(SnippetUi.font(0, Font.PLAIN));
@@ -273,6 +287,13 @@ public final class SnippetManagerDialog extends JDialog {
                 SnippetUi.Variant.PRIMARY);
         newButton.setToolTipText(I18n.t("snippet.manager.new.tip", Shortcuts.text(Shortcuts.menu(KeyEvent.VK_N))));
         newButton.addActionListener(e -> startNew());
+        var exportButton = new SnippetUi.Button(I18n.t("snippet.manager.export"),
+                SnippetUi.stroke(EXPORT, 14, SnippetUi::fg, 2), SnippetUi.Variant.DEFAULT);
+        exportButton.setToolTipText(I18n.t("snippet.manager.export.tip",
+                Shortcuts.text(Shortcuts.menu(KeyEvent.VK_E))));
+        exportButton.addActionListener(e -> openExport());
+        sortButton.setToolTipText(I18n.t("snippet.manager.reorder.tip"));
+        sortButton.addActionListener(e -> setSorting(!sorting));
 
         var bar = new JPanel();
         bar.setLayout(new BoxLayout(bar, BoxLayout.X_AXIS));
@@ -284,6 +305,10 @@ public final class SnippetManagerDialog extends JDialog {
         bar.add(Box.createHorizontalStrut(10));
         bar.add(count);
         bar.add(Box.createHorizontalGlue());
+        bar.add(exportButton);
+        bar.add(Box.createHorizontalStrut(10));
+        bar.add(sortButton);
+        bar.add(Box.createHorizontalStrut(10));
         bar.add(newButton);
         return bar;
     }
@@ -331,11 +356,26 @@ public final class SnippetManagerDialog extends JDialog {
         nav.setBorder(BorderFactory.createEmptyBorder(10, 8, 10, 8));
         nav.getAccessibleContext().setAccessibleName(I18n.t("snippet.manager.categories"));
         var scroll = new JScrollPane(nav);
-        scroll.setBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, SnippetUi.border()));
+        scroll.setBorder(BorderFactory.createEmptyBorder());
         scroll.getViewport().setBackground(SnippetUi.bar());
-        scroll.setPreferredSize(new Dimension(196, 0));
         scroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-        return scroll;
+
+        // "Kelola kategori…" selalu di bawah navigasi (prototipe), tidak ikut tergulung
+        var manage = new NavItem(new Nav(Nav.Kind.ALL, "\u0000manage", I18n.t("snippet.nav.manageCategories"), -1),
+                SnippetUi.sliders(14), false, this::openCategories);
+        manage.setToolTipText(I18n.t("snippet.nav.manageCategories.tip"));
+        var bottom = new JPanel(new BorderLayout());
+        bottom.setBackground(SnippetUi.bar());
+        bottom.setBorder(BorderFactory.createEmptyBorder(4, 8, 10, 8));
+        bottom.add(manage);
+
+        var pane = new JPanel(new BorderLayout());
+        pane.setBackground(SnippetUi.bar());
+        pane.setBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, SnippetUi.border()));
+        pane.setPreferredSize(new Dimension(196, 0));
+        pane.add(scroll, BorderLayout.CENTER);
+        pane.add(bottom, BorderLayout.SOUTH);
+        return pane;
     }
 
     private void rebuildNav(List<Snippet> all, List<String> ids) {
@@ -361,8 +401,16 @@ public final class SnippetManagerDialog extends JDialog {
     }
 
     private void addNav(Nav n, Icon icon) {
-        boolean on = n.kind() == navKind && n.categoryId().equals(navCategory);
-        var item = new NavItem(n, icon, on);
+        boolean on = !sorting && n.kind() == navKind && n.categoryId().equals(navCategory);
+        var item = new NavItem(n, icon, on, () -> {
+            navKind = n.kind();
+            navCategory = n.categoryId();
+            if (sorting) {
+                setSorting(false); // memilih kategori mengakhiri mode urutan (prototipe)
+            } else {
+                reload(selected);
+            }
+        });
         item.setAlignmentX(Component.LEFT_ALIGNMENT);
         nav.add(item);
         nav.add(Box.createVerticalStrut(2));
@@ -373,7 +421,8 @@ public final class SnippetManagerDialog extends JDialog {
         private final boolean on;
         private boolean hover;
 
-        NavItem(Nav n, Icon icon, boolean on) {
+        /** @param n {@code count} −1 = tanpa angka (aksi, bukan filter) */
+        NavItem(Nav n, Icon icon, boolean on, Runnable pick) {
             super(new BorderLayout(8, 0));
             this.on = on;
             setOpaque(false);
@@ -381,19 +430,17 @@ public final class SnippetManagerDialog extends JDialog {
             setBorder(BorderFactory.createEmptyBorder(0, 10, 0, 10));
             setPreferredSize(new Dimension(180, 28));
             setMaximumSize(new Dimension(Integer.MAX_VALUE, 28));
+            boolean action = n.count() < 0;
             var label = SnippetUi.label(n.label(), SnippetUi.font(0, Font.PLAIN), on ? SnippetUi.onSelection()
-                    : SnippetUi.fg());
+                    : action ? SnippetUi.muted() : SnippetUi.fg());
             label.setIcon(icon);
             label.setIconTextGap(8);
             add(label, BorderLayout.CENTER);
-            add(SnippetUi.label(String.valueOf(n.count()), SnippetUi.font(0, Font.PLAIN), SnippetUi.muted()),
-                    BorderLayout.EAST);
+            if (!action) {
+                add(SnippetUi.label(String.valueOf(n.count()), SnippetUi.font(0, Font.PLAIN), SnippetUi.muted()),
+                        BorderLayout.EAST);
+            }
             getAccessibleContext().setAccessibleName(n.label());
-            Runnable pick = () -> {
-                navKind = n.kind();
-                navCategory = n.categoryId();
-                reload(selected);
-            };
             addMouseListener(new MouseAdapter() {
                 @Override
                 public void mouseEntered(MouseEvent e) {
@@ -481,6 +528,9 @@ public final class SnippetManagerDialog extends JDialog {
                     return;
                 }
                 var s = tableModel.at(row);
+                if (sorting) {
+                    return; // klik di mode urutan hanya memilih / menyeret
+                }
                 if (table.columnAtPoint(e.getPoint()) == 0 && e.getClickCount() == 1) {
                     toggleFavorite(s);
                 } else if (e.getClickCount() == 2) {
@@ -522,9 +572,106 @@ public final class SnippetManagerDialog extends JDialog {
         var emptyWrap = new JPanel(new BorderLayout());
         emptyWrap.setBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, SnippetUi.border()));
         emptyWrap.add(empty);
-        listArea.add(scroll, TABLE);
+        table.setDragEnabled(true);
+        table.setDropMode(javax.swing.DropMode.INSERT_ROWS);
+        table.setTransferHandler(new ReorderHandler());
+
+        sortBanner.setText("<html>" + SnippetUi.esc(I18n.t("snippet.manager.reorder.banner")) + "</html>");
+        sortBanner.setFont(SnippetUi.font(-1, Font.PLAIN));
+        sortBanner.setForeground(SnippetUi.muted());
+        sortBanner.setOpaque(true);
+        sortBanner.setBackground(SnippetUi.chip());
+        sortBanner.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 0, 1, 1, SnippetUi.border()),
+                BorderFactory.createEmptyBorder(8, 12, 8, 12)));
+        sortBanner.setVisible(false);
+        var tableCard = new JPanel(new BorderLayout());
+        tableCard.add(sortBanner, BorderLayout.NORTH);
+        tableCard.add(scroll, BorderLayout.CENTER);
+        listArea.add(tableCard, TABLE);
         listArea.add(emptyWrap, EMPTY);
         return listArea;
+    }
+
+    /**
+     * Seret baris di mode Atur urutan. Data yang dipindah hanya indeks baris (di dalam tabel ini), lalu disimpan lewat
+     * {@link SnippetStore#moveSnippet}; di luar mode itu seret tidak melakukan apa-apa.
+     */
+    private final class ReorderHandler extends javax.swing.TransferHandler {
+        private static final java.awt.datatransfer.DataFlavor ROW = new java.awt.datatransfer.DataFlavor(
+                Integer.class, "snippet row");
+
+        @Override
+        public int getSourceActions(JComponent c) {
+            return sorting ? MOVE : NONE;
+        }
+
+        @Override
+        protected java.awt.datatransfer.Transferable createTransferable(JComponent c) {
+            int row = table.getSelectedRow();
+            return new java.awt.datatransfer.Transferable() {
+                @Override
+                public java.awt.datatransfer.DataFlavor[] getTransferDataFlavors() {
+                    return new java.awt.datatransfer.DataFlavor[] {ROW};
+                }
+
+                @Override
+                public boolean isDataFlavorSupported(java.awt.datatransfer.DataFlavor flavor) {
+                    return ROW.equals(flavor);
+                }
+
+                @Override
+                public Object getTransferData(java.awt.datatransfer.DataFlavor flavor) {
+                    return row;
+                }
+            };
+        }
+
+        @Override
+        public boolean canImport(TransferSupport support) {
+            return sorting && support.isDrop() && support.isDataFlavorSupported(ROW);
+        }
+
+        @Override
+        public boolean importData(TransferSupport support) {
+            if (!canImport(support)) {
+                return false;
+            }
+            try {
+                int from = (Integer) support.getTransferable().getTransferData(ROW);
+                int to = ((javax.swing.JTable.DropLocation) support.getDropLocation()).getRow();
+                moveRow(from, dropIndex(from, to));
+                return true;
+            } catch (java.awt.datatransfer.UnsupportedFlavorException | java.io.IOException e) {
+                return false;
+            }
+        }
+    }
+
+    /** Indeks tujuan setelah baris {@code from} diambil, untuk sisipan sebelum baris {@code insertBefore}. */
+    static int dropIndex(int from, int insertBefore) {
+        return insertBefore > from ? insertBefore - 1 : insertBefore;
+    }
+
+    private void moveRow(int from, int to) {
+        if (from < 0 || from >= tableModel.getRowCount() || from == to) {
+            return;
+        }
+        var s = tableModel.at(from);
+        UiAsync.run(io, () -> store.moveSnippet(s.id(), to), this::saveFailed)
+                .thenRun(() -> SwingUtilities.invokeLater(() -> reload(s.id())));
+    }
+
+    private void setSorting(boolean on) {
+        if (editing && on) {
+            cancelEdit();
+        }
+        sorting = on;
+        sortButton.setText(I18n.t(on ? "snippet.manager.reorder.done" : "snippet.manager.reorder"));
+        sortButton.getModel().setPressed(false);
+        sortBanner.setVisible(on);
+        search.setEnabled(!on);
+        reload(selected);
     }
 
     private static void fix(javax.swing.table.TableColumn column, int width) {
@@ -561,6 +708,11 @@ public final class SnippetManagerDialog extends JDialog {
         });
         key(root, Shortcuts.menu(KeyEvent.VK_N), "new", this::startNew);
         key(root, Shortcuts.menu(KeyEvent.VK_F), "search", search::requestFocusInWindow);
+        key(root, Shortcuts.menu(KeyEvent.VK_E), "export", this::openExport);
+        // pengganti seret untuk keyboard: Alt+↑ / Alt+↓ menggeser snippet terpilih di mode urutan
+        map(KeyStroke.getKeyStroke(KeyEvent.VK_UP, java.awt.event.InputEvent.ALT_DOWN_MASK), "moveUp", () -> moveBy(-1));
+        map(KeyStroke.getKeyStroke(KeyEvent.VK_DOWN, java.awt.event.InputEvent.ALT_DOWN_MASK), "moveDown",
+                () -> moveBy(1));
         var map = table.getInputMap(JComponent.WHEN_FOCUSED);
         map.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "pasteSnippet");
         map.put(KeyStroke.getKeyStroke(KeyEvent.VK_F2, 0), "editSnippet");
@@ -568,6 +720,18 @@ public final class SnippetManagerDialog extends JDialog {
         table.getActionMap().put("pasteSnippet", SnippetQuickPick.action(() -> current().ifPresent(this::paste)));
         table.getActionMap().put("editSnippet", SnippetQuickPick.action(() -> current().ifPresent(this::startEdit)));
         table.getActionMap().put("deleteSnippet", SnippetQuickPick.action(() -> current().ifPresent(this::delete)));
+    }
+
+    private void map(KeyStroke ks, String name, Runnable run) {
+        table.getInputMap(JComponent.WHEN_FOCUSED).put(ks, name);
+        table.getActionMap().put(name, SnippetQuickPick.action(run));
+    }
+
+    private void moveBy(int delta) {
+        int row = table.getSelectedRow();
+        if (sorting && row >= 0) {
+            moveRow(row, Math.clamp(row + delta, 0, tableModel.getRowCount() - 1));
+        }
     }
 
     private static void key(JComponent c, KeyStroke ks, String name, Runnable run) {
@@ -611,7 +775,8 @@ public final class SnippetManagerDialog extends JDialog {
             }
             rebuildNav(all, ids);
             var active = new Nav(navKind, navCategory, "", 0);
-            var rows = shown(all, active, ids, search.getText());
+            // mode urutan: semua snippet apa adanya (urutan manual), tanpa filter dan tanpa favorit di atas
+            var rows = sorting ? all : shown(all, active, ids, search.getText());
             tableModel.set(rows);
             count.setText(rows.size() == all.size() ? I18n.t("snippet.manager.count", all.size())
                     : I18n.t("snippet.manager.countFiltered", rows.size(), all.size()));
@@ -781,6 +946,9 @@ public final class SnippetManagerDialog extends JDialog {
         paste.setToolTipText(target == null ? I18n.t("snippet.manager.noTarget")
                 : I18n.t(s.enter() ? "snippet.action.run" : "snippet.action.paste", sendTo) + " (Enter)");
         paste.addActionListener(e -> paste(s));
+        // nama host panjang: tombol ini yang menyusut (teks dengan elipsis, lengkap di tooltip), bukan Edit / Hapus
+        // yang terdorong keluar panel
+        paste.setMinimumSize(new Dimension(80, paste.getPreferredSize().height));
         copy.setToolTipText(I18n.t("snippet.action.copy") + " (" + Shortcuts.text(Shortcuts.menu(KeyEvent.VK_C)) + ")");
         copy.addActionListener(e -> toast(sender.copy(this, s, Map.copyOf(vals), target)));
         var edit = new SnippetUi.Button(I18n.t("snippet.action.edit"), null, SnippetUi.Variant.DEFAULT);
@@ -870,6 +1038,30 @@ public final class SnippetManagerDialog extends JDialog {
                 }));
     }
 
+    private void openCategories() {
+        if (editing) {
+            cancelEdit(); // pilihan kategori di form edit dibangun ulang setelah kategori berubah
+        }
+        SnippetCategoriesDialog.show(this, store, io, message -> toast(message, false));
+        reload(selected);
+    }
+
+    private void openExport() {
+        var all = store.snapshot();
+        var ids = categoryIds();
+        var nav = new Nav(navKind, navCategory, "", 0);
+        var view = all.stream().filter(s -> nav.includes(s, ids)).toList();
+        String label = switch (navKind) {
+            case ALL -> I18n.t("snippet.nav.all");
+            case FAVORITES -> I18n.t("snippet.nav.favorites");
+            case NONE -> I18n.t("snippet.nav.uncategorized");
+            case CATEGORY -> store.categoryName(navCategory);
+        };
+        var start = navKind == Nav.Kind.ALL ? SnippetExportDialog.Which.ALL : SnippetExportDialog.Which.VIEW;
+        SnippetExportDialog.show(this, store, io, message -> toast(message, false),
+                new SnippetExportDialog.Sets(all, view, label, start));
+    }
+
     private void saveFailed(Throwable err) {
         Dialogs.error(this, I18n.t("snippet.saveFailed", err.getMessage()), err);
     }
@@ -877,13 +1069,13 @@ public final class SnippetManagerDialog extends JDialog {
     // --- edit ---
 
     private void startNew() {
-        String category = navKind == Nav.Kind.CATEGORY ? store.categoryName(navCategory) : "";
+        String category = navKind == Nav.Kind.CATEGORY ? navCategory : "";
         startEditor(null, new EditorState("", "", false, category, SnippetScope.ALL, navKind == Nav.Kind.FAVORITES,
                 false, Map.of()));
     }
 
     private void startEdit(Snippet s) {
-        startEditor(s, new EditorState(s.title(), s.command(), s.enter(), store.categoryName(s.category()), s.scope(),
+        startEditor(s, new EditorState(s.title(), s.command(), s.enter(), s.category(), s.scope(),
                 s.favorite(), s.dangerous(), s.variables()));
     }
 
@@ -954,13 +1146,17 @@ public final class SnippetManagerDialog extends JDialog {
         commandBlock.add(found, BorderLayout.SOUTH);
         add(box, gc, commandBlock, 12);
 
-        var category = SnippetUi.styleField(new JComboBox<String>(), 30);
-        category.setEditable(true);
-        category.addItem("");
-        store.categories().forEach(c -> category.addItem(c.name()));
-        category.setSelectedItem(init.categoryName());
-        if (category.getEditor().getEditorComponent() instanceof JTextField editor) {
-            editor.putClientProperty("JTextField.placeholderText", I18n.t("snippet.nav.uncategorized"));
+        // pilihan tetap seperti prototipe: kategori (urutan Kelola kategori) lalu Tanpa kategori di akhir
+        var category = SnippetUi.styleField(new JComboBox<CategoryChoice>(), 30);
+        store.categories().forEach(c -> category.addItem(new CategoryChoice(c.id(), c.name())));
+        category.addItem(new CategoryChoice("", I18n.t("snippet.nav.uncategorized")));
+        for (int i = 0; i < category.getItemCount(); i++) {
+            if (category.getItemAt(i).id().equals(init.categoryId())) {
+                category.setSelectedIndex(i);
+            }
+        }
+        if (category.getSelectedIndex() < 0) {
+            category.setSelectedIndex(category.getItemCount() - 1);
         }
         category.setToolTipText(I18n.t("snippet.edit.categoryTip"));
         var scope = SnippetUi.styleField(new JComboBox<ScopeChoice>(), 30);
@@ -1032,14 +1228,15 @@ public final class SnippetManagerDialog extends JDialog {
         cancel.setToolTipText(I18n.t("snippet.cancel") + " (Esc)");
         cancel.addActionListener(e -> cancelEdit());
         save.addActionListener(e -> {
-            String categoryName = Objects.toString(category.getEditor().getItem(), "").strip();
+            var picked = (CategoryChoice) category.getSelectedItem();
+            String categoryId = picked == null ? "" : picked.id();
             var choice = (ScopeChoice) scope.getSelectedItem();
             UUID id = original == null ? UUID.randomUUID() : original.id();
             var defaults = new LinkedHashMap<>(init.variables());
             defaults.keySet().retainAll(SnippetVariables.names(command.getText()));
             Snippet draft;
             try {
-                draft = new Snippet(id, title.getText(), command.getText(), enter.isSelected(), "",
+                draft = new Snippet(id, title.getText(), command.getText(), enter.isSelected(), categoryId,
                         favorite.isSelected(), dangerous.isSelected(),
                         choice == null ? SnippetScope.ALL : choice.scope(), defaults);
             } catch (IllegalArgumentException ex) {
@@ -1047,10 +1244,8 @@ public final class SnippetManagerDialog extends JDialog {
                 return;
             }
             UiAsync.run(io, () -> {
-                SnippetCategory c = store.ensureCategory(categoryName);
-                var saved = draft.withCategory(c == null ? "" : c.id());
-                store.save(saved);
-                return saved;
+                store.save(draft);
+                return draft;
             }, saved -> {
                 editing = false;
                 selected = saved.id();
@@ -1198,6 +1393,32 @@ public final class SnippetManagerDialog extends JDialog {
                 BorderFactory.createEmptyBorder(0, left, 0, right));
     }
 
+    /** Pegangan seret 2×3 titik (prototipe), di kolom bintang selama mode urutan. */
+    private static final Icon GRIP = new Icon() {
+        @Override
+        public void paintIcon(Component c, Graphics g, int x, int y) {
+            var g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(SnippetUi.muted());
+            for (int col = 0; col < 2; col++) {
+                for (int r = 0; r < 3; r++) {
+                    g2.fillOval(x + 1 + col * 6, y + r * 5, 3, 3);
+                }
+            }
+            g2.dispose();
+        }
+
+        @Override
+        public int getIconWidth() {
+            return 12;
+        }
+
+        @Override
+        public int getIconHeight() {
+            return 14;
+        }
+    };
+
     private final class StarRenderer implements TableCellRenderer {
         private final JLabel label = new JLabel();
 
@@ -1210,8 +1431,9 @@ public final class SnippetManagerDialog extends JDialog {
         public Component getTableCellRendererComponent(JTable t, Object value, boolean sel, boolean focus, int row,
                                                        int column) {
             var s = (Snippet) value;
-            label.setIcon(SnippetUi.star(s.favorite(), 14));
-            label.setToolTipText(I18n.t(s.favorite() ? "snippet.favorite.remove" : "snippet.favorite.add"));
+            label.setIcon(sorting ? GRIP : SnippetUi.star(s.favorite(), 14));
+            label.setToolTipText(sorting ? I18n.t("snippet.manager.reorder.handle")
+                    : I18n.t(s.favorite() ? "snippet.favorite.remove" : "snippet.favorite.add"));
             label.setBackground(rowBackground(t, row, sel));
             label.setBorder(rowLine(0, 0));
             return label;

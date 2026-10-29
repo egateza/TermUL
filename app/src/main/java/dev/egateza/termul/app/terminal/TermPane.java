@@ -27,6 +27,9 @@ public abstract sealed class TermPane extends JPanel permits TerminalTab, LocalT
 
         /** Buka Snippet manager. */
         void manage();
+
+        /** Sembunyikan tombol snippet di semua tab (sama dengan mematikan Pengaturan → Tampilkan tombol snippet). */
+        void hideButton();
     }
 
     /** Terminal ini sebagai tempat menempel snippet. */

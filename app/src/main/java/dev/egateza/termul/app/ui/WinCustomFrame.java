@@ -139,6 +139,47 @@ final class WinCustomFrame {
             updateGeometry();
         }
     };
+
+    /**
+     * Isi title bar / menu bar yang bergeser tanpa ukuran title bar berubah (mis. teks "Host status" melebar saat sampel
+     * pertama datang, dan meter di kirinya ikut bergeser): area kontrol dihitung ulang, supaya tooltip dan klik tetap
+     * sampai. Digabung jadi satu hitungan per siklus event.
+     */
+    private final ComponentAdapter contentMoved = new ComponentAdapter() {
+        @Override
+        public void componentResized(ComponentEvent e) {
+            scheduleGeometry();
+        }
+
+        @Override
+        public void componentMoved(ComponentEvent e) {
+            scheduleGeometry();
+        }
+
+        @Override
+        public void componentShown(ComponentEvent e) {
+            scheduleGeometry();
+        }
+
+        @Override
+        public void componentHidden(ComponentEvent e) {
+            scheduleGeometry();
+        }
+    };
+    /** Komponen title bar yang sudah dipasangi {@link #contentMoved}; lemah supaya komponen lama bisa dibuang. EDT. */
+    private final java.util.Set<Component> watched =
+            java.util.Collections.newSetFromMap(new java.util.WeakHashMap<>());
+    private boolean geometryPending; // EDT
+
+    private void scheduleGeometry() {
+        if (!geometryPending) {
+            geometryPending = true;
+            SwingUtilities.invokeLater(() -> {
+                geometryPending = false;
+                updateGeometry();
+            });
+        }
+    }
     private JComponent titlePane; // EDT; title bar FlatLaf (dicari ulang kalau UI diganti)
 
     WinCustomFrame(JFrame frame) {
@@ -385,6 +426,9 @@ final class WinCustomFrame {
             inTitleBar.addAll(descendants(menuBar));
         }
         for (Component c : inTitleBar) {
+            if (watched.add(c)) {
+                c.addComponentListener(contentMoved);
+            }
             if (!c.isShowing()) {
                 continue;
             }
@@ -416,7 +460,7 @@ final class WinCustomFrame {
      * Komponen di title bar yang menerima mouse (menu, tombol, input, indikator yang bisa diklik, tooltip); sisanya area
      * seret. Di area seret event mouse tidak sampai ke Java.
      */
-    private static boolean isControl(Component c) {
+    static boolean isControl(Component c) {
         if (c instanceof JComponent jc && jc.getClientProperty("JComponent.titleBarCaption") instanceof Boolean caption) {
             return !caption;
         }

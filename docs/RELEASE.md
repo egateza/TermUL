@@ -159,6 +159,11 @@ installer baru, karena opsi itu tertulis di `TermUL.cfg` folder instalasi. Ini *
 instalasi lama tetap menjalankan jar baru dengan opsi lamanya. Tulis di catatan rilis kalau pengguna disarankan memasang
 ulang untuk mendapatkan opsi baru.
 
+Mengganti ikon aplikasi (`java tools/MakeAppIcon.java`) **tidak** butuh installer baru maupun kenaikan `GENERATION`.
+Di Windows, shortcut Start Menu/desktop, pin taskbar, dan menu klik kanan Explorer ikut berganti lewat update menu
+(ADR 0010). Yang tetap ikon lama sampai installer baru: ikon file `TermUL.exe` di folder instalasi, dan ikon `.app` di
+Finder/Launchpad macOS.
+
 Menambah atau menaikkan versi library biasa **tidak** butuh installer baru, selama modul JDK yang dipakai tetap sama.
 Cek dengan perintah `jdeps` di [`SETUP.md`](SETUP.md#distribusi-profile-package-win).
 

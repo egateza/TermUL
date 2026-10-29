@@ -33,6 +33,20 @@ class WinCustomFrameTest {
         assertThat(hit(20, 2)).isEqualTo(12); // sudah lewat panjang pojok: tepi atas biasa
     }
 
+    /** Yang bertooltip (meter / teks "Host status") menerima mouse; wordmark dan pemisah tetap area seret window. */
+    @Test
+    void komponenBertooltipMenerimaMouseWordmarkTetapAreaSeret() {
+        var label = new javax.swing.JLabel("214 MB / 256 MB");
+        assertThat(WinCustomFrame.isControl(label)).isFalse();
+        label.setToolTipText("Heap: ...");
+        assertThat(WinCustomFrame.isControl(label)).isTrue();
+        assertThat(WinCustomFrame.isControl(new Wordmark())).isFalse();
+        var divider = dev.egateza.termul.app.monitor.HostStatusPanel.verticalDivider(14);
+        divider.putClientProperty("JComponent.titleBarCaption", true);
+        divider.setToolTipText("x");
+        assertThat(WinCustomFrame.isControl(divider)).as("titleBarCaption menang").isFalse();
+    }
+
     @Test
     void bagianDalamBukanTepi() {
         assertThat(hit(5, 300)).isEqualTo(1);

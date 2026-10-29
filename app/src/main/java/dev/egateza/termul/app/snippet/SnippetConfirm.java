@@ -77,11 +77,10 @@ final class SnippetConfirm {
         root.registerKeyboardAction(e -> dialog.dispose(), KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0),
                 JComponent.WHEN_IN_FOCUSED_WINDOW);
         root.setDefaultButton(cancel);
-        if (translucent(dialog)) {
-            dialog.setBackground(new Color(0, 0, 0, 0)); // sudut kartu membulat
-        }
+        SnippetUi.roundWindow(dialog); // sudut kartu membulat
         dialog.setContentPane(card);
         dialog.setSize(440, card.getPreferredSize().height);
+        SnippetUi.keepSizeAcrossScreens(dialog);
         dialog.setLocationRelativeTo(owner);
         Runnable undim = SnippetUi.dim(owner);
         SwingUtilities.invokeLater(cancel::requestFocusInWindow);

@@ -50,6 +50,15 @@ public interface ExplorerMenu {
     /** Tulis ulang daftar shell kalau menu sedang terpasang (profil lokal atau distro WSL berubah). */
     void sync(List<Entry> entries) throws IOException;
 
+    /**
+     * Arahkan ikon menu ke file ikon dari jar (ADR 0010) kalau menu sedang terpasang.
+     *
+     * @return true kalau ada yang diubah
+     */
+    default boolean refreshIcon() throws IOException {
+        return false;
+    }
+
     /** Untuk OS yang sedang berjalan; null kalau OS ini tidak didukung (opsi disembunyikan). */
     static ExplorerMenu forCurrentOs() {
         return of(Os.current(), System::getProperty, WinRegistry::jna);

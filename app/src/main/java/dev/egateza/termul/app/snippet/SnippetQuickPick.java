@@ -64,7 +64,7 @@ public final class SnippetQuickPick {
     private final Consumer<String> toast;
     private final JPopupMenu popup = new JPopupMenu();
     private final JTextField filter = new JTextField();
-    private final JPanel list = new JPanel();
+    private final JPanel list = new ListPanel();
     private final JScrollPane scroll;
     private final JLabel count = SnippetUi.mutedLabel("");
     private final JLabel hidden = SnippetUi.mutedLabel("");
@@ -297,6 +297,37 @@ public final class SnippetQuickPick {
         if (result != null) {
             popup.setVisible(false);
             toast.accept(result.message());
+        }
+    }
+
+    /**
+     * Isi daftar selalu selebar viewport. Tanpa ini pratinjau perintah yang panjang membuat daftar lebih lebar dari
+     * menu, lalu viewport menggeser isinya ke samping (mis. saat snippet berbahaya dibuka), dan teks terpotong.
+     */
+    private static final class ListPanel extends JPanel implements javax.swing.Scrollable {
+        @Override
+        public Dimension getPreferredScrollableViewportSize() {
+            return getPreferredSize();
+        }
+
+        @Override
+        public int getScrollableUnitIncrement(java.awt.Rectangle visible, int orientation, int direction) {
+            return 16;
+        }
+
+        @Override
+        public int getScrollableBlockIncrement(java.awt.Rectangle visible, int orientation, int direction) {
+            return visible.height;
+        }
+
+        @Override
+        public boolean getScrollableTracksViewportWidth() {
+            return true;
+        }
+
+        @Override
+        public boolean getScrollableTracksViewportHeight() {
+            return false;
         }
     }
 

@@ -781,6 +781,17 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
     private JMenuBar buildMenu() {
         var bar = new JMenuBar();
+        if (getRootPane().getWindowDecorationStyle() != javax.swing.JRootPane.NONE) {
+            // title bar FlatLaf: ikon, wordmark termul_, pemisah, lalu menu (prototipe); judul bawaan disembunyikan
+            getRootPane().putClientProperty(com.formdev.flatlaf.FlatClientProperties.TITLE_BAR_SHOW_TITLE, false);
+            bar.add(javax.swing.Box.createHorizontalStrut(4));
+            bar.add(new Wordmark());
+            bar.add(javax.swing.Box.createHorizontalStrut(6));
+            var divider = HostStatusPanel.verticalDivider(14);
+            divider.putClientProperty("JComponent.titleBarCaption", true);
+            bar.add(divider);
+            bar.add(javax.swing.Box.createHorizontalStrut(8));
+        }
         var file = new JMenu(I18n.t("main.menu.file"));
         file.add(actionItem(AppIcon.PLUS, I18n.t("main.menu.file.newTab"), ShortcutAction.NEW_TAB, this::showQuickOpen));
         file.add(actionItem(AppIcon.SERVER, I18n.t("main.menu.file.newHost"), ShortcutAction.NEW_HOST,
@@ -1282,7 +1293,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     /** Ikon aplikasi (dibuat dengan {@code tools/MakeAppIcon.java}); ukuran yang tidak ada dilewati. */
     static List<java.awt.Image> appIcons() {
         var images = new java.util.ArrayList<java.awt.Image>();
-        for (int size : new int[] {16, 32, 48, 64, 128, 256}) {
+        for (int size : new int[] {16, 20, 24, 32, 40, 48, 64, 128, 256}) {
             var url = MainFrame.class.getResource("/dev/egateza/termul/app/icons/app-" + size + ".png");
             if (url != null) {
                 images.add(new javax.swing.ImageIcon(url).getImage());
@@ -2206,6 +2217,11 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         @Override
         public void manage() {
             openSnippets();
+        }
+
+        @Override
+        public void hideButton() {
+            saveSnippetSettings(ctx.config().current().withSnippetButton(false));
         }
     };
 

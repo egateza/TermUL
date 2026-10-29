@@ -175,6 +175,161 @@ public final class SnippetStore {
         return created[0];
     }
 
+    // --- kelola kategori (id tetap saat ganti nama, supaya file ekspor/impor tetap cocok) ---
+
+    /** Panjang maksimum nama kategori yang dibuat / diganti dari Kelola kategori (prototipe). */
+    public static final int MAX_CATEGORY_NAME = 24;
+
+    public enum CategoryProblem { EMPTY, TOO_LONG, DUPLICATE }
+
+    /**
+     * Masalah pada nama kategori baru / nama pengganti, atau null kalau boleh.
+     *
+     * @param selfId   kategori yang sedang diganti namanya (boleh memakai namanya sendiri), null untuk kategori baru
+     * @param reserved nama lain yang tidak boleh dipakai (mis. label "Tanpa kategori"), tanpa membedakan huruf besar/kecil
+     */
+    public static CategoryProblem categoryProblem(List<SnippetCategory> categories, String name, String selfId,
+                                                  String... reserved) {
+        String n = name == null ? "" : name.strip();
+        if (n.isEmpty()) {
+            return CategoryProblem.EMPTY;
+        }
+        if (n.length() > MAX_CATEGORY_NAME) {
+            return CategoryProblem.TOO_LONG;
+        }
+        for (String r : reserved) {
+            if (n.equalsIgnoreCase(r)) {
+                return CategoryProblem.DUPLICATE;
+            }
+        }
+        boolean taken = categories.stream().anyMatch(c -> !c.id().equals(selfId) && c.name().equalsIgnoreCase(n));
+        return taken ? CategoryProblem.DUPLICATE : null;
+    }
+
+    /** Kategori baru di urutan terakhir. @throws IllegalArgumentException kalau namanya tidak boleh */
+    public SnippetCategory addCategory(String name) {
+        var created = new SnippetCategory[1];
+        mutate(s -> {
+            check(categoryProblem(s.categories(), name, null));
+            created[0] = new SnippetCategory(uniqueId(s.categories(), name.strip()), name);
+            var cats = new ArrayList<>(s.categories());
+            cats.add(created[0]);
+            return new State(s.snippets(), List.copyOf(cats), s.remembered());
+        });
+        return created[0];
+    }
+
+    /** Ganti nama; id tetap. @throws IllegalArgumentException kalau namanya tidak boleh */
+    public void renameCategory(String id, String name) {
+        mutate(s -> {
+            check(categoryProblem(s.categories(), name, id));
+            if (!contains(s.categories(), id)) {
+                return s;
+            }
+            var cats = s.categories().stream().map(c -> c.id().equals(id) ? new SnippetCategory(id, name) : c)
+                    .toList();
+            return cats.equals(s.categories()) ? s : new State(s.snippets(), cats, s.remembered());
+        });
+    }
+
+    /** Geser kategori {@code delta} posisi (−1 naik, +1 turun); diam di ujung. */
+    public void moveCategory(String id, int delta) {
+        mutate(s -> {
+            var cats = new ArrayList<>(s.categories());
+            int from = -1;
+            for (int i = 0; i < cats.size(); i++) {
+                if (cats.get(i).id().equals(id)) {
+                    from = i;
+                }
+            }
+            int to = from + delta;
+            if (from < 0 || to < 0 || to >= cats.size() || delta == 0) {
+                return s;
+            }
+            cats.add(to, cats.remove(from));
+            return new State(s.snippets(), List.copyOf(cats), s.remembered());
+        });
+    }
+
+    /**
+     * Hapus kategori; snippet di dalamnya pindah ke Tanpa kategori (tidak ada snippet yang terhapus).
+     *
+     * @return jumlah snippet yang dipindah
+     */
+    public int deleteCategory(String id) {
+        int[] moved = {0};
+        mutate(s -> {
+            if (!contains(s.categories(), id)) {
+                return s;
+            }
+            var snippets = s.snippets().stream().map(x -> {
+                if (x.category().equals(id)) {
+                    moved[0]++;
+                    return x.withCategory("");
+                }
+                return x;
+            }).toList();
+            return new State(snippets, s.categories().stream().filter(c -> !c.id().equals(id)).toList(),
+                    s.remembered());
+        });
+        return moved[0];
+    }
+
+    private static void check(CategoryProblem problem) {
+        if (problem != null) {
+            throw new IllegalArgumentException(switch (problem) {
+                case EMPTY -> "Nama kategori wajib diisi.";
+                case TOO_LONG -> "Nama kategori maksimal " + MAX_CATEGORY_NAME + " karakter.";
+                case DUPLICATE -> "Nama kategori sudah dipakai.";
+            });
+        }
+    }
+
+    // --- urutan manual ---
+
+    /** Pindahkan snippet ke posisi {@code toIndex} di urutan manual (dipakai juga oleh menu snippet terminal). */
+    public void moveSnippet(UUID id, int toIndex) {
+        mutate(s -> {
+            var list = new ArrayList<>(s.snippets());
+            int from = indexOf(list, id);
+            int to = Math.clamp(toIndex, 0, list.size() - 1);
+            if (from < 0 || from == to) {
+                return s;
+            }
+            list.add(to, list.remove(from));
+            return new State(List.copyOf(list), s.categories(), s.remembered());
+        });
+    }
+
+    // --- ekspor ---
+
+    /**
+     * Isi file ekspor (version 2, format yang sama dengan TermUL mobile; diimpor berdasarkan id). Tidak pernah berisi
+     * nilai variabel yang diingat per host.
+     *
+     * @param extras        sertakan field opsional TermUL ({@code appliesTo}, {@code dangerous}, {@code variables});
+     *                      false = hanya id, judul, perintah, kategori, favorit
+     * @param allCategories semua kategori; false = hanya kategori yang dipakai {@code snippets}
+     */
+    public byte[] export(List<Snippet> snippets, boolean extras, boolean allCategories) {
+        var used = snippets.stream().map(Snippet::category).collect(java.util.stream.Collectors.toSet());
+        var cats = state.categories().stream().filter(c -> allCategories || used.contains(c.id()))
+                .map(c -> new CategoryJson(c.id(), c.name())).toList();
+        var known = state.categories().stream().map(SnippetCategory::id).collect(java.util.stream.Collectors.toSet());
+        var items = snippets.stream().map(s -> {
+            var j = toJson(s);
+            String category = known.contains(s.category()) ? j.category() : null;
+            return extras ? new SnippetJson(j.id(), j.title(), j.command(), category, j.favorite(), j.appliesTo(),
+                    j.dangerous(), j.variables())
+                    : new SnippetJson(j.id(), j.title(), j.command(), category, j.favorite(), null, null, null);
+        }).toList();
+        try {
+            return mapper.writeValueAsBytes(new FileJson(VERSION, cats, items, null));
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
     /** Nilai variabel terakhir untuk snippet ini di host {@code hostKey} (mis. id profil); kosong kalau belum ada. */
     public Map<String, String> remembered(String hostKey, UUID snippetId) {
         return state.remembered().getOrDefault(hostKey, Map.of()).getOrDefault(snippetId.toString(), Map.of());

@@ -1,6 +1,7 @@
 package dev.egateza.termul.app.startup;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
 import org.slf4j.Logger;
@@ -73,9 +74,31 @@ final class WindowsExplorerMenu implements ExplorerMenu {
         }
     }
 
+    @Override
+    public boolean refreshIcon() throws IOException {
+        if (status() != Status.ENABLED) {
+            return false;
+        }
+        boolean changed = false;
+        String icon = icon();
+        for (String root : ROOT_KEYS) {
+            if (!icon.equals(registry.readString(root, "Icon"))) {
+                registry.writeString(root, "Icon", icon);
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
+    /** File ikon dari jar kalau sudah disalin (ikut update menu, ADR 0010), selain itu ikon di dalam exe. */
+    String icon() {
+        Path file = AppIconFile.installed();
+        return file != null ? file.toString() : appPath + ",0";
+    }
+
     private void write(String root, List<Entry> entries) throws IOException {
         registry.writeString(root, "MUIVerb", VERB);
-        registry.writeString(root, "Icon", appPath + ",0");
+        registry.writeString(root, "Icon", icon());
         registry.writeString(root, "SubCommands", ""); // kosong = submenu dari subkey "shell"
         int n = 0;
         for (Entry entry : entries.subList(0, Math.min(entries.size(), MAX_ENTRIES))) {

@@ -135,6 +135,14 @@ public record AppPaths(Path configDir, Path cacheDir) {
         return cacheDir.resolve("updates");
     }
 
+    /**
+     * Ikon aplikasi ({@code .ico}) yang dipakai shortcut dan menu klik kanan Explorer, disalin dari jar setiap kali
+     * ikonnya berubah, supaya ikut berganti lewat update menu (ADR 0010). Di cache: kalau terhapus, dibuat lagi saat start.
+     */
+    public Path appIconDir() {
+        return cacheDir.resolve("app-icon");
+    }
+
     /** Riwayat update yang sudah dipakai (halaman "Yang baru"); di config supaya tidak hilang saat cache dibersihkan. */
     public Path updateHistoryFile() {
         return configDir.resolve("update-history.json");
