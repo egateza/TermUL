@@ -120,7 +120,7 @@ Legenda: `[ ]` belum, `[~]` sedang, `[x]` selesai.
 - [x] Pre-connect: distro + sshd dijalankan sebelum connect; auto-reconnect tidak menyalakan distro yang berhenti
 - [x] Periksa SSH (`SshCheck`): cek sshd terpasang/config/port/`ssh.socket`/listen/terjangkau + perintah perbaikan; dipakai juga untuk pesan error saat connect (kasus nyata user: `ssh.socket` di Ubuntu 22.04 mengabaikan `Port`)
 - [x] Kolom "Port SSH" di WSL Manager: terdeteksi dari `sshd -T` (selain 22 diutamakan), bisa diisi user; mengubahnya di distro berprofil ikut mengubah port profil
-- [ ] Uji manual user: nyalakan Pengaturan → Manajemen WSL, siapkan sshd lewat Panduan SSH, connect dari grup WSL
+- [x] ~~Uji manual user~~: tidak dilanjutkan, WSL Manager dihapus 2026-11-02 (ADR 0011). Distro WSL kini lewat terminal lokal (`WslDistros`, dibaca saat start + saat window aktif, maks. sekali per menit); profil/config lama tetap terbaca
 
 ### Streak api (permintaan user 2026-10-13)
 - [x] `core.streak`: `Streak` (aturan hari: bara hari 1–2, aktif hari ke-3, padam absen 1–2 hari, beku absen 3–10 hari dengan 5–10 klik, hangus absen > 10 hari) + `StreakStore` (`streak.json`, atomic, file rusak disisihkan)

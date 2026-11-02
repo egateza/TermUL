@@ -51,25 +51,6 @@ public final class ProcessWslRunner implements WslRunner {
         }
     }
 
-    @Override
-    public Handle spawn(List<String> args) throws IOException {
-        var process = builder(args)
-                .redirectOutput(ProcessBuilder.Redirect.DISCARD)
-                .redirectError(ProcessBuilder.Redirect.DISCARD)
-                .start();
-        return new Handle() {
-            @Override
-            public boolean isAlive() {
-                return process.isAlive();
-            }
-
-            @Override
-            public void stop() {
-                process.destroy();
-            }
-        };
-    }
-
     private ProcessBuilder builder(List<String> args) {
         var command = new ArrayList<String>(args.size() + 1);
         command.add(exe.toString());

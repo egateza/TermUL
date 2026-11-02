@@ -54,14 +54,21 @@ class ProfileStoreTest {
         assertThat(loaded.allGroups()).containsExactly("Staging");
     }
 
+    /** WSL Manager dihapus (ADR 0011): profil lama dengan {@code wslDistro} tetap terbaca sebagai profil SSH biasa. */
     @Test
-    void distroWslIkutTersimpan() {
+    void profilLamaDenganDistroWslTetapTerbacaDanFieldnyaHilangSaatDisimpan() throws Exception {
         Path file = dir.resolve("profiles.json");
-        var p = HostProfile.create("Ubuntu", "localhost", "ega").withWslDistro("Ubuntu-24.04");
+        var p = HostProfile.create("Ubuntu", "localhost", "ega").withPort(2211);
         new ProfileStore(file).save(p);
+        String json = Files.readString(file);
+        Files.writeString(file, json.replace("\"port\"", "\"wslDistro\" : \"Ubuntu-22.04\", \"port\""));
+        assertThat(Files.readString(file)).contains("wslDistro");
 
-        assertThat(new ProfileStore(file).load().profiles()).singleElement()
-                .extracting(HostProfile::wslDistro).isEqualTo("Ubuntu-24.04");
+        var store = new ProfileStore(file);
+        var loaded = store.load().profiles();
+        assertThat(loaded).containsExactly(p);
+        store.save(loaded.getFirst());
+        assertThat(Files.readString(file)).doesNotContain("wslDistro");
     }
 
     @Test

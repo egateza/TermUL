@@ -86,7 +86,7 @@ class LocalProfilesTest {
         store.setDefault(ubuntuId);
 
         assertThat(p.defaultChoice(List.of("Ubuntu"))).map(LocalProfiles.Choice::name).contains("WSL · Ubuntu");
-        // distro tidak lagi terpasang / WSL dimatikan: kembali ke shell terdeteksi pertama
+        // distro tidak lagi terpasang: kembali ke shell terdeteksi pertama
         assertThat(p.defaultChoice(List.of())).map(LocalProfiles.Choice::name).contains("zsh");
         assertThat(p.find(bash.id(), List.of())).map(LocalProfiles.Choice::commandLine).contains("/bin/bash -l");
     }

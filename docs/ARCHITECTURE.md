@@ -169,18 +169,16 @@ Bisa dimatikan lewat `AppConfig.autoUpdateCheck`.
 - `MainFrame` mengompilasi profil sekali per perubahan pengaturan dan memilih profil per `TermPane` (pattern matching
   `TerminalTab`/`LocalTerminalTab`); dipanggil ulang saat host diedit (pindah grup).
 
-## WSL (opsional, ADR 0004)
+## WSL (ADR 0011)
 
-Aktif hanya kalau `AppConfig.wslManager` dinyalakan dan OS-nya Windows. Distro WSL dimasuki lewat SSH biasa ke sshd di
-distro (`localhost:<port>`). Profilnya `HostProfile` dengan field `wslDistro`, jadi tidak ada PTY lokal.
+Distro WSL dimasuki lewat terminal lokal (`wsl.exe -d <distro>`, ADR 0005). WSL Manager dan WSL lewat SSH (ADR 0004)
+sudah dihapus.
 
-- `core.wsl.WslManager` menjalankan `wsl.exe` (lewat `WslRunner`, yang di-fake di test): `--list --quiet [--running]`,
-  start dengan keep-alive (`--exec sleep infinity`, karena WSL mematikan distro tanpa sesi `wsl.exe`), `--terminate`,
-  `--shutdown`, dan sshd sebagai root. Semua method blocking.
-- `app.wsl.WslController` (EDT) membaca ulang daftar distro setiap 15 detik di `ssh-ops`, mengisi grup bawaan WSL di
-  `HostTreePanel`, dan mengelola `WslManagerDialog`. `prepare()` dipasang sebagai `TerminalTab.BeforeConnect`: sebelum
-  connect ke profil WSL, distro dan sshd dijalankan dulu. Auto-reconnect tidak menyalakan distro yang berhenti.
-- Keep-alive dilepas saat aplikasi ditutup (`TermULApp.shutdown`); distro tidak dihentikan paksa.
+- `core.wsl.WslDistros` membaca distro terpasang dengan `wsl --list --quiet` (lewat `WslRunner`, yang di-fake di test;
+  output UTF-16LE/UTF-8 di-decode `WslOutput`). Distro internal Docker Desktop dilewati. Blocking.
+- `MainFrame.refreshWslDistros` menjalankannya di `ssh-ops` saat start, lalu paling sering sekali per menit saat window
+  diaktifkan (Windows saja). Hasilnya diteruskan ke `LocalProfiles` sebagai pilihan "WSL · <distro>" di panel host,
+  Tab baru, dan menu klik kanan Explorer.
 
 ## Alur utama
 
@@ -240,6 +238,12 @@ distro (`localhost:<port>`). Profilnya `HostProfile` dengan field `wslDistro`, j
 - Latar terminal: `ZoomableTermWidget` mengisi latar (warna default JediTerm + gambar latar tema) dengan
   `AlphaComposite.Src` × `TerminalTranslucency.percent()`, lalu teks lewat `FillFilterGraphics2D`.
 - macOS: window tanpa dekorasi hanya kalau transparansi aktif saat start; dari 100% butuh restart.
+- Blur di belakang window (`windowBlur`, Windows saja): `WindowBlur` memanggil `SetWindowCompositionAttribute` +
+  `ACCENT_ENABLE_BLURBEHIND` lewat JNA. `WindowOpacity.apply` menyalakannya hanya selama window tembus, dan
+  `MainFrame.addNotify` memasangnya ulang di HWND baru.
+- Blur gambar latar terminal (`TerminalPalette.imageBlur`, per tema): `BackgroundImages.cover(image, w, h, blur)`
+  mem-blur hasil cover (diperkecil, box blur 3 putaran, lalu diperbesar). Radiusnya relatif terhadap ukuran panel.
+  `ZoomableTermWidget` dan `TerminalPreview` menyimpan hasilnya di cache per ukuran + blur.
 
 ## Menu klik kanan Explorer (ADR 0009)
 - `ExplorerMenu` / `WindowsExplorerMenu` (app, `startup`) menulis cascading menu "TermUL" di

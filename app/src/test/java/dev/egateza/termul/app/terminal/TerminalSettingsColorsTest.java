@@ -55,7 +55,7 @@ class TerminalSettingsColorsTest {
         var prodTab = base.copy();
         var otherTab = base.copy();
         var redBackground = new dev.egateza.termul.core.theme.CustomTheme.TerminalPalette("#3A0D0D", red.foreground(),
-                red.selection(), red.ansi(), null, null, null);
+                red.selection(), red.ansi(), null, null, null, null);
 
         prodTab.setPaletteOverride(redBackground);
 
@@ -144,5 +144,19 @@ class TerminalSettingsColorsTest {
         settings.setPalette(theme);
 
         assertThat(hex(cellStyleFromTab.getBackground().toColor())).isEqualTo(theme.background());
+    }
+
+    @Test
+    void backgroundLayerCarriesClampedBlur() {
+        var settings = new TerminalSettings(14f);
+        var image = new java.awt.image.BufferedImage(4, 4, java.awt.image.BufferedImage.TYPE_INT_RGB);
+        settings.setPalette(ThemeTemplates.dark("x", "X").terminal());
+
+        settings.setBackgroundImage(image, 40, 25);
+        assertThat(settings.backgroundLayer().blur()).isEqualTo(25);
+        settings.setBackgroundImage(image, 40, 300);
+        assertThat(settings.backgroundLayer().blur()).isEqualTo(100);
+        settings.setBackgroundImage(image, 40); // tanpa blur
+        assertThat(settings.backgroundLayer().blur()).isZero();
     }
 }

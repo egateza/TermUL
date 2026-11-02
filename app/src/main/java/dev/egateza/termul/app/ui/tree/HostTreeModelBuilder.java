@@ -26,12 +26,11 @@ public final class HostTreeModelBuilder {
 
     /**
      * User object grup bawaan yang tampil di atas dan tidak bisa di-rename/hapus. Isinya referensi ke profil yang sama
-     * dengan di grup aslinya. {@link #WSL} hanya tampil kalau manajemen WSL aktif dan ada distro yang berjalan.
+     * dengan di grup aslinya.
      */
     public enum BuiltinGroup {
         FAVORITES,
-        RECENT,
-        WSL
+        RECENT
     }
 
     /** Node tetap paling atas: terminal lokal (ADR 0005); berisi {@link LocalProfileNode} kalau daftarnya diberikan. */
@@ -47,55 +46,33 @@ public final class HostTreeModelBuilder {
         }
     }
 
-    /** User object distro WSL yang sedang berjalan tapi belum punya profil SSH (lihat {@link HostProfile#wslDistro()}). */
-    public record WslDistroNode(String name) {
-        @Override
-        public String toString() {
-            return name;
-        }
-    }
-
     private HostTreeModelBuilder() {
     }
 
-    /** Tanpa grup WSL. */
+    /**
+     * @param filter teks pencarian (nama, host, user, grup); kosong = semua. Kalau filter aktif, grup yang tidak berisi
+     *               hasil disembunyikan.
+     */
     public static DefaultMutableTreeNode build(ProfileSnapshot snapshot, String filter) {
         return build(snapshot, filter, null);
     }
 
     /**
-     * Profil WSL ({@link HostProfile#wslDistro()} terisi) hanya tampil di grup bawaan {@link BuiltinGroup#WSL}, tidak
-     * di grup biasanya; selama manajemen WSL mati, profil itu disembunyikan dari seluruh tree (termasuk Favorites/Last
-     * used) dan grup biasa yang hanya berisi profil WSL ikut hilang.
-     *
-     * @param filter     teks pencarian (nama, host, user, grup); kosong = semua. Kalau filter aktif,
-     *                   grup yang tidak berisi hasil disembunyikan.
-     * @param wslRunning nama distro WSL yang sedang berjalan; null = manajemen WSL mati (grup WSL tidak tampil)
-     */
-    public static DefaultMutableTreeNode build(ProfileSnapshot snapshot, String filter, List<String> wslRunning) {
-        return build(snapshot, filter, wslRunning, null);
-    }
-
-    /**
      * @param localChoices isi grup Terminal lokal (default dulu); null = node tunggal tanpa isi
      */
-    public static DefaultMutableTreeNode build(ProfileSnapshot snapshot, String filter, List<String> wslRunning,
+    public static DefaultMutableTreeNode build(ProfileSnapshot snapshot, String filter,
                                                List<dev.egateza.termul.app.terminal.LocalProfiles.Choice> localChoices) {
         String q = filter == null ? "" : filter.strip().toLowerCase(Locale.ROOT);
-        boolean wslOn = wslRunning != null;
         var root = new DefaultMutableTreeNode(new GroupNode(""));
         Map<String, DefaultMutableTreeNode> groups = new HashMap<>();
         groups.put("", root);
 
         if (q.isEmpty()) {
-            // grup kosong tetap tampil, kecuali grup yang hanya terbentuk dari profil WSL
-            var visibleGroups = new java.util.TreeSet<String>(snapshot.groups());
-            snapshot.profiles().stream().filter(p -> !isWsl(p)).forEach(p -> visibleGroups.add(p.group()));
-            visibleGroups.stream().filter(g -> !g.isEmpty()).forEach(g -> groupNode(groups, g));
+            snapshot.allGroups().stream().filter(g -> !g.isEmpty()).forEach(g -> groupNode(groups, g)); // termasuk yang kosong
         }
         for (String g : snapshotGroupsWithRoot(snapshot)) {
             for (HostProfile p : snapshot.profilesIn(g)) {
-                if (!isWsl(p) && matches(p, q)) {
+                if (matches(p, q)) {
                     groupNode(groups, g).add(new DefaultMutableTreeNode(p, false));
                 }
             }
@@ -104,18 +81,11 @@ public final class HostTreeModelBuilder {
         int index = 0;
         for (BuiltinGroup b : BuiltinGroup.values()) {
             var node = new DefaultMutableTreeNode(b, true);
-            switch (b) {
-                case FAVORITES -> addProfiles(node, visible(snapshot.favoriteProfiles(), wslOn), q);
-                case RECENT -> addProfiles(node, visible(snapshot.recentProfiles(), wslOn), q);
-                case WSL -> {
-                    if (wslOn) {
-                        addWsl(node, snapshot, wslRunning, q);
-                    }
-                }
-            }
-            // grup WSL kosong (tidak ada profil WSL maupun distro berjalan) tidak ditampilkan sama sekali
-            boolean show = b == BuiltinGroup.WSL ? node.getChildCount() > 0 : q.isEmpty() || node.getChildCount() > 0;
-            if (show) {
+            addProfiles(node, switch (b) {
+                case FAVORITES -> snapshot.favoriteProfiles();
+                case RECENT -> snapshot.recentProfiles();
+            }, q);
+            if (q.isEmpty() || node.getChildCount() > 0) {
                 root.insert(node, index++);
             }
         }
@@ -143,32 +113,8 @@ public final class HostTreeModelBuilder {
                 || "local terminal shell".contains(q);
     }
 
-    private static boolean isWsl(HostProfile p) {
-        return p.wslDistro() != null;
-    }
-
-    private static List<HostProfile> visible(List<HostProfile> profiles, boolean wslOn) {
-        return wslOn ? profiles : profiles.stream().filter(p -> !isWsl(p)).toList();
-    }
-
     private static void addProfiles(DefaultMutableTreeNode node, List<HostProfile> profiles, String q) {
         profiles.stream().filter(p -> matches(p, q)).forEach(p -> node.add(new DefaultMutableTreeNode(p, false)));
-    }
-
-    /**
-     * Semua profil WSL (termasuk yang distronya berhenti), urut nama, lalu {@link WslDistroNode} untuk distro yang
-     * berjalan tapi belum punya profil.
-     */
-    private static void addWsl(DefaultMutableTreeNode node, ProfileSnapshot snapshot, List<String> running, String q) {
-        var profiles = snapshot.profiles().stream().filter(HostTreeModelBuilder::isWsl)
-                .sorted(java.util.Comparator.comparing(HostProfile::name, String.CASE_INSENSITIVE_ORDER)).toList();
-        addProfiles(node, profiles, q);
-        for (String distro : running) {
-            boolean hasProfile = profiles.stream().anyMatch(p -> distro.equalsIgnoreCase(p.wslDistro()));
-            if (!hasProfile && (q.isEmpty() || distro.toLowerCase(Locale.ROOT).contains(q))) {
-                node.add(new DefaultMutableTreeNode(new WslDistroNode(distro), false));
-            }
-        }
     }
 
     public static boolean matches(HostProfile p, String q) {
@@ -176,7 +122,6 @@ public final class HostTreeModelBuilder {
             return true;
         }
         return p.name().toLowerCase(Locale.ROOT).contains(q)
-                || (p.wslDistro() != null && p.wslDistro().toLowerCase(Locale.ROOT).contains(q))
                 || p.host().toLowerCase(Locale.ROOT).contains(q)
                 || p.username().toLowerCase(Locale.ROOT).contains(q)
                 || p.group().toLowerCase(Locale.ROOT).contains(q);

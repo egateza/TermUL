@@ -38,7 +38,7 @@ import dev.egateza.termul.core.theme.BundledThemes;
 import dev.egateza.termul.core.theme.ThemeStore;
 import dev.egateza.termul.core.profile.ProfileStore;
 import dev.egateza.termul.core.wsl.ProcessWslRunner;
-import dev.egateza.termul.core.wsl.WslManager;
+import dev.egateza.termul.core.wsl.WslDistros;
 import dev.egateza.termul.sftp.SftpLinks;
 import dev.egateza.termul.sftp.ftp.FtpConnector;
 import dev.egateza.termul.sftp.ftp.FtpsCertStore;
@@ -77,6 +77,12 @@ public final class TermULApp {
         // MacIntegration: logback hanya membaca konfigurasi sekali, sesudah itu log tertulis ke ./logs
         System.setProperty("termul.logDir", paths.logDir().toString());
         MacIntegration.configureBeforeAwt();
+        // Window tembus (ADR 0008): painter software mengikuti skala monitor saat ini. Painter D3D tetap memakai
+        // skala lama setelah window pindah monitor beda scaling (isi tampil berulang/bergaris). Installer sudah
+        // tanpa D3D (-Dsun.java2d.d3d=false); ini untuk cara jalan lain (IDE, JAR portable).
+        if (System.getProperty("sun.java2d.twp.forcesw") == null) {
+            System.setProperty("sun.java2d.twp.forcesw", "true");
+        }
         Logger log = LoggerFactory.getLogger(TermULApp.class);
         log.info("TermUL start, config={}, cache={}", paths.configDir(), paths.cacheDir());
         detected.notes().forEach(note -> log.warn("{}", note));
@@ -142,7 +148,7 @@ public final class TermULApp {
         var ftpsCerts = new FtpsCertStore(paths.ftpsCertsFile());
         var sftpLinks = new SftpLinks(sessions,
                 new FtpConnector(credentials, ftpsCerts, new SwingFtpsCertPrompt(frameRef::get)));
-        var wsl = new WslManager(new ProcessWslRunner());
+        var wsl = new WslDistros(new ProcessWslRunner());
         EditManager edits;
         try {
             edits = new EditManager(sftpLinks, new EditCache(paths.editCacheDir()), () -> config.current().editors(),
@@ -161,7 +167,8 @@ public final class TermULApp {
             var terminalSettings = new TerminalSettings(config.current().terminalFontFamily(),
                     config.current().terminalFontSize());
             terminalSettings.setPalette(startupPalette);
-            terminalSettings.setBackgroundImage(startupBackdrop, startupPalette.imageVisibility());
+            terminalSettings.setBackgroundImage(startupBackdrop, startupPalette.imageVisibility(),
+                    startupPalette.imageBlur());
             terminalSettings.bell().setSound(config.current().bellSound());
             terminalSettings.bell().setShake(config.current().bellShake());
             terminalSettings.setRightClickCopyPaste(
@@ -172,7 +179,7 @@ public final class TermULApp {
                     terminalSettings, vault, edits, sftpLinks, themes, knownHosts, ftpsCerts, wsl, snippets, locals,
                     highlights, shortcuts, bookmarks);
             var frame = new MainFrame(ctx, customThemes,
-                    () -> shutdown(io, sshOps, sessions, vault, edits, wsl, instance, log));
+                    () -> shutdown(io, sshOps, sessions, vault, edits, instance, log));
             frameRef.set(frame);
             MacIntegration.install(frame);
             if (startHidden) {
@@ -227,10 +234,9 @@ public final class TermULApp {
     }
 
     private static void shutdown(ExecutorService io, ExecutorService sshOps, SessionManager sessions, VaultGate vault,
-                                 EditManager edits, WslManager wsl, SingleInstance instance, Logger log) {
+                                 EditManager edits, SingleInstance instance, Logger log) {
         log.info("TermUL keluar");
         edits.close();
-        wsl.close(); // lepas keep-alive; distro mati sendiri saat idle kecuali dipakai di luar TermUL
         sshOps.shutdownNow();
         sessions.close();
         vault.close();

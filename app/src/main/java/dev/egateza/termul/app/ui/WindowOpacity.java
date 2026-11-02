@@ -23,6 +23,7 @@ final class WindowOpacity {
 
     private static Color solidBackground; // latar window sebelum dibuat tembus; EDT
     private static Boolean dynamicLayout; // nilai awal Toolkit.isDynamicLayoutActive(); EDT
+    private static boolean blurActive; // blur di belakang window yang diminta terakhir (sudah memperhitungkan mode); EDT
 
     private WindowOpacity() {
     }
@@ -47,12 +48,18 @@ final class WindowOpacity {
         return ownFrame() || config.translucent();
     }
 
+    /** @return true kalau blur di belakang window ikut menyala: hanya selama window tembus */
+    static boolean blurWanted(boolean blur, int windowPercent, int terminalPercent) {
+        return blur && (clamp(windowPercent) < 100 || clampTerminal(terminalPercent) < 100);
+    }
+
     /**
-     * Terapkan kedua opasitas (juga untuk pratinjau slider). EDT.
+     * Terapkan kedua opasitas dan blur di belakang window (juga untuk pratinjau). EDT.
      *
+     * @param blur blur apa yang ada di belakang window; hanya berlaku selama transparansi aktif, di Windows
      * @return true kalau berlaku sekarang; false kalau butuh restart (window masih berdekorasi native)
      */
-    static boolean apply(JFrame frame, int windowPercent, int terminalPercent) {
+    static boolean apply(JFrame frame, int windowPercent, int terminalPercent, boolean blur) {
         int window = clamp(windowPercent);
         int terminal = clampTerminal(terminalPercent);
         boolean translucent = window < 100 || terminal < 100;
@@ -60,6 +67,11 @@ final class WindowOpacity {
         if (!frame.isUndecorated() || root == null) {
             return !translucent;
         }
+        boolean wantBlur = blurWanted(blur, window, terminal);
+        if (blurActive && !wantBlur) {
+            WindowBlur.set(frame, false); // lepas sebelum window kembali solid
+        }
+        blurActive = wantBlur;
         if (solidBackground == null) {
             solidBackground = frame.getBackground();
         }
@@ -74,7 +86,11 @@ final class WindowOpacity {
         try {
             setBackground(frame, root, translucent ? new Color(0, 0, 0, 0) : solidBackground, switching);
         } catch (IllegalComponentStateException | UnsupportedOperationException e) {
+            blurActive = false;
             return !translucent; // sistem tanpa dukungan alpha per piksel
+        }
+        if (wantBlur) {
+            WindowBlur.set(frame, true); // setelah window beralpha per piksel: blur terlihat di piksel yang tembus
         }
         root.setChromeOpacity(translucent ? window : 100);
         TerminalTranslucency.setPercent(translucent ? terminal : 100);
@@ -86,6 +102,13 @@ final class WindowOpacity {
         toolkit.setDynamicLayout(!translucent && dynamicLayout);
         root.repaint();
         return true;
+    }
+
+    /** Pasang ulang blur di HWND baru (dipanggil dari {@code addNotify}; HWND belum ada saat {@link #apply} pertama). */
+    static void reapplyBlur(JFrame frame) {
+        if (blurActive) {
+            WindowBlur.set(frame, true);
+        }
     }
 
     /**

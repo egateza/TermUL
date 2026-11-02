@@ -80,4 +80,26 @@ class AppConfigWindowOpacityTest {
         assertThat(AppConfig.defaults().withWindowOpacity(90).translucent()).isTrue();
         assertThat(AppConfig.defaults().withTerminalOpacity(90).translucent()).isTrue();
     }
+
+    @Test
+    void windowBlurOptInDanConfigLamaMati(@TempDir Path dir) throws Exception {
+        assertThat(AppConfig.defaults().windowBlur()).isFalse();
+        var file = dir.resolve("config.json");
+        Files.writeString(file, "{\"windowOpacity\": 76}");
+        assertThat(new ConfigStore(file).load().windowBlur()).isFalse();
+
+        var store = new ConfigStore(dir.resolve("blur.json"));
+        store.save(AppConfig.defaults().withTerminalOpacity(50).withWindowBlur(true));
+        var loaded = new ConfigStore(dir.resolve("blur.json")).load();
+        assertThat(loaded.windowBlur()).isTrue();
+        assertThat(loaded.terminalOpacity()).isEqualTo(50);
+    }
+
+    @Test
+    void otherWithersKeepWindowBlur() {
+        var config = AppConfig.defaults().withWindowBlur(true);
+        assertThat(config.withWindowOpacity(60).withTerminalOpacity(40).withTheme("x")
+                .withCollapsedHostGroups(java.util.List.of("group:A")).windowBlur()).isTrue();
+        assertThat(config.withWindowBlur(false).windowBlur()).isFalse();
+    }
 }

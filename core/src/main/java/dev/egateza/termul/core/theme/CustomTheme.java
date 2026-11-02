@@ -65,9 +65,11 @@ public record CustomTheme(String id, String name, String base, UiPalette ui, Ter
      *                        (100 = gambar penuh); null di tema lama = {@value #DEFAULT_VISIBILITY}
      * @param desktopWallpaper true = gambar latar adalah wallpaper desktop saat ini (diikuti setiap tema diterapkan)
      *                        dan {@code backgroundImage} diabaikan; null di tema lama = false
+     * @param imageBlur       kekuatan blur gambar latar, persen 0..100 (0 = tajam); null di tema lama = 0
      */
     public record TerminalPalette(String background, String foreground, String selection, List<String> ansi,
-                                  String backgroundImage, Integer imageVisibility, Boolean desktopWallpaper) {
+                                  String backgroundImage, Integer imageVisibility, Boolean desktopWallpaper,
+                                  Integer imageBlur) {
         public static final int ANSI_COUNT = 16;
         public static final int MIN_VISIBILITY = 0;
         public static final int DEFAULT_VISIBILITY = 40;
@@ -88,21 +90,29 @@ public record CustomTheme(String id, String name, String base, UiPalette ui, Ter
             imageVisibility = imageVisibility == null ? DEFAULT_VISIBILITY
                     : Math.max(MIN_VISIBILITY, Math.min(100, imageVisibility));
             desktopWallpaper = desktopWallpaper != null && desktopWallpaper;
+            imageBlur = imageBlur == null ? 0 : Math.clamp(imageBlur, 0, 100);
         }
 
         /** Palet tanpa gambar latar. */
         public TerminalPalette(String background, String foreground, String selection, List<String> ansi) {
-            this(background, foreground, selection, ansi, null, null, null);
+            this(background, foreground, selection, ansi, null, null, null, null);
         }
 
         /** Salinan dengan gambar latar dari file {@code path} (null = tanpa gambar); flag wallpaper tidak berubah. */
         public TerminalPalette withBackgroundImage(String path, int visibility) {
-            return new TerminalPalette(background, foreground, selection, ansi, path, visibility, desktopWallpaper);
+            return new TerminalPalette(background, foreground, selection, ansi, path, visibility, desktopWallpaper,
+                    imageBlur);
         }
 
         public TerminalPalette withDesktopWallpaper(boolean useWallpaper) {
             return new TerminalPalette(background, foreground, selection, ansi, backgroundImage, imageVisibility,
-                    useWallpaper);
+                    useWallpaper, imageBlur);
+        }
+
+        /** @param percent kekuatan blur gambar latar, 0..100 */
+        public TerminalPalette withImageBlur(int percent) {
+            return new TerminalPalette(background, foreground, selection, ansi, backgroundImage, imageVisibility,
+                    desktopWallpaper, percent);
         }
 
         /** @return true kalau palet ini meminta gambar latar, dari file maupun wallpaper desktop */

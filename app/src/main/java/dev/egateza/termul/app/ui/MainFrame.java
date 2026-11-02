@@ -41,7 +41,6 @@ import dev.egateza.termul.app.update.UpdateNotifier;
 import dev.egateza.termul.app.update.UpdatePrompter;
 import dev.egateza.termul.app.update.WhatsNewDialog;
 import dev.egateza.termul.update.ReleaseVersion;
-import dev.egateza.termul.app.wsl.WslController;
 import java.awt.Color;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -85,6 +84,7 @@ import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
 import javax.swing.JRadioButtonMenuItem;
+import javax.swing.JRootPane;
 import javax.swing.ButtonGroup;
 import java.awt.Window;
 import java.util.Arrays;
@@ -188,8 +188,9 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             new JCheckBoxMenuItem(I18n.t("main.menu.settings.streakWidget"));
     /** Api streak di pojok kiri panel bawah + animasinya saat aplikasi dibuka. */
     private final StreakController streak;
-    private final WslController wsl;
-    private JCheckBoxMenuItem miWslToggle; // EDT; Pengaturan → Manajemen WSL (null di luar Windows)
+    /** Distro WSL terpasang, sebagai pilihan terminal lokal (Windows); dibaca di background. EDT. */
+    private List<String> wslDistros = List.of();
+    private long wslDistrosReadAt; // EDT; System.nanoTime() pembacaan terakhir (0 = belum)
     /** Ikon tray (Pengaturan → Tray &amp; startup); opt-in. */
     private final TrayController tray;
     /** Run at startup; null di OS yang tidak didukung (opsinya disembunyikan). */
@@ -239,6 +240,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         if (customFrame != null) {
             customFrame.install();
         }
+        WindowOpacity.reapplyBlur(this);
     }
 
     public MainFrame(AppContext ctx, List<CustomTheme> customThemes, Runnable onExit) {
@@ -264,29 +266,6 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         ctx.highlights().addListener(s -> SwingUtilities.invokeLater(() -> highlightChanged(s)));
         ctx.shortcuts().addListener(o -> SwingUtilities.invokeLater(
                 () -> applyShortcuts(KeyBindings.of(o, Os.current().isMac()))));
-        this.wsl = new WslController(this, ctx.wsl(),
-                () -> Os.current().isWindows() && ctx.config().current().wslManager(), store::snapshot, ctx.sshOps(),
-                new WslController.Host() {
-                    @Override
-                    public void wslRunningChanged(List<String> running) {
-                        hostTree.setWslRunning(running);
-                        refreshLocalChoices(); // distro WSL terpasang ikut jadi pilihan terminal lokal
-                    }
-
-                    @Override
-                    public Optional<HostProfile> createProfile(java.awt.Component parent, HostProfile template) {
-                        return ProfileDialog.createFrom(parent, template, store.snapshot(),
-                                HostTerminalColors.choices(customThemes), wsl.installedNames()).map(result -> {
-                                    MainFrame.this.saveProfile(result);
-                                    return result.profile();
-                                });
-                    }
-
-                    @Override
-                    public void saveProfile(HostProfile profile) {
-                        mutate(I18n.t("main.error.saveProfile"), () -> store.save(profile));
-                    }
-                });
         this.tray = new TrayController(new TrayController.Actions() {
             @Override
             public void showWindow() {
@@ -323,13 +302,20 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             if (WindowOpacity.ownFrame()) {
                 customFrame = new WinCustomFrame(this);
             }
-            WindowOpacity.apply(this, startConfig.windowOpacity(), startConfig.terminalOpacity());
+            WindowOpacity.apply(this, startConfig.windowOpacity(), startConfig.terminalOpacity(),
+                    startConfig.windowBlur());
         }
 
         // pindah ke monitor dengan scaling lain: lebar teks ikut berubah (hinting per skala), tapi ukuran logis window
         // tetap sehingga Swing tidak menyusun ulang; label yang tadinya pas jadi terpotong ("16:…"). Bisa datang dari
-        // thread toolkit.
-        addPropertyChangeListener("graphicsConfiguration", e -> SwingUtilities.invokeLater(this::relayoutForScreen));
+        // thread toolkit. Di EDT langsung, supaya tidak ada gambar sebagian di antaranya (lihat relayoutForScreen).
+        addPropertyChangeListener("graphicsConfiguration", e -> {
+            if (SwingUtilities.isEventDispatchThread()) {
+                relayoutForScreen();
+            } else {
+                SwingUtilities.invokeLater(this::relayoutForScreen);
+            }
+        });
 
         setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
         addWindowListener(new WindowAdapter() {
@@ -351,6 +337,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
             @Override
             public void windowActivated(WindowEvent e) {
+                refreshWslDistros(false); // distro yang baru dipasang ikut jadi pilihan terminal lokal
                 if (activeDetached != null) {
                     activeDetached = null;
                     updateTerminalMenu();
@@ -483,7 +470,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         if (ctx.config().current().streakWidget().visible()) {
             SwingUtilities.invokeLater(() -> setStreakWidget(true)); // setelah konstruksi window selesai
         }
-        wsl.apply();
+        refreshWslDistros(true);
 
         setSize(1280, 800);
         setLocationRelativeTo(null);
@@ -492,7 +479,6 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             hostTree.setSnapshot(s);
             home.setSnapshot(s);
             tray.setSnapshot(s);
-            wsl.profilesChanged();
             reloadTerminalColors(); // warna khusus host / environment yang diubah di Edit host
             allPanes().forEach(this::applyHighlight); // host pindah grup: profil highlight bisa berubah
         }));
@@ -701,7 +687,6 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         updatePrompter.stop();
         drawer.dispose();
         resourceMonitor.close();
-        wsl.close();
         tray.close();
         streak.stop(); // termasuk menutup widget mengambang
         super.dispose();
@@ -747,13 +732,17 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     }
 
     /**
-     * Susun ulang seluruh isi window untuk skala layar yang baru. {@code revalidate()} saja tidak cukup: validasi hanya
-     * turun ke container yang tidak valid, jadi semua komponen ditandai tidak valid dulu. EDT.
+     * Susun ulang dan gambar ulang seluruh isi window untuk skala layar yang baru. {@code revalidate()} saja tidak
+     * cukup: validasi hanya turun ke container yang tidak valid, jadi semua komponen ditandai tidak valid dulu.
+     * Penyusunan dikerjakan RepaintManager tepat sebelum gambar berikutnya, setelah komponen anak juga memakai skala
+     * baru (event ini datang lebih dulu di window). Gambarnya harus penuh: window tembus mendapat buffer kosong
+     * seukuran skala baru, dan gambar sebagian (jam, animasi) membuat sisa window tampil kosong sesaat (kedip). EDT.
      */
     private void relayoutForScreen() {
-        invalidateTree(getRootPane());
-        validate();
-        repaint();
+        JRootPane root = getRootPane();
+        invalidateTree(root);
+        root.revalidate();
+        root.repaint();
     }
 
     private static void invalidateTree(java.awt.Component c) {
@@ -801,10 +790,6 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         file.add(menuItem(AppIcon.FOLDER_PLUS, I18n.t("main.menu.file.newGroup"), null, () -> newGroup(hostTree.selectedGroup())));
         file.add(menuItem(null, I18n.t("main.menu.file.importSshConfig"), null, this::importSshConfig));
         file.add(menuItem(null, I18n.t("main.menu.file.exportProfiles"), null, this::exportProfiles));
-        if (Os.current().isWindows()) {
-            // selalu terlihat di Windows; kalau manajemen WSL mati, user ditawari untuk menyalakannya
-            file.add(menuItem(AppIcon.TERMINAL, I18n.t("main.menu.file.wslManager"), null, this::openWslManager));
-        }
         file.add(actionItem(null, I18n.t("main.menu.file.findHost"), ShortcutAction.FIND_HOST,
                 () -> {
                     showHostList();
@@ -946,12 +931,6 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         streakWidgetToggle.setToolTipText(I18n.t("main.menu.settings.streakWidget.tooltip"));
         streakWidgetToggle.addActionListener(e -> setStreakWidget(streakWidgetToggle.isSelected()));
         settings.add(streakWidgetToggle);
-        if (Os.current().isWindows()) {
-            miWslToggle = new JCheckBoxMenuItem(I18n.t("main.menu.settings.wsl"), ctx.config().current().wslManager());
-            miWslToggle.setToolTipText(I18n.t("main.menu.settings.wsl.tooltip"));
-            miWslToggle.addActionListener(e -> setWslManager(miWslToggle.isSelected()));
-            settings.add(miWslToggle);
-        }
         settings.add(buildTrayMenu());
         settings.addSeparator();
         settings.add(menuItem(null, I18n.t("main.menu.settings.knownHosts"), null,
@@ -1800,17 +1779,18 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             backdropImage = null;
             settings.setBackgroundImage(null, 0);
         } else if (path.equals(backdropPath) && backdropImage != null) {
-            // gambar yang sama sudah di memori: hanya keterlihatannya yang mungkin berubah
-            settings.setBackgroundImage(backdropImage, palette.imageVisibility());
+            // gambar yang sama sudah di memori: hanya keterlihatan dan blur-nya yang mungkin berubah
+            settings.setBackgroundImage(backdropImage, palette.imageVisibility(), palette.imageBlur());
         } else {
             backdropPath = path;
             backdropImage = null;
             settings.setBackgroundImage(null, 0); // jangan tampilkan gambar lama selama yang baru dimuat
             int visibility = palette.imageVisibility();
+            int blur = palette.imageBlur();
             UiAsync.run(ctx.sshOps(), () -> BackgroundImages.loadFor(palette), image -> {
                 if (request == backdropRequest && image != null) {
                     backdropImage = image;
-                    settings.setBackgroundImage(image, visibility);
+                    settings.setBackgroundImage(image, visibility, blur);
                     reloadTerminalColors();
                 }
             }, err -> { });
@@ -1831,17 +1811,22 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         var config = ctx.config().current();
         int originalWindow = config.windowOpacity();
         int originalTerminal = config.terminalOpacity();
+        boolean originalBlur = config.windowBlur();
         var windowSlider = new javax.swing.JSlider(AppConfig.MIN_WINDOW_OPACITY, 100, originalWindow);
         var terminalSlider = new javax.swing.JSlider(AppConfig.MIN_TERMINAL_OPACITY, 100, originalTerminal);
         var windowLabel = new JLabel(I18n.t("window.opacity.label", originalWindow));
         var terminalLabel = new JLabel(I18n.t("window.opacity.terminalLabel", originalTerminal));
-        javax.swing.event.ChangeListener preview = e -> {
+        var blurBox = new javax.swing.JCheckBox(I18n.t("window.opacity.blur"), originalBlur);
+        blurBox.setToolTipText(I18n.t("window.opacity.blurTip"));
+        Runnable preview = () -> {
             windowLabel.setText(I18n.t("window.opacity.label", windowSlider.getValue()));
             terminalLabel.setText(I18n.t("window.opacity.terminalLabel", terminalSlider.getValue()));
-            WindowOpacity.apply(this, windowSlider.getValue(), terminalSlider.getValue()); // pratinjau langsung
+            WindowOpacity.apply(this, windowSlider.getValue(), terminalSlider.getValue(),
+                    blurBox.isSelected()); // pratinjau langsung
         };
-        windowSlider.addChangeListener(preview);
-        terminalSlider.addChangeListener(preview);
+        windowSlider.addChangeListener(e -> preview.run());
+        terminalSlider.addChangeListener(e -> preview.run());
+        blurBox.addActionListener(e -> preview.run());
         var hint = new JLabel("<html>" + I18n.t("window.opacity.hint") + "</html>");
         hint.setPreferredSize(new Dimension(380, 70));
         var sliders = new JPanel(new java.awt.GridLayout(0, 1, 0, 4));
@@ -1849,6 +1834,9 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         sliders.add(windowSlider);
         sliders.add(terminalLabel);
         sliders.add(terminalSlider);
+        if (WindowBlur.supported()) {
+            sliders.add(blurBox);
+        }
         var panel = new JPanel(new BorderLayout(0, 8));
         panel.add(sliders, BorderLayout.CENTER);
         panel.add(hint, BorderLayout.SOUTH);
@@ -1857,12 +1845,13 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         boolean ok = answer == JOptionPane.OK_OPTION;
         int window = ok ? windowSlider.getValue() : originalWindow;
         int terminal = ok ? terminalSlider.getValue() : originalTerminal;
-        boolean applied = WindowOpacity.apply(this, window, terminal); // batal: kembali ke nilai semula
-        if (window == originalWindow && terminal == originalTerminal) {
+        boolean blur = ok ? blurBox.isSelected() : originalBlur;
+        boolean applied = WindowOpacity.apply(this, window, terminal, blur); // batal: kembali ke nilai semula
+        if (window == originalWindow && terminal == originalTerminal && blur == originalBlur) {
             return;
         }
-        mutate(I18n.t("error.saveSettings"), () -> ctx.config().save(
-                ctx.config().current().withWindowOpacity(window).withTerminalOpacity(terminal)));
+        mutate(I18n.t("error.saveSettings"), () -> ctx.config().save(ctx.config().current()
+                .withWindowOpacity(window).withTerminalOpacity(terminal).withWindowBlur(blur)));
         if (!applied) {
             JOptionPane.showMessageDialog(this, I18n.t("window.opacity.restart"),
                     I18n.t("window.opacity.title"), JOptionPane.INFORMATION_MESSAGE);
@@ -3191,20 +3180,23 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         });
     }
 
-    /** Nyalakan/matikan manajemen WSL; saat dinyalakan, WSL Manager langsung dibuka. */
-    private void setWslManager(boolean on) {
-        UiAsync.run(io, () -> {
-            ctx.config().save(ctx.config().current().withWslManager(on));
-            return on;
-        }, saved -> {
-            if (miWslToggle != null) {
-                miWslToggle.setSelected(on);
+    /**
+     * Baca ulang distro WSL terpasang di background (Windows saja), lalu perbarui pilihan terminal lokal kalau berubah.
+     * Tanpa {@code force}, paling sering sekali per menit (dipanggil setiap window aktif). EDT.
+     */
+    private void refreshWslDistros(boolean force) {
+        long now = System.nanoTime();
+        if (!Os.current().isWindows() || !force && wslDistrosReadAt != 0
+                && now - wslDistrosReadAt < java.util.concurrent.TimeUnit.MINUTES.toNanos(1)) {
+            return;
+        }
+        wslDistrosReadAt = now;
+        UiAsync.run(ctx.sshOps(), ctx.wsl()::installed, distros -> {
+            if (!distros.equals(wslDistros)) {
+                wslDistros = distros;
+                refreshLocalChoices();
             }
-            wsl.apply();
-            if (on) {
-                wsl.openManager();
-            }
-        }, err -> Dialogs.error(this, I18n.t("error.saveSettings"), err));
+        }, err -> { });
     }
 
     /** Menjalankan mutasi store di thread I/O; error ditampilkan di EDT. */
@@ -3233,27 +3225,12 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         mutate(I18n.t("main.error.recent"), () -> store.markUsed(profile.id()));
         var tab = createPane(profile, sftpOnly);
         insertGroupTab(new SplitPanes<>(TermPane.class, tab), tabs.getTabCount());
-        if (sftpOnly && profile.wslDistro() != null && wsl.enabled()) {
-            // tab "SFTP saja" tidak lewat hook connect terminal: siapkan distro WSL dulu
-            UiAsync.run(ctx.sshOps(), () -> {
-                try {
-                    wsl.prepare(profile, false);
-                    return null;
-                } catch (dev.egateza.termul.ssh.SshConnectException e) {
-                    throw new java.util.concurrent.CompletionException(e);
-                }
-            }, ignored -> tab.connect(), err -> {
-                Dialogs.error(this, I18n.t("wsl.error.title"), err);
-                tab.connect();
-            });
-        } else {
-            tab.connect();
-        }
+        tab.connect();
     }
 
     /** Popup Tab baru: pilih host atau terminal lokal tanpa membuka sidebar. EDT. */
     private void showQuickOpen() {
-        QuickOpenPopup.show(this, store.snapshot(), wsl.enabled(), localChoices(), new QuickOpenPopup.Actions() {
+        QuickOpenPopup.show(this, store.snapshot(), localChoices(), new QuickOpenPopup.Actions() {
             @Override
             public void openLocalProfile(java.util.UUID id) {
                 MainFrame.this.openLocalProfile(id);
@@ -3278,7 +3255,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
     /** Pilihan terminal lokal (shell terdeteksi + profil, default dulu); tanpa I/O. EDT. */
     private List<dev.egateza.termul.app.terminal.LocalProfiles.Choice> localChoices() {
-        return ctx.locals().choices(wsl == null ? List.of() : wsl.installedNames());
+        return ctx.locals().choices(wslDistros);
     }
 
     private void refreshLocalChoices() {
@@ -3343,7 +3320,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     @Override
     public void manageLocalProfiles() {
         new LocalProfilesDialog(this, ctx.locals().store(),
-                () -> ctx.locals().allChoices(wsl == null ? List.of() : wsl.installedNames()),
+                () -> ctx.locals().allChoices(wslDistros),
                 HostTerminalColors.choices(customThemes), io).setVisible(true);
     }
 
@@ -3429,7 +3406,6 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                     saveSftpLayout(on);
                 })));
         tab.setConnectedListener(tty -> detectOs(profile.id(), tty));
-        tab.setBeforeConnect(wsl::prepare);
         tab.setStateListener(() -> {
             updateTerminalMenu();
             refreshTabIcons(); // panel SFTP dibuka/ditutup
@@ -3462,7 +3438,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
     @Override
     public void newHost(String group) {
-        ProfileDialog.create(this, group, store.snapshot(), HostTerminalColors.choices(customThemes), wsl.installedNames())
+        ProfileDialog.create(this, group, store.snapshot(), HostTerminalColors.choices(customThemes))
                 .ifPresent(this::saveProfile);
     }
 
@@ -3470,8 +3446,8 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     public void edit(HostProfile profile) {
         // baca metadata vault (disk I/O) di luar EDT, lalu buka dialog
         UiAsync.run(io, () -> storedSecrets(profile), stored ->
-                        ProfileDialog.edit(this, profile, store.snapshot(), stored, HostTerminalColors.choices(customThemes),
-                                wsl.installedNames()).ifPresent(this::saveProfile),
+                        ProfileDialog.edit(this, profile, store.snapshot(), stored, HostTerminalColors.choices(customThemes))
+                                .ifPresent(this::saveProfile),
                 err -> Dialogs.error(this, I18n.t("main.error.readVault"), err));
     }
 
@@ -3642,27 +3618,6 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     @Override
     public void clearRecent() {
         mutate(I18n.t("main.error.recent"), store::clearRecent);
-    }
-
-    @Override
-    public void newWslProfile(String distro) {
-        wsl.newProfile(distro);
-    }
-
-    /** Buka WSL Manager; kalau manajemen WSL masih mati, tawarkan untuk menyalakannya dulu. */
-    @Override
-    public void openWslManager() {
-        if (wsl.enabled()) {
-            wsl.openManager();
-        } else if (Os.current().isWindows()
-                && Dialogs.confirm(this, I18n.t("wsl.manager.title"), I18n.t("wsl.enable.confirm"))) {
-            setWslManager(true); // membuka WSL Manager setelah pengaturan tersimpan
-        }
-    }
-
-    @Override
-    public void checkWslSsh(HostProfile profile) {
-        wsl.checkProfile(profile);
     }
 
     /** Status buka/tutup grup panel host disimpan, supaya sama lagi setelah restart. */

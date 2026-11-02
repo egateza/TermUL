@@ -47,6 +47,30 @@ Batasan yang ditemukan lewat prototipe:
 7. Config: `windowOpacity` (30–100) kini berarti bagian selain terminal; field baru `terminalOpacity` (10–100). Config lama
    tanpa field = solid.
 
+8. **Blur (tambahan 2026-11-02)**, dua opsi yang bisa dipakai bersama:
+   - **Blur di belakang window** (`windowBlur`, opt-in, Windows saja): `SetWindowCompositionAttribute` dengan
+     `ACCENT_ENABLE_BLURBEHIND`. Berbeda dengan backdrop DWM (batasan 3), accent ini *terbukti* mem-blur isi di belakang
+     piksel tembus window layered milik Java (prototipe dengan screenshot `Robot`, teks di depan tetap tajam). Hanya
+     menyala selama transparansi aktif; kekuatan blur diatur Windows. `ACCENT_ENABLE_ACRYLICBLURBEHIND` tidak dipakai
+     karena dikenal patah-patah saat window diseret.
+   - **Blur gambar latar terminal** (`imageBlur` di palet tema, 0..100): dihitung di Java saat gambar disesuaikan ke
+     ukuran panel, jadi jalan di semua OS dan tanpa transparansi.
+
+9. **Pindah monitor beda skala (tambahan 2026-11-02).**
+   - Painter D3D milik JDK untuk window layered memakai ulang buffer berskala lama setelah window pindah ke monitor
+     dengan skala lain (ukuran logisnya sama): isi window tampil berulang/bergaris. `TermULApp` mengeset
+     `sun.java2d.twp.forcesw=true` sebelum AWT dimuat, sehingga dipakai painter software yang menghitung buffernya dari
+     skala saat ini. Installer sudah tanpa D3D (`-Dsun.java2d.d3d=false`), jadi painter software memang sudah dipakai di
+     sana; properti ini untuk cara jalan lain (IDE, JAR portable). Melepas lalu memasang lagi latar beralpha juga
+     memperbaikinya, tetapi terlihat sebagai kedipan (window kosong lalu putih), jadi tidak dipakai.
+   - Setelah skala berubah, gambar ulang pertama harus penuh: painter membuat buffer baru yang kosong, dan gambar
+     sebagian (jam, animasi) membuat sisa window tampil kosong sesaat. `MainFrame.relayoutForScreen` (langsung di EDT
+     saat `graphicsConfiguration` berubah) menandai semua komponen tidak valid dan seluruh root pane kotor. Penyusunan
+     dan gambarnya dikerjakan RepaintManager dalam satu langkah, setelah semua komponen memakai skala baru (sekitar
+     25–50 ms setelah `WM_DPICHANGED`). Diukur dengan tangkapan layar beruntun.
+   - `TranslucentRootPane` menempel buffer dalam piksel perangkat yang dibulatkan keluar: di skala pecahan (125%) tepi
+     area yang digambar ulang sebelumnya tertinggal transparan dan tampak sebagai garis tipis.
+
 ## Konsekuensi
 - (+) Dua slider transparansi, berlaku langsung tanpa restart dan tanpa kedipan, dengan Snap dan animasi docking tetap
   berfungsi (diuji manual oleh user).
@@ -57,4 +81,6 @@ Batasan yang ditemukan lewat prototipe:
   dan CPU sedikit lebih tinggi saat output terminal deras.
 - (−) Bagian title bar yang menerima mouse dikenali dari tipe dan listener-nya. Komponen baru di title bar yang bisa diklik
   tetapi tanpa listener perlu client property `JComponent.titleBarCaption = false`.
-- (−) Multi-monitor dengan DPI berbeda dan macOS belum diuji.
+- (−) macOS belum diuji. Multi-monitor beda DPI di Windows (100% ↔ 125%) diuji 2026-11-02 setelah keputusan 9.
+- (−) Blur di belakang window memakai API Windows yang tidak terdokumentasi: perilakunya bisa berubah di update Windows.
+  Kalau gagal, error dicatat sekali di log dan transparansi tetap jalan tanpa blur.

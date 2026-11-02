@@ -57,11 +57,12 @@ public final class TerminalSettings extends DefaultSettingsProvider {
      * @param image      gambar asli (belum disesuaikan dengan ukuran panel)
      * @param visibility persen 0..100: seberapa jelas gambar terlihat di atas {@code base}
      * @param base       warna latar tema; juga warna yang isiannya dibuang agar gambar terlihat di antara teks
+     * @param blur       kekuatan blur gambar, persen 0..100 (lihat {@link BackgroundImages#cover(BufferedImage, int, int, int)})
      */
-    public record BackgroundLayer(BufferedImage image, int visibility, java.awt.Color base) {
+    public record BackgroundLayer(BufferedImage image, int visibility, java.awt.Color base, int blur) {
     }
 
-    private record Backdrop(BufferedImage image, int visibility) {
+    private record Backdrop(BufferedImage image, int visibility, int blur) {
     }
 
     public TerminalSettings(float fontSize) {
@@ -140,7 +141,17 @@ public final class TerminalSettings extends DefaultSettingsProvider {
      * @param visibility persen 0..100
      */
     public void setBackgroundImage(BufferedImage image, int visibility) {
-        backdrop.set(image == null ? null : new Backdrop(image, Math.max(0, Math.min(100, visibility))));
+        setBackgroundImage(image, visibility, 0);
+    }
+
+    /**
+     * Seperti {@link #setBackgroundImage(BufferedImage, int)}, dengan gambar di-blur.
+     *
+     * @param blur persen 0..100; 0 = tajam
+     */
+    public void setBackgroundImage(BufferedImage image, int visibility, int blur) {
+        backdrop.set(image == null ? null
+                : new Backdrop(image, Math.max(0, Math.min(100, visibility)), Math.clamp(blur, 0, 100)));
     }
 
     /**
@@ -164,7 +175,7 @@ public final class TerminalSettings extends DefaultSettingsProvider {
         }
         var b = backdrop.get();
         var c = colors.get();
-        return b == null || c == null ? null : new BackgroundLayer(b.image(), b.visibility(), c.awtBackground());
+        return b == null || c == null ? null : new BackgroundLayer(b.image(), b.visibility(), c.awtBackground(), b.blur());
     }
 
     public BellSettings bell() {

@@ -42,10 +42,10 @@ public final class HostTerminalColors {
         }
         if (id.equals(PROD_RED)) {
             var dark = ThemeTemplates.dark("prod-red", "Produksi").terminal();
-            return new TerminalPalette("#2B0B0E", dark.foreground(), "#6B2A30", dark.ansi(), null, null, null);
+            return new TerminalPalette("#2B0B0E", dark.foreground(), "#6B2A30", dark.ansi(), null, null, null, null);
         }
         return custom.stream().filter(t -> t.id().equals(id)).findFirst().map(CustomTheme::terminal)
-                .map(p -> new TerminalPalette(p.background(), p.foreground(), p.selection(), p.ansi(), null, null, null))
+                .map(p -> new TerminalPalette(p.background(), p.foreground(), p.selection(), p.ansi(), null, null, null, null))
                 .orElse(null);
     }
 }

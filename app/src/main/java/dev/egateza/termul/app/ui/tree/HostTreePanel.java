@@ -8,9 +8,7 @@ import dev.egateza.termul.app.ui.tree.HostTreeModelBuilder.BuiltinGroup;
 import dev.egateza.termul.app.ui.tree.HostTreeModelBuilder.GroupNode;
 import dev.egateza.termul.app.ui.tree.HostTreeModelBuilder.LocalProfileNode;
 import dev.egateza.termul.app.ui.tree.HostTreeModelBuilder.LocalTerminalNode;
-import dev.egateza.termul.app.ui.tree.HostTreeModelBuilder.WslDistroNode;
 import dev.egateza.termul.core.profile.HostProfile;
-import dev.egateza.termul.core.profile.OsInfo;
 import dev.egateza.termul.core.profile.ProfileSnapshot;
 import java.awt.BorderLayout;
 import java.awt.Component;
@@ -110,14 +108,6 @@ public final class HostTreePanel extends JPanel {
         /** Kosongkan grup bawaan Last used. */
         void clearRecent();
 
-        /** Buat profil SSH untuk distro WSL yang belum punya profil. */
-        void newWslProfile(String distro);
-
-        void openWslManager();
-
-        /** Periksa sshd di distro WSL profil ini dan tampilkan perbaikannya. */
-        void checkWslSsh(HostProfile profile);
-
         /** User membuka/menutup grup: {@code collapsed} = kunci grup yang tertutup (lihat {@link #foldKey}). */
         void collapsedGroupsChanged(Set<String> collapsed);
     }
@@ -130,7 +120,6 @@ public final class HostTreePanel extends JPanel {
     private final DefaultTreeModel model = new DefaultTreeModel(new DefaultMutableTreeNode());
     private final JTree tree = new JTree(model);
     private ProfileSnapshot snapshot = ProfileSnapshot.empty();
-    private List<String> wslRunning; // null = manajemen WSL mati
     private List<dev.egateza.termul.app.terminal.LocalProfiles.Choice> localChoices = List.of(); // default dulu
 
     public HostTreePanel(Actions actions) {
@@ -160,7 +149,7 @@ public final class HostTreePanel extends JPanel {
         tree.setShowsRootHandles(true);
         // Ctrl+klik (Cmd di Mac) / Shift+klik untuk memilih beberapa profil sekaligus
         tree.getSelectionModel().setSelectionMode(TreeSelectionModel.DISCONTIGUOUS_TREE_SELECTION);
-        tree.setCellRenderer(new Renderer(this::isWslStopped));
+        tree.setCellRenderer(new Renderer());
         tree.setToggleClickCount(0);
         tree.addTreeExpansionListener(new javax.swing.event.TreeExpansionListener() {
             @Override
@@ -185,8 +174,6 @@ public final class HostTreePanel extends JPanel {
                         actions.openLocalTerminal(); // grup khusus: double-click = buka default
                     } else if (path != null && userObject(path) instanceof LocalProfileNode n) {
                         actions.openLocalProfile(n.choice().id());
-                    } else if (path != null && userObject(path) instanceof WslDistroNode d) {
-                        actions.newWslProfile(d.name());
                     } else if (path != null) {
                         toggle(path);
                     }
@@ -213,7 +200,6 @@ public final class HostTreePanel extends JPanel {
                 case HostProfile p -> actions.open(p);
                 case LocalTerminalNode n -> actions.openLocalTerminal();
                 case LocalProfileNode n -> actions.openLocalProfile(n.choice().id());
-                case WslDistroNode d -> actions.newWslProfile(d.name());
                 case null, default -> { }
             }
         });
@@ -255,20 +241,11 @@ public final class HostTreePanel extends JPanel {
         rebuild();
     }
 
-    /** @param running nama distro WSL yang berjalan; null = manajemen WSL mati (grup WSL tidak tampil) */
-    /** Isi grup Terminal lokal (default dulu); dipanggil saat profil/deteksi/WSL berubah. */
+    /** Isi grup Terminal lokal (default dulu); dipanggil saat profil/deteksi/distro WSL berubah. */
     public void setLocalChoices(List<dev.egateza.termul.app.terminal.LocalProfiles.Choice> choices) {
         var next = List.copyOf(choices);
         if (!next.equals(localChoices)) {
             localChoices = next;
-            rebuild();
-        }
-    }
-
-    public void setWslRunning(List<String> running) {
-        var next = running == null ? null : List.copyOf(running);
-        if (!java.util.Objects.equals(next, wslRunning)) {
-            wslRunning = next;
             rebuild();
         }
     }
@@ -384,7 +361,7 @@ public final class HostTreePanel extends JPanel {
         var reselect = new java.util.ArrayList<TreePath>();
         boolean filtering = !search.getText().isBlank();
 
-        var root = HostTreeModelBuilder.build(snapshot, search.getText(), wslRunning, localChoices);
+        var root = HostTreeModelBuilder.build(snapshot, search.getText(), localChoices);
         model.setRoot(root);
 
         // postorder: subgrup lebih dulu, lalu induknya. Subgrup yang terbuka di dalam induk yang tertutup tetap
@@ -413,18 +390,11 @@ public final class HostTreePanel extends JPanel {
         }
     }
 
-    /** Profil WSL yang distronya tidak sedang berjalan (manajemen WSL aktif). */
-    private boolean isWslStopped(HostProfile p) {
-        return p.wslDistro() != null && wslRunning != null
-                && wslRunning.stream().noneMatch(d -> d.equalsIgnoreCase(p.wslDistro()));
-    }
-
     private static boolean isSame(Object a, Object b) {
         return switch (a) {
             case HostProfile p when b instanceof HostProfile q -> p.id().equals(q.id());
             case GroupNode g when b instanceof GroupNode h -> g.path().equals(h.path());
             case BuiltinGroup g -> g == b;
-            case WslDistroNode d -> d.equals(b);
             case LocalTerminalNode n -> n == b;
             case LocalProfileNode n -> b instanceof LocalProfileNode m && n.choice().id().equals(m.choice().id());
             case null, default -> false;
@@ -488,9 +458,6 @@ public final class HostTreePanel extends JPanel {
                             menu.add(item(null, I18n.t("tree.menu.forgetFtpsCert"), () -> actions.forgetFtpsCert(p)));
                     case FTP -> { } // tanpa enkripsi: tidak ada kunci/sertifikat yang dipercaya
                 }
-                if (p.wslDistro() != null && wslRunning != null) {
-                    menu.add(item(AppIcon.TERMINAL, I18n.t("tree.menu.checkWslSsh"), () -> actions.checkWslSsh(p)));
-                }
             }
             case GroupNode g -> {
                 menu.add(item(AppIcon.SERVER, I18n.t("tree.menu.newHostInGroup"), () -> actions.newHost(g.path())));
@@ -506,7 +473,6 @@ public final class HostTreePanel extends JPanel {
                 clear.setEnabled(!snapshot.recent().isEmpty());
                 menu.add(clear);
             }
-            case BuiltinGroup.WSL -> menu.add(item(AppIcon.TERMINAL, I18n.t("tree.menu.wslManager"), actions::openWslManager));
             case LocalTerminalNode n -> {
                 menu.add(item(AppIcon.TERMINAL, I18n.t("tree.menu.openLocal"), actions::openLocalTerminal));
                 menu.addSeparator();
@@ -527,18 +493,9 @@ public final class HostTreePanel extends JPanel {
                 menu.addSeparator();
                 menu.add(item(null, I18n.t("tree.menu.manageLocal"), actions::manageLocalProfiles));
             }
-            case WslDistroNode d -> {
-                menu.add(item(AppIcon.SERVER, I18n.t("tree.menu.newWslProfile"), () -> actions.newWslProfile(d.name())));
-                menu.addSeparator();
-                menu.add(item(AppIcon.TERMINAL, I18n.t("tree.menu.wslManager"), actions::openWslManager));
-            }
             case null, default -> {
                 menu.add(item(AppIcon.SERVER, I18n.t("tree.menu.newHost"), () -> actions.newHost("")));
                 menu.add(item(AppIcon.FOLDER_PLUS, I18n.t("tree.menu.newGroup"), () -> actions.newGroup("")));
-                if (dev.egateza.termul.core.Os.current().isWindows()) {
-                    menu.addSeparator();
-                    menu.add(item(AppIcon.TERMINAL, I18n.t("tree.menu.wslManager"), actions::openWslManager));
-                }
             }
         }
         return menu;
@@ -614,12 +571,7 @@ public final class HostTreePanel extends JPanel {
                 AppIcon.FOLDER_OPEN.icon(AppIcon.SIZE, () -> AppIcon.FOLDER_COLOR);
         private static final javax.swing.Icon STAR = AppIcon.STAR.icon(AppIcon.SIZE, () -> AppIcon.FOLDER_COLOR);
         private static final javax.swing.Icon HISTORY = AppIcon.HISTORY.icon();
-        private static final javax.swing.Icon WSL = AppIcon.TERMINAL.icon();
-        private final java.util.function.Predicate<HostProfile> wslStopped;
-
-        Renderer(java.util.function.Predicate<HostProfile> wslStopped) {
-            this.wslStopped = wslStopped;
-        }
+        private static final javax.swing.Icon TERMINAL = AppIcon.TERMINAL.icon();
 
         @Override
         public Component getTreeCellRendererComponent(JTree tree, Object value, boolean sel, boolean expanded,
@@ -631,8 +583,7 @@ public final class HostTreePanel extends JPanel {
             if (uo instanceof HostProfile p) {
                 var color = EnvColors.of(p.environment());
                 String dot = color == null ? "" : "<font color='#%06x'>&#9679;</font> ".formatted(color.getRGB() & 0xFFFFFF);
-                String stopped = wslStopped.test(p) ? " &middot; " + escape(I18n.t("tree.wsl.stopped")) : "";
-                setText("<html>" + dot + escape(p.name()) + " <font color='gray'>" + escape(p.address()) + stopped
+                setText("<html>" + dot + escape(p.name()) + " <font color='gray'>" + escape(p.address())
                         + "</font></html>");
                 setIcon(OsIcons.forHost(p));
                 String os = escape(OsIcons.hostLabel(p));
@@ -641,33 +592,25 @@ public final class HostTreePanel extends JPanel {
                 setText(switch (b) {
                     case FAVORITES -> I18n.t("tree.group.favorites");
                     case RECENT -> I18n.t("tree.group.recent");
-                    case WSL -> I18n.t("tree.group.wsl");
                 });
                 setIcon(switch (b) {
                     case FAVORITES -> STAR;
                     case RECENT -> HISTORY;
-                    case WSL -> WSL;
                 });
                 setToolTipText(switch (b) {
                     case FAVORITES -> I18n.t("tree.group.favorites.tooltip");
                     case RECENT -> I18n.t("tree.group.recent.tooltip", ProfileSnapshot.RECENT_LIMIT);
-                    case WSL -> I18n.t("tree.group.wsl.tooltip");
                 });
             } else if (uo instanceof LocalProfileNode(var c)) {
                 String def = c.isDefault() ? " &middot; " + escape(I18n.t("tree.local.default")) : "";
                 setText("<html>" + escape(c.name()) + " <font color='gray'>" + escape(c.commandLine()) + def
                         + "</font></html>");
-                setIcon(WSL);
+                setIcon(TERMINAL);
                 setToolTipText(escape(c.commandLine()));
             } else if (uo instanceof LocalTerminalNode) {
                 setText(I18n.t("tree.local"));
-                setIcon(WSL);
+                setIcon(TERMINAL);
                 setToolTipText(I18n.t("tree.local.tooltip"));
-            } else if (uo instanceof WslDistroNode d) {
-                setText("<html>" + escape(d.name()) + " <font color='gray'>" + escape(I18n.t("tree.wsl.noProfile"))
-                        + "</font></html>");
-                setIcon(OsIcons.of(guessOs(d.name())));
-                setToolTipText(I18n.t("tree.wsl.noProfile.tooltip"));
             } else {
                 if (isGroup) {
                     setIcon(expanded ? FOLDER_OPEN : FOLDER);
@@ -675,12 +618,6 @@ public final class HostTreePanel extends JPanel {
                 setToolTipText(null);
             }
             return this;
-        }
-
-        /** Ikon distro dari namanya, mis. {@code Ubuntu-22.04} → ubuntu; null kalau tidak bisa ditebak. */
-        static OsInfo guessOs(String distro) {
-            var m = java.util.regex.Pattern.compile("[a-z]+").matcher(distro.toLowerCase(Locale.ROOT));
-            return m.lookingAt() ? new OsInfo(m.group(), null, distro) : null;
         }
 
         private static String escape(String s) {

@@ -10,7 +10,7 @@
 - Terminal SSH dengan tab
 - Inject password sudo/su (hotkey, plus auto-trigger opsional dengan guard)
 - Browser remote directory (SFTP) dan edit file remote dengan editor lokal Windows (VS Code, Notepad++, dll.), lalu auto-upload saat file disimpan
-- Opsional (Windows): WSL Manager untuk start/stop distro WSL; distro dimasuki lewat SSH ke sshd di `localhost` (ADR 0004)
+- Distro WSL (Windows) dibuka sebagai terminal lokal `wsl.exe -d <distro>`; WSL Manager sudah dihapus (ADR 0011)
 
 Fokus utamanya SSH: PTY berada di server remote dan aplikasi merender stream dari SSH channel. Sejak ADR 0005 ada juga
 tab **terminal lokal** (shell di mesin sendiri lewat pty4j), tanpa fitur khusus SSH (SFTP, inject password, vault).
@@ -42,7 +42,7 @@ Sejak ADR 0007 profil juga bisa **FTP/FTPS** (browser file + remote edit saja, t
 
 ```
 termul/
-├─ core/       domain model (HostProfile, Group), ProfileStore, event bus, utilities, WslManager (wsl.exe)
+├─ core/       domain model (HostProfile, Group), ProfileStore, event bus, utilities, WslDistros (daftar distro WSL)
 ├─ vault/      CredentialVault API + implementasi (DPAPI / AES-GCM)
 ├─ ssh/        SessionManager, koneksi MINA, known_hosts, auth (key/agent/password), jump host
 ├─ terminal/   JediTerm TtyConnector, PromptResponder (sudo inject)
@@ -129,5 +129,5 @@ Arah dependensi: `app → terminal, sftp → ssh → core`, `vault → core`, `a
 | `docs/SETUP.md` | Tools, dependensi, environment dev & test |
 | `docs/RELEASE.md` | Menerbitkan rilis baru ke GitHub Releases (update lewat menu); Windows: `tools/release.ps1`, Mac: `tools/release-mac.sh` |
 | `docs/RELEASE-CROSS-PLATFORM.md` | Satu tag rilis berisi aset Windows + macOS: draft dari satu mesin, aset dari mesin lain (`-AssetsOnly` / `--dmg-only`) |
-| `docs/adr/` | Architecture Decision Records (0003: update via GitHub Releases, 0004: WSL lewat SSH + WSL Manager, 0005: terminal lokal lewat pty4j, 0006: Ingat di Mac ini via Keychain, 0007: FTP/FTPS, 0008: transparansi + bingkai Windows sendiri, 0009: menu klik kanan Explorer, 0010: ikon shortcut ikut update menu) |
+| `docs/adr/` | Architecture Decision Records (0003: update via GitHub Releases, 0004: WSL lewat SSH + WSL Manager (digantikan 0011), 0005: terminal lokal lewat pty4j, 0006: Ingat di Mac ini via Keychain, 0007: FTP/FTPS, 0008: transparansi + bingkai Windows sendiri, 0009: menu klik kanan Explorer, 0010: ikon shortcut ikut update menu, 0011: hapus WSL Manager) |
 | `docs/local-terminal-plan.md` | Rencana & progres terminal lokal (ADR 0005) |

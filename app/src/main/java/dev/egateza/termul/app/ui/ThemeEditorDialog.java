@@ -100,6 +100,7 @@ public final class ThemeEditorDialog extends JDialog {
     private final JButton clearImage = new JButton(I18n.t("theme.editor.term.image.clear"));
     private final JSlider imageVisibility = new JSlider(TerminalPalette.MIN_VISIBILITY, 100,
             TerminalPalette.DEFAULT_VISIBILITY);
+    private final JSlider imageBlur = new JSlider(0, 100, 0);
     private final JCheckBox useWallpaper = new JCheckBox(I18n.t("theme.editor.term.image.wallpaper"));
     private String imagePath; // null = tanpa gambar latar
     private String previewKey; // kunci gambar (BackgroundImages.key) yang sedang/sudah dimuat untuk pratinjau
@@ -157,6 +158,7 @@ public final class ThemeEditorDialog extends JDialog {
             edited();
         });
         imageVisibility.addChangeListener(e -> edited());
+        imageBlur.addChangeListener(e -> edited());
         useWallpaper.addActionListener(e -> edited());
 
         list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
@@ -291,8 +293,9 @@ public final class ThemeEditorDialog extends JDialog {
             addWideRow(terminal, 4, "", useWallpaper);
         }
         addWideRow(terminal, 5, I18n.t("theme.editor.term.image.visibility"), imageVisibility);
+        addWideRow(terminal, 6, I18n.t("theme.editor.term.image.blur"), imageBlur);
         var g = new GridBagConstraints();
-        g.gridy = 6;
+        g.gridy = 7;
         g.insets = new Insets(8, 4, 2, 4);
         g.anchor = GridBagConstraints.WEST;
         g.gridx = 1;
@@ -300,7 +303,7 @@ public final class ThemeEditorDialog extends JDialog {
         g.gridx = 2;
         terminal.add(new JLabel(I18n.t("theme.editor.ansi.bright")), g);
         for (int i = 0; i < 8; i++) {
-            addRow(terminal, 7 + i, I18n.t("theme.ansi." + i), ansi[i], ansi[i + 8]);
+            addRow(terminal, 8 + i, I18n.t("theme.ansi." + i), ansi[i], ansi[i + 8]);
         }
         c.gridy = 2;
         form.add(terminal, c);
@@ -389,6 +392,7 @@ public final class ThemeEditorDialog extends JDialog {
                 }
                 imagePath = t.backgroundImage();
                 imageVisibility.setValue(t.imageVisibility());
+                imageBlur.setValue(t.imageBlur());
                 useWallpaper.setSelected(t.desktopWallpaper());
             } else {
                 name.setText("");
@@ -417,7 +421,7 @@ public final class ThemeEditorDialog extends JDialog {
             colors.add(f.hex());
         }
         return new TerminalPalette(termBackground.hex(), termForeground.hex(), termSelection.hex(), colors,
-                imagePath, imageVisibility.getValue(), useWallpaper.isSelected());
+                imagePath, imageVisibility.getValue(), useWallpaper.isSelected(), imageBlur.getValue());
     }
 
     private void edited() {
@@ -449,6 +453,7 @@ public final class ThemeEditorDialog extends JDialog {
         chooseImage.setEnabled(!wallpaper);
         clearImage.setEnabled(!wallpaper && imagePath != null);
         imageVisibility.setEnabled(palette.hasBackdrop());
+        imageBlur.setEnabled(palette.hasBackdrop());
         preview.setPalette(palette);
         refreshBackdrop(palette);
         warning.setText(contrastWarning(palette, previewMissing ? missingImageMessage(palette) : null));
@@ -489,7 +494,7 @@ public final class ThemeEditorDialog extends JDialog {
                 }.execute();
             }
         }
-        preview.setBackdrop(previewImage, palette.imageVisibility());
+        preview.setBackdrop(previewImage, palette.imageVisibility(), palette.imageBlur());
     }
 
     /**

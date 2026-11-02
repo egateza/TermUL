@@ -1,8 +1,24 @@
 package dev.egateza.termul.app.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
+import com.formdev.flatlaf.FlatDarkLaf;
+import com.formdev.flatlaf.FlatLaf;
+import com.formdev.flatlaf.FlatLightLaf;
+import java.awt.Frame;
+import java.awt.GraphicsEnvironment;
+import java.time.Duration;
+import java.util.concurrent.atomic.AtomicReference;
+import javax.swing.JFrame;
+import javax.swing.JRootPane;
+import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
+import javax.swing.UnsupportedLookAndFeelException;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 
 class WinCustomFrameTest {
 
@@ -45,6 +61,82 @@ class WinCustomFrameTest {
         divider.putClientProperty("JComponent.titleBarCaption", true);
         divider.setToolTipText("x");
         assertThat(WinCustomFrame.isControl(divider)).as("titleBarCaption menang").isFalse();
+    }
+
+    /**
+     * Ganti tema / font aplikasi membuat ulang title bar FlatLaf di tempat yang sama, tanpa event resize. Klik maximize
+     * sesudahnya harus sampai ke tombol yang baru, bukan ke tombol lama yang sudah tidak tampil.
+     */
+    @Test
+    @EnabledOnOs(OS.WINDOWS)
+    void maximizeTetapJalanSetelahTitleBarDibuatUlang() throws Exception {
+        Assumptions.assumeFalse(GraphicsEnvironment.isHeadless());
+        var originalLaf = UIManager.getLookAndFeel();
+        var frame = new AtomicReference<JFrame>();
+        var custom = new AtomicReference<WinCustomFrame>();
+        try {
+            SwingUtilities.invokeAndWait(() -> {
+                FlatDarkLaf.setup();
+                var f = new JFrame("test");
+                f.setUndecorated(true);
+                f.getRootPane().setWindowDecorationStyle(JRootPane.FRAME);
+                var cf = new WinCustomFrame(f);
+                f.setBounds(80, 80, 600, 300);
+                f.addNotify();
+                cf.install();
+                f.setVisible(true);
+                frame.set(f);
+                custom.set(cf);
+            });
+            SwingUtilities.invokeAndWait(() -> {
+                FlatLightLaf.setup();
+                FlatLaf.updateUI(); // title bar & tombolnya dibuat ulang
+            });
+            SwingUtilities.invokeAndWait(() -> { }); // geometri yang dijadwalkan ulang
+            SwingUtilities.invokeAndWait(() -> custom.get().clickMaxButton());
+
+            await().atMost(Duration.ofSeconds(5))
+                    .until(() -> (frame.get().getExtendedState() & Frame.MAXIMIZED_BOTH) == Frame.MAXIMIZED_BOTH);
+        } finally {
+            SwingUtilities.invokeAndWait(() -> {
+                if (frame.get() != null) {
+                    frame.get().dispose();
+                }
+                try {
+                    UIManager.setLookAndFeel(originalLaf);
+                } catch (UnsupportedLookAndFeelException e) {
+                    throw new IllegalStateException(e);
+                }
+            });
+        }
+    }
+
+    /** Monitor kedua 125%: area kerja fisik 1920x1020 di kiri monitor utama. */
+    private static final int[] WORK = {-1920, 0, 0, 1020};
+
+    @Test
+    void windowYangMembesarKarenaScalingDipaskanKeAreaKerja() {
+        // 1280x800 logis di 125% = 1600x1000 fisik; tingginya muat, tapi dilepas di y=80 bawahnya tertutup taskbar
+        assertThat(WinCustomFrame.fitToWorkArea(new int[] {-1900, 80, -300, 1080}, WORK, true))
+                .containsExactly(-1900, 20, -300, 1020);
+        // lebih tinggi dari area kerja: diperkecil, lalu digeser masuk
+        assertThat(WinCustomFrame.fitToWorkArea(new int[] {-1800, 100, -200, 1200}, WORK, true))
+                .containsExactly(-1800, 0, -200, 1020);
+        // terlalu lebar & menjorok keluar kiri
+        assertThat(WinCustomFrame.fitToWorkArea(new int[] {-2000, 10, 100, 500}, WORK, true))
+                .containsExactly(-1920, 10, 0, 500);
+    }
+
+    @Test
+    void selamaDiseretHanyaUkuranYangDipaskan() {
+        assertThat(WinCustomFrame.fitToWorkArea(new int[] {-1800, 100, -200, 1200}, WORK, false))
+                .containsExactly(-1800, 100, -200, 1120); // tinggi 1020, posisi tetap ikut kursor
+    }
+
+    @Test
+    void windowYangSudahMuatTidakBerubah() {
+        int[] rect = {-1700, 50, -500, 850};
+        assertThat(WinCustomFrame.fitToWorkArea(rect, WORK, true)).containsExactly(rect);
     }
 
     @Test

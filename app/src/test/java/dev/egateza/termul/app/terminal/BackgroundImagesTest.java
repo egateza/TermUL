@@ -100,4 +100,51 @@ class BackgroundImagesTest {
 
         assertThat(BackgroundImages.shrink(small)).isSameAs(small);
     }
+
+    @Test
+    void blurRadiusFollowsAreaNotImageResolution() {
+        assertThat(BackgroundImages.blurRadius(800, 600, 0)).isZero();
+        assertThat(BackgroundImages.blurRadius(800, 600, 100)).isEqualTo(30); // 5% dari sisi terpendek
+        assertThat(BackgroundImages.blurRadius(800, 600, 50)).isEqualTo(15);
+        assertThat(BackgroundImages.blurRadius(800, 600, 500)).isEqualTo(30); // dibatasi ke 100%
+        assertThat(BackgroundImages.blurRadius(0, 600, 100)).isZero();
+    }
+
+    @Test
+    void boxBlurSoftensHardEdgeButKeepsFlatAreas() {
+        // separuh kiri hitam, separuh kanan putih
+        var image = solid(100, 20, Color.BLACK);
+        var g = image.createGraphics();
+        g.setColor(Color.WHITE);
+        g.fillRect(50, 0, 50, 20);
+        g.dispose();
+
+        BackgroundImages.boxBlur(image, 4);
+
+        int atEdge = image.getRGB(50, 10) & 0xFF;
+        assertThat(atEdge).isBetween(60, 200); // tepi jadi abu-abu
+        assertThat(image.getRGB(2, 10) & 0xFF).isZero(); // jauh dari tepi tetap hitam
+        assertThat(image.getRGB(97, 10) & 0xFF).isEqualTo(255); // tepi gambar tidak menggelap
+        assertThat(image.getRGB(97, 0) & 0xFF).isEqualTo(255);
+    }
+
+    @Test
+    void coverWithBlurHasAreaSizeAndKeepsUniformColor() {
+        var image = solid(640, 400, new Color(10, 120, 200));
+
+        var blurred = BackgroundImages.cover(image, 300, 200, 80);
+
+        assertThat(blurred.getWidth()).isEqualTo(300);
+        assertThat(blurred.getHeight()).isEqualTo(200);
+        assertThat(new Color(blurred.getRGB(150, 100))).isEqualTo(new Color(10, 120, 200));
+        assertThat(new Color(blurred.getRGB(0, 0))).isEqualTo(new Color(10, 120, 200));
+    }
+
+    @Test
+    void coverWithoutBlurIsPlainCover() {
+        var image = solid(64, 64, Color.RED);
+        var sharp = BackgroundImages.cover(image, 32, 32, 0);
+        assertThat(new Color(sharp.getRGB(5, 5))).isEqualTo(Color.RED);
+        assertThat(sharp.getWidth()).isEqualTo(32);
+    }
 }

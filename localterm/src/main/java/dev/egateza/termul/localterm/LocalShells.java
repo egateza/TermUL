@@ -117,8 +117,8 @@ public final class LocalShells {
     }
 
     /**
-     * Shell untuk distro WSL ({@code wsl.exe -d <distro>}), tanpa I/O: daftar distro berasal dari WSL Manager. Kosong di
-     * luar Windows atau kalau Manajemen WSL mati.
+     * Shell untuk distro WSL ({@code wsl.exe -d <distro>}), tanpa I/O: daftar distro dibaca terpisah
+     * ({@code WslDistros} di core). Kosong di luar Windows.
      */
     public static List<DetectedShell> wsl(List<String> distros) {
         return Os.current().isWindows() ? wsl(System.getenv(), distros) : List.of();

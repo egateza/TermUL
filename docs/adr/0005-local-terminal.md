@@ -63,7 +63,8 @@ Opsi **3**, dengan batasan berikut.
    Profil lokal **bukan** `HostProfile` dan tidak punya secret. *(Revisi 2026-10-20: tahap 2 dikerjakan. Profil
    disimpan di `local-profiles.json` terpisah, dan shell terpasang dideteksi otomatis sebagai pilihan hanya-baca;
    lihat `docs/local-terminal-plan.md`.)*
-9. **WSL lewat SSH (ADR 0004) tetap jalan apa adanya.** Tab `wsl.exe` di tahap 2 adalah alternatif tanpa sshd, dan
+9. *(Revisi 2026-11-02, ADR 0011: WSL Manager dihapus; tab `wsl.exe` kini satu-satunya jalur WSL bawaan.)*
+   **WSL lewat SSH (ADR 0004) tetap jalan apa adanya.** Tab `wsl.exe` di tahap 2 adalah alternatif tanpa sshd, dan
    tidak punya SFTP/remote edit.
 
 ## Konsekuensi

@@ -10,6 +10,8 @@ import java.awt.Container;
 import java.awt.Rectangle;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
+import java.awt.event.ContainerAdapter;
+import java.awt.event.ContainerEvent;
 import java.util.ArrayList;
 import java.util.List;
 import javax.swing.AbstractButton;
@@ -61,6 +63,9 @@ final class WinCustomFrame {
     private static final int WM_NCLBUTTONDBLCLK = 0x00A3;
     private static final int WM_NCMOUSELEAVE = 0x02A2;
     private static final int WM_GETMINMAXINFO = 0x0024;
+    private static final int WM_DPICHANGED = 0x02E0;
+    private static final int WM_ENTERSIZEMOVE = 0x0231;
+    private static final int WM_EXITSIZEMOVE = 0x0232;
 
     private static final int HTCLIENT = 1;
     private static final int HTCAPTION = 2;
@@ -92,6 +97,8 @@ final class WinCustomFrame {
         boolean GetWindowRect(Pointer hwnd, int[] rect);
 
         boolean IsZoomed(Pointer hwnd);
+
+        boolean IsIconic(Pointer hwnd);
 
         Pointer MonitorFromRect(Pointer rect, int flags);
 
@@ -127,6 +134,8 @@ final class WinCustomFrame {
     private volatile Rectangle maxButtonArea = new Rectangle();
     private JButton maxButton; // EDT; tombol maximize/restore FlatLaf yang sedang tampil
     private volatile boolean maxHover;
+    private volatile boolean sizeMove; // window sedang diseret / di-resize user (loop modal Windows)
+    private volatile boolean dpiChangedInMove; // scaling berubah selama seretan yang sedang berjalan
 
     private final ComponentAdapter relayout = new ComponentAdapter() {
         @Override
@@ -191,6 +200,20 @@ final class WinCustomFrame {
         // pindah ke monitor dengan scaling lain: ukuran logis tetap (tanpa componentResized), tapi skala piksel fisik
         // berubah. Event ini bisa datang dari thread toolkit.
         frame.addPropertyChangeListener("graphicsConfiguration", e -> SwingUtilities.invokeLater(this::updateGeometry));
+        // ganti tema / font aplikasi (FlatLaf.updateUI): FlatLaf membuang title bar dan membuat yang baru di tempat yang
+        // sama, tanpa event resize/move. Tanpa ini tombol maximize yang dipegang adalah tombol lama yang sudah tidak
+        // tampil, sehingga kliknya diabaikan sampai window di-resize.
+        frame.getRootPane().getLayeredPane().addContainerListener(new ContainerAdapter() {
+            @Override
+            public void componentAdded(ContainerEvent e) {
+                scheduleGeometry();
+            }
+
+            @Override
+            public void componentRemoved(ContainerEvent e) {
+                scheduleGeometry();
+            }
+        });
     }
 
     /**
@@ -268,6 +291,35 @@ final class WinCustomFrame {
                 lParam.write(8, maxSizeAndPosition, 0, 4);
                 lParam.write(32, maxTrackSize, 0, 2);
                 return result;
+            }
+            case WM_ENTERSIZEMOVE -> {
+                sizeMove = true;
+                dpiChangedInMove = false;
+                // event mouse tidak sampai ke Swing selama seretan: tooltip yang sedang tampil tertinggal melayang
+                SwingUtilities.invokeLater(WinCustomFrame::hideTooltip);
+            }
+            case WM_EXITSIZEMOVE -> {
+                sizeMove = false;
+                if (dpiChangedInMove) {
+                    // diseret ke monitor beda scaling: window membesar mengikuti skala, jadi bisa tertutup taskbar di
+                    // tempat yang di monitor lama masih muat. Setelah dilepas, paskan sekali ke area kerja.
+                    dpiChangedInMove = false;
+                    fitWindowToWorkArea(hwnd);
+                }
+            }
+            case WM_DPICHANGED -> {
+                // Pindah ke monitor dengan scaling lain: Windows mengusulkan ukuran baru (ukuran logis tetap, jadi
+                // piksel fisiknya ikut skala). Dari 100% ke 125% window bisa lebih tinggi dari layar dan bagian bawahnya
+                // (status bar, baris terminal terakhir) tertutup taskbar. Usulannya dipaskan ke area kerja monitor
+                // tujuan sebelum AWT menerapkannya. Selama diseret hanya ukurannya: posisinya mengikuti kursor, dan
+                // menggesernya membuat window melompat. Window maximize / minimize dibiarkan: diatur Windows.
+                dpiChangedInMove = sizeMove;
+                if (!user32.IsZoomed(hwnd) && !user32.IsIconic(hwnd)) {
+                    int[] work = workAreaOf(lParam);
+                    if (work != null) {
+                        lParam.write(0, fitToWorkArea(lParam.getIntArray(0, 4), work, !sizeMove), 0, 4);
+                    }
+                }
             }
             default -> {
             }
@@ -350,16 +402,65 @@ final class WinCustomFrame {
      * digambar terpotong (window tampak freeze sampai di-resize).
      */
     private static void clientToWorkArea(Pointer params) {
-        Pointer monitor = user32.MonitorFromRect(params, 2); // MONITOR_DEFAULTTONEAREST
+        int[] work = workAreaOf(params);
+        if (work != null) {
+            params.write(0, work, 0, 4);
+        }
+    }
+
+    /** Sembunyikan tooltip yang sedang tampil (mematikan ToolTipManager menutup jendela tooltip-nya). EDT. */
+    private static void hideTooltip() {
+        var tooltips = javax.swing.ToolTipManager.sharedInstance();
+        if (tooltips.isEnabled()) {
+            tooltips.setEnabled(false);
+            tooltips.setEnabled(true);
+        }
+    }
+
+    /** Paskan window (bukan maximize / minimize) ke area kerja monitornya, kalau belum muat. */
+    private static void fitWindowToWorkArea(Pointer hwnd) {
+        if (user32.IsZoomed(hwnd) || user32.IsIconic(hwnd)) {
+            return;
+        }
+        int[] rect = new int[4];
+        if (!user32.GetWindowRect(hwnd, rect)) {
+            return;
+        }
+        try (var rectMemory = new Memory(16)) {
+            rectMemory.write(0, rect, 0, 4);
+            int[] work = workAreaOf(rectMemory);
+            if (work == null) {
+                return;
+            }
+            int[] fitted = fitToWorkArea(rect, work, true);
+            if (!java.util.Arrays.equals(fitted, rect)) {
+                user32.SetWindowPos(hwnd, null, fitted[0], fitted[1], fitted[2] - fitted[0], fitted[3] - fitted[1],
+                        0x0004 | 0x0010); // SWP_NOZORDER | SWP_NOACTIVATE
+            }
+        }
+    }
+
+    /** @return area kerja (left, top, right, bottom) monitor terdekat dari RECT di {@code rect}; null kalau gagal */
+    private static int[] workAreaOf(Pointer rect) {
+        Pointer monitor = user32.MonitorFromRect(rect, 2); // MONITOR_DEFAULTTONEAREST
         int[] info = new int[10]; // cbSize, rcMonitor(4), rcWork(4), dwFlags
         info[0] = 40;
         if (monitor == null || !user32.GetMonitorInfoW(monitor, info)) {
-            return;
+            return null;
         }
-        params.setInt(0, info[5]);
-        params.setInt(4, info[6]);
-        params.setInt(8, info[7]);
-        params.setInt(12, info[8]);
+        return new int[] {info[5], info[6], info[7], info[8]};
+    }
+
+    /**
+     * Paskan {@code rect} (left, top, right, bottom) ke {@code work}: diperkecil kalau lebih besar dari area kerja, dan
+     * kalau {@code move}, digeser supaya seluruhnya di dalam. Rect yang sudah muat dikembalikan apa adanya.
+     */
+    static int[] fitToWorkArea(int[] rect, int[] work, boolean move) {
+        int width = Math.min(rect[2] - rect[0], work[2] - work[0]);
+        int height = Math.min(rect[3] - rect[1], work[3] - work[1]);
+        int left = move ? Math.clamp(rect[0], work[0], work[2] - width) : rect[0];
+        int top = move ? Math.clamp(rect[1], work[1], work[3] - height) : rect[1];
+        return new int[] {left, top, left + width, top + height};
     }
 
     /** Efek hover tombol maximize: event mouse di area HTMAXBUTTON tidak sampai ke Java. */
@@ -388,7 +489,11 @@ final class WinCustomFrame {
         user32.TrackMouseEvent(tme);
     }
 
-    private void clickMaxButton() {
+    /** Klik tombol maximize/restore FlatLaf (dari WM_NCLBUTTONUP di HTMAXBUTTON). EDT. */
+    void clickMaxButton() {
+        if (maxButton == null || !maxButton.isShowing()) {
+            updateGeometry(); // tombol yang dipegang sudah usang (mis. title bar dibuat ulang): cari lagi
+        }
         if (maxButton != null && maxButton.isShowing()) {
             maxButton.getModel().setRollover(false);
             maxButton.doClick(0); // aksi FlatLaf: maximize atau restore

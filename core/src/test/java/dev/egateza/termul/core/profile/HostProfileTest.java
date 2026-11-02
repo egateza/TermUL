@@ -58,41 +58,16 @@ class HostProfileTest {
     }
 
     @Test
-    void distroWslOpsionalDanDipertahankanSaatProfilDiubah() {
-        var p = HostProfile.create("Ubuntu", "localhost", "ega");
-        assertThat(p.wslDistro()).isNull();
-
-        var wsl = p.withWslDistro(" Ubuntu-24.04 ");
-
-        assertThat(wsl.wslDistro()).isEqualTo("Ubuntu-24.04");
-        assertThat(wsl.withGroup("WSL").withOs(null).withTerminalTheme("x").withJumpHostId(null).wslDistro())
-                .isEqualTo("Ubuntu-24.04");
-        assertThat(wsl.duplicate().wslDistro()).isEqualTo("Ubuntu-24.04");
-        assertThat(wsl.withPort(2211).port()).isEqualTo(2211);
-        assertThat(wsl.withPort(2211).wslDistro()).isEqualTo("Ubuntu-24.04");
-        assertThat(wsl.withWslDistro(" ").wslDistro()).isNull();
-    }
-
-    @Test
-    void distroWslTidakValidDitolak() {
-        var p = HostProfile.create("x", "localhost", "u");
-
-        assertThatThrownBy(() -> p.withWslDistro("Ubuntu & calc")).hasMessageContaining("distro WSL");
-        assertThatThrownBy(() -> p.withWslDistro("-d")).hasMessageContaining("distro WSL");
-    }
-
-    @Test
     void profilFtpMengabaikanFieldKhususSsh() {
         var jump = UUID.randomUUID();
         var p = new HostProfile(UUID.randomUUID(), "ftp", "", "files.example.com", 21, "web", AuthMethod.KEY,
-                "C:/keys/id", jump, EnvironmentTag.PROD, null, null, true, null, null, "Ubuntu", Protocol.FTPS);
+                "C:/keys/id", jump, EnvironmentTag.PROD, null, null, true, null, null, Protocol.FTPS);
 
         assertThat(p.isFtp()).isTrue();
         assertThat(p.authMethod()).isEqualTo(AuthMethod.PASSWORD);
         assertThat(p.privateKeyPath()).isNull();
         assertThat(p.jumpHostId()).isNull();
         assertThat(p.autoSudo()).isFalse();
-        assertThat(p.wslDistro()).isNull();
         assertThat(p.address()).isEqualTo("ftps://web@files.example.com");
     }
 
@@ -138,7 +113,6 @@ class HostProfileTest {
         assertThat(p.withPort(2222).sensitive()).isTrue();
         assertThat(p.withOs(null).sensitive()).isTrue();
         assertThat(p.withTerminalTheme("x").sensitive()).isTrue();
-        assertThat(p.withWslDistro("Ubuntu").sensitive()).isTrue();
         assertThat(p.withJumpHostId(null).sensitive()).isTrue();
         assertThat(p.withProtocol(Protocol.FTP).sensitive()).isTrue();
         assertThat(p.duplicate().sensitive()).isTrue();

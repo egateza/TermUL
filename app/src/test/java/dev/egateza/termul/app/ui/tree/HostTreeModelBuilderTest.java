@@ -70,54 +70,17 @@ class HostTreeModelBuilderTest {
         assertThat(labels(HostTreeModelBuilder.build(s, "10.0.0.2"))).containsExactly("Produksi");
     }
 
+    /** WSL Manager dihapus (ADR 0011): profil SSH ke distro WSL kini tampil seperti profil biasa di grupnya sendiri. */
     @Test
-    void grupWslTidakTampilKalauMatiAtauTidakAdaDistroBerjalan() {
-        assertThat(labels(HostTreeModelBuilder.build(snapshot, "", null))).doesNotContain("WSL");
-        assertThat(labels(HostTreeModelBuilder.build(snapshot, "", List.of()))).doesNotContain("WSL");
-    }
+    void profilBekasWslTampilSebagaiProfilBiasa() {
+        var ubuntu = HostProfile.create("Ubuntu-ega", "localhost", "ega").withGroup("WSL");
+        var s = new ProfileSnapshot(1, List.of(), List.of(web, ubuntu), List.of(ubuntu.id()), List.of());
 
-    @Test
-    void grupWslBerisiProfilDistroAtauNodeDistroTanpaProfil() {
-        var ubuntu = HostProfile.create("Ubuntu dev", "localhost", "ega").withWslDistro("Ubuntu-22.04");
-        var s = new ProfileSnapshot(1, List.of(), List.of(web, ubuntu));
+        var root = HostTreeModelBuilder.build(s, "");
 
-        var root = HostTreeModelBuilder.build(s, "", List.of("ubuntu-22.04", "Debian"));
-
-        assertThat(labels(root)).containsExactly("INSTANCE", "FAVORITES", "RECENT", "WSL", "Produksi");
-        var wsl = (DefaultMutableTreeNode) root.getChildAt(3);
-        assertThat(wsl.getUserObject()).isEqualTo(BuiltinGroup.WSL);
-        assertThat(labels(wsl)).containsExactly("Ubuntu dev", "Debian");
-        assertThat(((DefaultMutableTreeNode) wsl.getChildAt(1)).getUserObject())
-                .isEqualTo(new HostTreeModelBuilder.WslDistroNode("Debian"));
-    }
-
-    @Test
-    void profilWslHanyaDiGrupWslDanHilangSaatFiturMati() {
-        // profil lama dibuat di grup biasa "WSL": tidak boleh muncul sebagai grup kedua
-        var ubuntu = HostProfile.create("Ubuntu-ega", "localhost", "ega").withGroup("WSL").withWslDistro("Ubuntu-22.04");
-        var s = new ProfileSnapshot(1, List.of("Kosong"), List.of(web, ubuntu), List.of(ubuntu.id()), List.of(ubuntu.id()));
-
-        var on = HostTreeModelBuilder.build(s, "", List.of());
-        assertThat(labels(on)).containsExactly("INSTANCE", "FAVORITES", "RECENT", "WSL", "Kosong", "Produksi");
-        assertThat(labels((DefaultMutableTreeNode) on.getChildAt(3))).containsExactly("Ubuntu-ega"); // distro berhenti tetap tampil
-
-        var off = HostTreeModelBuilder.build(s, "", null);
-        assertThat(labels(off)).containsExactly("INSTANCE", "FAVORITES", "RECENT", "Kosong", "Produksi");
-        assertThat(labels((DefaultMutableTreeNode) off.getChildAt(1))).isEmpty();
-        assertThat(labels((DefaultMutableTreeNode) off.getChildAt(2))).isEmpty();
-        assertThat(labels(HostTreeModelBuilder.build(s, "ubuntu", null))).isEmpty();
-    }
-
-    @Test
-    void filterBerlakuDiGrupWsl() {
-        var ubuntu = HostProfile.create("dev box", "localhost", "ega").withWslDistro("Ubuntu-22.04");
-        var s = new ProfileSnapshot(1, List.of(), List.of(ubuntu));
-
-        assertThat(labels(HostTreeModelBuilder.build(s, "ubuntu", List.of("Ubuntu-22.04", "Debian"))))
-                .containsExactly("WSL");
-        assertThat(labels(HostTreeModelBuilder.build(s, "debian", List.of("Ubuntu-22.04", "Debian"))))
-                .containsExactly("WSL");
-        assertThat(labels(HostTreeModelBuilder.build(s, "tidak-ada", List.of("Ubuntu-22.04", "Debian")))).isEmpty();
+        assertThat(labels(root)).containsExactly("INSTANCE", "FAVORITES", "RECENT", "Produksi", "WSL");
+        assertThat(labels((DefaultMutableTreeNode) root.getChildAt(1))).containsExactly("Ubuntu-ega");
+        assertThat(labels(HostTreeModelBuilder.build(s, "localhost"))).containsExactly("FAVORITES", "WSL");
     }
 
     @Test
@@ -139,15 +102,15 @@ class HostTreeModelBuilderTest {
         var proyek = new dev.egateza.termul.app.terminal.LocalProfiles.Choice(java.util.UUID.randomUUID(), "Proyek API",
                 List.of("/bin/zsh", "-l"), "~/api", java.util.Map.of(), null, false, false);
 
-        var root = HostTreeModelBuilder.build(snapshot, "", null, List.of(zsh, proyek));
+        var root = HostTreeModelBuilder.build(snapshot, "", List.of(zsh, proyek));
         var local = (DefaultMutableTreeNode) root.getChildAt(0);
         assertThat(local.getAllowsChildren()).isTrue();
         assertThat(labels(local)).containsExactly("zsh", "Proyek API");
 
-        var filtered = HostTreeModelBuilder.build(snapshot, "api", null, List.of(zsh, proyek));
+        var filtered = HostTreeModelBuilder.build(snapshot, "api", List.of(zsh, proyek));
         assertThat(labels(filtered)).containsExactly("INSTANCE");
         assertThat(labels((DefaultMutableTreeNode) filtered.getChildAt(0))).containsExactly("Proyek API");
-        assertThat(labels(HostTreeModelBuilder.build(snapshot, "10.0.0.1", null, List.of(zsh, proyek))))
+        assertThat(labels(HostTreeModelBuilder.build(snapshot, "10.0.0.1", List.of(zsh, proyek))))
                 .doesNotContain("INSTANCE");
     }
 

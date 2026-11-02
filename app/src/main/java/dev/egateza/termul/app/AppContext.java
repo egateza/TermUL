@@ -8,7 +8,7 @@ import dev.egateza.termul.core.config.ConfigStore;
 import dev.egateza.termul.core.snippet.SnippetStore;
 import dev.egateza.termul.core.profile.ProfileStore;
 import dev.egateza.termul.core.theme.ThemeStore;
-import dev.egateza.termul.core.wsl.WslManager;
+import dev.egateza.termul.core.wsl.WslDistros;
 import dev.egateza.termul.sftp.SftpLinks;
 import dev.egateza.termul.sftp.ftp.FtpsCertStore;
 import dev.egateza.termul.ssh.SessionManager;
@@ -23,7 +23,7 @@ import java.util.concurrent.ExecutorService;
  * @param sshOps     executor untuk operasi SSH blocking (connect, exec, SFTP)
  * @param knownHosts known_hosts aplikasi (instance yang sama dengan verifier di {@code sessions})
  * @param ftpsCerts  sertifikat FTPS yang dipercaya user (instance yang sama dengan yang dipakai {@code sftpLinks})
- * @param wsl        start/stop distro WSL; hanya dipakai kalau manajemen WSL aktif di Windows
+ * @param wsl        distro WSL terpasang, sebagai pilihan terminal lokal (Windows)
  * @param snippets   snippet perintah untuk tombol snippet di terminal
  * @param locals     shell terdeteksi + profil terminal lokal (ADR 0005)
  * @param highlights profil highlight teks dan penugasannya ke host/grup/terminal lokal
@@ -34,7 +34,7 @@ public record AppContext(AppPaths paths, ConfigStore config, ProfileStore profil
                          ExecutorService sshOps,
                          SessionManager sessions, SshTerminalFactory terminals, TerminalSettings terminalSettings,
                          VaultGate vault, EditManager edits, SftpLinks sftpLinks, ThemeStore themes,
-                         KnownHostsStore knownHosts, FtpsCertStore ftpsCerts, WslManager wsl, SnippetStore snippets,
+                         KnownHostsStore knownHosts, FtpsCertStore ftpsCerts, WslDistros wsl, SnippetStore snippets,
                          dev.egateza.termul.app.terminal.LocalProfiles locals,
                          dev.egateza.termul.core.highlight.HighlightStore highlights,
                          dev.egateza.termul.core.shortcut.ShortcutStore shortcuts,

@@ -68,7 +68,7 @@ public final class LocalProfiles {
      * profil buatan user (urut nama). Default = pilihan tersimpan kalau masih ada dan aktif; selain itu pilihan aktif
      * pertama. Kalau semuanya nonaktif (mis. file diedit manual), semua tetap ditawarkan supaya selalu ada terminal.
      *
-     * @param wslDistros distro WSL terpasang (kosong kalau Manajemen WSL mati)
+     * @param wslDistros distro WSL terpasang (kosong di luar Windows)
      */
     public List<Choice> choices(List<String> wslDistros) {
         var all = allChoices(wslDistros);

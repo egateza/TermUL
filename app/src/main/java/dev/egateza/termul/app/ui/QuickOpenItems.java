@@ -33,12 +33,10 @@ final class QuickOpenItems {
     }
 
     /**
-     * @param query      teks pencarian (boleh kosong)
-     * @param wslEnabled false = profil WSL disembunyikan, sama seperti daftar host saat Manajemen WSL mati
-     * @param locals     pilihan terminal lokal, default dulu
+     * @param query  teks pencarian (boleh kosong)
+     * @param locals pilihan terminal lokal, default dulu
      */
-    static List<Item> build(ProfileSnapshot snapshot, String query, boolean wslEnabled,
-                            List<LocalProfiles.Choice> locals) {
+    static List<Item> build(ProfileSnapshot snapshot, String query, List<LocalProfiles.Choice> locals) {
         String q = query == null ? "" : query.strip().toLowerCase(Locale.ROOT);
         var items = new ArrayList<Item>();
         boolean allLocal = q.isEmpty() || HostTreeModelBuilder.matchesLocal(q);
@@ -48,19 +46,15 @@ final class QuickOpenItems {
         var pinned = new ArrayList<HostProfile>(snapshot.favoriteProfiles());
         pinned.addAll(snapshot.recentProfiles());
         for (HostProfile p : pinned) {
-            if (visible(p, q, wslEnabled) && seen.add(p.id())) {
+            if (HostTreeModelBuilder.matches(p, q) && seen.add(p.id())) {
                 items.add(new Host(p, true));
             }
         }
         snapshot.profiles().stream()
-                .filter(p -> visible(p, q, wslEnabled) && !seen.contains(p.id()))
+                .filter(p -> HostTreeModelBuilder.matches(p, q) && !seen.contains(p.id()))
                 .sorted(Comparator.comparing(HostProfile::group, String.CASE_INSENSITIVE_ORDER)
                         .thenComparing(HostProfile::name, String.CASE_INSENSITIVE_ORDER))
                 .forEach(p -> items.add(new Host(p, false)));
         return items;
-    }
-
-    private static boolean visible(HostProfile p, String q, boolean wslEnabled) {
-        return (wslEnabled || p.wslDistro() == null) && HostTreeModelBuilder.matches(p, q);
     }
 }

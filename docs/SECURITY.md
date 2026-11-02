@@ -193,15 +193,13 @@ Detail di `docs/adr/0003-self-update.md`.
 - Snippet beberapa baris dibungkus bracketed paste kalau shell memintanya (DECSET 2004), sehingga tidak ada baris yang
   berjalan sebelum Enter. Tanpa bracketed paste, baris awal akan langsung berjalan: user dikonfirmasi dulu.
 
-## WSL (opsional)
+## WSL
 
-- Hanya aktif kalau dinyalakan di Pengaturan. Profil WSL adalah koneksi SSH biasa, jadi verifikasi host key (TOFU) dan
-  vault tetap berlaku. Host key sshd distro ikut tercatat di `known_hosts` sebagai `[localhost]:<port>`.
-- TermUL menjalankan `wsl.exe` dengan daftar argumen (tanpa shell Windows). Nama distro divalidasi
-  (`[A-Za-z0-9][A-Za-z0-9._-]*`) sebelum dipakai sebagai argumen. Script untuk menjalankan sshd sebagai root berupa
-  konstanta, tidak ada input user di dalamnya.
-- TermUL tidak mengubah konfigurasi sshd. Panduan menyarankan port selain 22, dan `ListenAddress 127.0.0.1` untuk mode
-  networking `mirrored`, karena di mode itu port distro bisa terjangkau dari LAN.
+- Distro WSL hanya dibuka sebagai terminal lokal (ADR 0011): proses `wsl.exe -d <distro>` berjalan sebagai user yang
+  sama, tanpa secret dari vault (sama seperti shell lokal lain, ADR 0005).
+- TermUL menjalankan `wsl.exe` dengan daftar argumen (tanpa shell Windows). Nama distro dari `wsl --list` divalidasi
+  (`[A-Za-z0-9][A-Za-z0-9._-]*`) sebelum dipakai sebagai argumen. Selain membaca daftar distro, TermUL tidak
+  menjalankan perintah apa pun di dalam distro.
 
 ## Logging
 

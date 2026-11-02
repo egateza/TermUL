@@ -26,7 +26,7 @@ public enum Protocol {
         return defaultPort;
     }
 
-    /** true untuk keluarga FTP (browser file saja, auth password, tanpa jump host/sudo/WSL). */
+    /** true untuk keluarga FTP (browser file saja, auth password, tanpa jump host/sudo). */
     public boolean isFtp() {
         return this != SSH;
     }

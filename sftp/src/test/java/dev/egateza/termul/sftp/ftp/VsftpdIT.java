@@ -74,7 +74,7 @@ class VsftpdIT {
     @BeforeEach
     void setUp() throws Exception {
         var profile = new HostProfile(UUID.randomUUID(), "vsftpd", "", VSFTPD.getHost(), VSFTPD.getMappedPort(21), USER,
-                null, null, null, EnvironmentTag.DEV, null, null, false, null, null, null, Protocol.FTPS);
+                null, null, null, EnvironmentTag.DEV, null, null, false, null, null, Protocol.FTPS);
         var connector = new FtpConnector(new FtpFileServiceTest.Passwords(PASSWORD),
                 new FtpsCertStore(tmp.resolve("ftps_known_certs")), info -> true);
         files = connector.open(profile, new ConnectCancel());

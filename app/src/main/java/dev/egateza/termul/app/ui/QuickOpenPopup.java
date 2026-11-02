@@ -54,7 +54,6 @@ final class QuickOpenPopup extends JDialog {
     private static final int VISIBLE_ROWS = 12;
 
     private final ProfileSnapshot snapshot;
-    private final boolean wslEnabled;
     private final java.util.List<dev.egateza.termul.app.terminal.LocalProfiles.Choice> locals;
     private final Actions actions;
     private final JTextField search = new JTextField();
@@ -62,11 +61,10 @@ final class QuickOpenPopup extends JDialog {
     private final JList<Item> list = new JList<>(model);
     private boolean done; // EDT; sudah memilih atau dibatalkan (window deactivated ikut terpanggil saat dispose)
 
-    private QuickOpenPopup(Frame owner, ProfileSnapshot snapshot, boolean wslEnabled,
+    private QuickOpenPopup(Frame owner, ProfileSnapshot snapshot,
                            java.util.List<dev.egateza.termul.app.terminal.LocalProfiles.Choice> locals, Actions actions) {
         super(owner, false);
         this.snapshot = snapshot;
-        this.wslEnabled = wslEnabled;
         this.locals = locals;
         this.actions = actions;
         setUndecorated(true);
@@ -131,9 +129,9 @@ final class QuickOpenPopup extends JDialog {
     }
 
     /** Tampilkan popup di tengah-atas {@code owner}. */
-    static void show(Frame owner, ProfileSnapshot snapshot, boolean wslEnabled,
+    static void show(Frame owner, ProfileSnapshot snapshot,
                      java.util.List<dev.egateza.termul.app.terminal.LocalProfiles.Choice> locals, Actions actions) {
-        var popup = new QuickOpenPopup(owner, snapshot, wslEnabled, locals, actions);
+        var popup = new QuickOpenPopup(owner, snapshot, locals, actions);
         popup.pack();
         popup.setSize(new Dimension(WIDTH, popup.getHeight()));
         var o = owner.getBounds();
@@ -144,7 +142,7 @@ final class QuickOpenPopup extends JDialog {
 
     private void refresh() {
         model.clear();
-        QuickOpenItems.build(snapshot, search.getText(), wslEnabled, locals).forEach(model::addElement);
+        QuickOpenItems.build(snapshot, search.getText(), locals).forEach(model::addElement);
         if (!model.isEmpty()) {
             list.setSelectedIndex(0);
             list.ensureIndexIsVisible(0);

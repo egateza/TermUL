@@ -32,7 +32,7 @@ class AppConfigSnippetTest {
         var store = new ConfigStore(file);
         store.load();
         store.save(store.current().withSnippetButton(false).withSnippetCorner(AppConfig.SNIPPET_BOTTOM_LEFT)
-                .withWslManager(true).withTheme("neo-brutalism"));
+                .withTheme("neo-brutalism"));
 
         var reloaded = new ConfigStore(file);
         reloaded.load();

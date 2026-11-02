@@ -35,8 +35,10 @@ final class TerminalPreview extends JPanel {
     private TerminalPalette palette;
     private BufferedImage image; // gambar latar, null = tanpa
     private int visibility;
+    private int blur;
     private BufferedImage scaled; // gambar yang sudah disesuaikan dengan ukuran panel
     private BufferedImage scaledSource;
+    private int scaledBlur;
 
     TerminalPreview(TerminalPalette palette, Font font) {
         this.palette = palette;
@@ -50,10 +52,15 @@ final class TerminalPreview extends JPanel {
         repaint();
     }
 
-    /** @param image gambar latar yang sudah dimuat, null = tanpa gambar; @param visibility persen 0..100 */
-    void setBackdrop(BufferedImage image, int visibility) {
+    /**
+     * @param image      gambar latar yang sudah dimuat, null = tanpa gambar
+     * @param visibility persen 0..100
+     * @param blur       kekuatan blur, persen 0..100
+     */
+    void setBackdrop(BufferedImage image, int visibility, int blur) {
         this.image = image;
         this.visibility = visibility;
+        this.blur = blur;
         repaint();
     }
 
@@ -64,10 +71,11 @@ final class TerminalPreview extends JPanel {
         g2.setColor(Color.decode(palette.background()));
         g2.fillRect(0, 0, getWidth(), getHeight());
         if (image != null && getWidth() > 0 && getHeight() > 0) {
-            if (scaled == null || scaledSource != image || scaled.getWidth() != getWidth()
+            if (scaled == null || scaledSource != image || scaledBlur != blur || scaled.getWidth() != getWidth()
                     || scaled.getHeight() != getHeight()) {
-                scaled = BackgroundImages.cover(image, getWidth(), getHeight());
+                scaled = BackgroundImages.cover(image, getWidth(), getHeight(), blur);
                 scaledSource = image;
+                scaledBlur = blur;
             }
             g2.setComposite(AlphaComposite.SrcOver.derive(visibility / 100f));
             g2.drawImage(scaled, 0, 0, null);

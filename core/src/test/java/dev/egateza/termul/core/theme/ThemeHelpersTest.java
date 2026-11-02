@@ -139,4 +139,22 @@ class ThemeHelpersTest {
         assertThat(base.withBackgroundImage("C:/a.png", 50).hasBackdrop()).isTrue();
         assertThat(loaded.withDesktopWallpaper(false).hasBackdrop()).isFalse();
     }
+
+    @Test
+    void imageBlurDefaultsToZeroIsClampedAndRoundTrips() throws IOException {
+        var base = ThemeTemplates.dark("x", "X").terminal();
+        assertThat(base.imageBlur()).isZero(); // tema lama tanpa field = tajam
+        assertThat(base.withImageBlur(150).imageBlur()).isEqualTo(100);
+        assertThat(base.withImageBlur(-3).imageBlur()).isZero();
+
+        var blurred = base.withBackgroundImage("C:/a.png", 50).withImageBlur(35);
+        // mengganti gambar atau flag wallpaper tidak mengubah blur
+        assertThat(blurred.withBackgroundImage("C:/b.png", 20).imageBlur()).isEqualTo(35);
+        assertThat(blurred.withDesktopWallpaper(true).imageBlur()).isEqualTo(35);
+
+        Path file = dir.resolve("blur.json");
+        var store = new ThemeStore(dir);
+        store.exportTo(new CustomTheme("x", "X", "dark", ThemeTemplates.dark("x", "X").ui(), blurred), file);
+        assertThat(store.importFrom(file).terminal().imageBlur()).isEqualTo(35);
+    }
 }

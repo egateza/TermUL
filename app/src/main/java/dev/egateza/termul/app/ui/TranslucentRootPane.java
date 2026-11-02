@@ -101,11 +101,21 @@ final class TranslucentRootPane extends JRootPane {
         if (clip.isEmpty()) {
             return;
         }
-        var target = (Graphics2D) g;
-        double sx = target.getTransform().getScaleX();
-        double sy = target.getTransform().getScaleY();
-        int w = (int) Math.ceil(clip.width * sx);
-        int h = (int) Math.ceil(clip.height * sy);
+        AffineTransform tx = ((Graphics2D) g).getTransform();
+        double sx = tx.getScaleX();
+        double sy = tx.getScaleY();
+        // Skala pecahan (mis. 125%): tepi area logis jatuh di tengah piksel perangkat. Buffer digambar 1 px logis lebih
+        // luas supaya setiap piksel yang ditempel benar-benar terisi; tanpa ini piksel tepi tetap transparan, lalu
+        // menimpa isi window sebagai garis tipis di batas area yang digambar ulang (mis. di bawah jam).
+        boolean fractional = sx != Math.rint(sx) || sy != Math.rint(sy);
+        Rectangle painted = fractional
+                ? new Rectangle(clip.x - 1, clip.y - 1, clip.width + 2, clip.height + 2)
+                        .intersection(new Rectangle(0, 0, getWidth(), getHeight()))
+                : clip;
+        int bx = (int) Math.floor(painted.x * sx);
+        int by = (int) Math.floor(painted.y * sy);
+        int w = (int) Math.ceil((painted.x + painted.width) * sx) - bx;
+        int h = (int) Math.ceil((painted.y + painted.height) * sy) - by;
 
         BufferedImage img = buffer(w, h);
         var bg = img.createGraphics();
@@ -113,9 +123,9 @@ final class TranslucentRootPane extends JRootPane {
             bg.setComposite(AlphaComposite.Clear);
             bg.fillRect(0, 0, w, h);
             bg.setComposite(AlphaComposite.SrcOver);
+            bg.translate(-bx, -by);
             bg.scale(sx, sy);
-            bg.translate(-clip.x, -clip.y);
-            bg.setClip(clip);
+            bg.setClip(painted);
             super.paint(bg);
         } finally {
             bg.dispose();
@@ -123,13 +133,17 @@ final class TranslucentRootPane extends JRootPane {
 
         var out = (Graphics2D) g.create();
         try {
+            // tempel dalam piksel perangkat (tanpa skala), supaya batasnya bulat dan sama dengan buffer
+            out.setTransform(AffineTransform.getTranslateInstance(tx.getTranslateX(), tx.getTranslateY()));
+            Rectangle device = deviceBounds(clip, sx, sy);
+            out.setClip(device);
             out.setComposite(AlphaComposite.Src.derive(chromeAlpha));
-            blit(out, img, clip, clip, sx, sy);
+            blit(out, img, device, bx, by);
             out.setComposite(AlphaComposite.Src); // terminal & popup: alpha apa adanya (terminal mengatur sendiri)
             for (Rectangle area : solidAreas()) {
                 Rectangle part = area.intersection(clip);
                 if (!part.isEmpty()) {
-                    blit(out, img, part, clip, sx, sy);
+                    blit(out, img, deviceBounds(part, sx, sy).intersection(device), bx, by);
                 }
             }
         } finally {
@@ -137,14 +151,22 @@ final class TranslucentRootPane extends JRootPane {
         }
     }
 
-    /** Tempel bagian {@code part} (koordinat root) dari buffer yang mewakili {@code clip}. */
-    private static void blit(Graphics2D out, BufferedImage img, Rectangle part, Rectangle clip, double sx, double sy) {
-        int srcX1 = (int) Math.floor((part.x - clip.x) * sx);
-        int srcY1 = (int) Math.floor((part.y - clip.y) * sy);
-        int srcX2 = Math.min(img.getWidth(), (int) Math.ceil((part.x + part.width - clip.x) * sx));
-        int srcY2 = Math.min(img.getHeight(), (int) Math.ceil((part.y + part.height - clip.y) * sy));
-        out.drawImage(img, part.x, part.y, part.x + part.width, part.y + part.height,
-                srcX1, srcY1, srcX2, srcY2, null);
+    /** Piksel perangkat (relatif ke root pane) yang tersentuh {@code r}: dibulatkan keluar. */
+    static Rectangle deviceBounds(Rectangle r, double sx, double sy) {
+        int x1 = (int) Math.floor(r.x * sx);
+        int y1 = (int) Math.floor(r.y * sy);
+        int x2 = (int) Math.ceil((r.x + r.width) * sx);
+        int y2 = (int) Math.ceil((r.y + r.height) * sy);
+        return new Rectangle(x1, y1, x2 - x1, y2 - y1);
+    }
+
+    /** Tempel piksel perangkat {@code d} dari buffer yang pojok kiri atasnya di piksel perangkat ({@code bx}, {@code by}). */
+    private static void blit(Graphics2D out, BufferedImage img, Rectangle d, int bx, int by) {
+        if (d.isEmpty()) {
+            return;
+        }
+        out.drawImage(img, d.x, d.y, d.x + d.width, d.y + d.height,
+                d.x - bx, d.y - by, d.x + d.width - bx, d.y + d.height - by, null);
     }
 
     private BufferedImage buffer(int w, int h) {

@@ -1,6 +1,6 @@
 # ADR 0004: WSL lewat SSH ke localhost, dengan WSL Manager opsional
 
-- Status: Diterima
+- Status: Digantikan oleh ADR 0011 (2026-11-02): WSL Manager dihapus, WSL lewat terminal lokal saja
 - Tanggal: 2026-10-06
 
 ## Konteks

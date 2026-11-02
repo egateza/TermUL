@@ -173,6 +173,7 @@ public final class ZoomableTermWidget extends JediTermWidget {
 
         private BufferedImage scaled; // gambar latar yang sudah disesuaikan dengan ukuran panel; EDT
         private BufferedImage scaledSource;
+        private int scaledBlur;
 
         void refreshColors() {
             styleState.setDefaultStyle(settings.getDefaultStyle());
@@ -203,10 +204,11 @@ public final class ZoomableTermWidget extends JediTermWidget {
             var g2 = (Graphics2D) g;
             g2.setColor(layer.base());
             g2.fillRect(0, 0, getWidth(), getHeight());
-            if (scaled == null || scaledSource != layer.image()
+            if (scaled == null || scaledSource != layer.image() || scaledBlur != layer.blur()
                     || scaled.getWidth() != getWidth() || scaled.getHeight() != getHeight()) {
-                scaled = BackgroundImages.cover(layer.image(), getWidth(), getHeight());
+                scaled = BackgroundImages.cover(layer.image(), getWidth(), getHeight(), layer.blur());
                 scaledSource = layer.image();
+                scaledBlur = layer.blur();
             }
             var previous = g2.getComposite();
             g2.setComposite(AlphaComposite.SrcOver.derive(layer.visibility() / 100f));
@@ -219,6 +221,7 @@ public final class ZoomableTermWidget extends JediTermWidget {
         private BufferedImage backdropSource;
         private java.awt.Color backdropBase;
         private int backdropVisibility;
+        private int backdropBlur;
 
         /**
          * Latar tembus (window beralpha per piksel): latar digambar dengan alpha {@code opacity} dan mengganti piksel
@@ -241,19 +244,20 @@ public final class ZoomableTermWidget extends JediTermWidget {
         /** Warna dasar + gambar latar (sesuai keterlihatannya), solid, seukuran panel; dibuat ulang kalau berubah. */
         private BufferedImage backdrop(TerminalSettings.BackgroundLayer layer, java.awt.Color base) {
             if (backdrop == null || backdropSource != layer.image() || !base.equals(backdropBase)
-                    || backdropVisibility != layer.visibility()
+                    || backdropVisibility != layer.visibility() || backdropBlur != layer.blur()
                     || backdrop.getWidth() != getWidth() || backdrop.getHeight() != getHeight()) {
                 var img = new BufferedImage(getWidth(), getHeight(), BufferedImage.TYPE_INT_RGB);
                 var bg = img.createGraphics();
                 bg.setColor(base);
                 bg.fillRect(0, 0, getWidth(), getHeight());
                 bg.setComposite(AlphaComposite.SrcOver.derive(layer.visibility() / 100f));
-                bg.drawImage(BackgroundImages.cover(layer.image(), getWidth(), getHeight()), 0, 0, null);
+                bg.drawImage(BackgroundImages.cover(layer.image(), getWidth(), getHeight(), layer.blur()), 0, 0, null);
                 bg.dispose();
                 backdrop = img;
                 backdropSource = layer.image();
                 backdropBase = base;
                 backdropVisibility = layer.visibility();
+                backdropBlur = layer.blur();
             }
             return backdrop;
         }
