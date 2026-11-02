@@ -52,7 +52,9 @@ Batasan yang ditemukan lewat prototipe:
      `ACCENT_ENABLE_BLURBEHIND`. Berbeda dengan backdrop DWM (batasan 3), accent ini *terbukti* mem-blur isi di belakang
      piksel tembus window layered milik Java (prototipe dengan screenshot `Robot`, teks di depan tetap tajam). Hanya
      menyala selama transparansi aktif; kekuatan blur diatur Windows. `ACCENT_ENABLE_ACRYLICBLURBEHIND` tidak dipakai
-     karena dikenal patah-patah saat window diseret.
+     karena dikenal patah-patah saat window diseret. Selama blur menyala, animasi transisi DWM dimatikan
+     (`DWMWA_TRANSITIONS_FORCEDISABLED`): animasi maximize/restore menggambar window tanpa blur, sehingga isi di
+     belakangnya tampil tajam sekitar 200–300 ms sebelum ter-blur. Maximize/restore jadi langsung, tanpa animasi.
    - **Blur gambar latar terminal** (`imageBlur` di palet tema, 0..100): dihitung di Java saat gambar disesuaikan ke
      ukuran panel, jadi jalan di semua OS dan tanpa transparansi.
 
@@ -70,6 +72,13 @@ Batasan yang ditemukan lewat prototipe:
      25–50 ms setelah `WM_DPICHANGED`). Diukur dengan tangkapan layar beruntun.
    - `TranslucentRootPane` menempel buffer dalam piksel perangkat yang dibulatkan keluar: di skala pecahan (125%) tepi
      area yang digambar ulang sebelumnya tertinggal transparan dan tampak sebagai garis tipis.
+
+10. **Teks tetap solid (tambahan 2026-11-02, opt-in `windowSolidText`).** Slider Jendela memudarkan teks juga
+    (keputusan 3), sehingga di 85% teks tampak lebih redup daripada saat solid (diukur: 191 vs 221). Opsi ini membuat
+    hanya latarnya yang tembus, seperti Windows Terminal: area yang digambar ulang digambar sekali lagi lewat
+    `TextMaskGraphics2D` (hanya `drawString`/`drawGlyphVector`, putih pekat) menjadi mask, lalu alpha tiap piksel =
+    max(alpha jendela, cakupan teks). Ikon, garis, dan teks yang sudah berupa gambar tetap ikut pudar. Biaya: area
+    yang digambar ulang digambar dua kali selama opsi aktif.
 
 ## Konsekuensi
 - (+) Dua slider transparansi, berlaku langsung tanpa restart dan tanpa kedipan, dengan Snap dan animasi docking tetap

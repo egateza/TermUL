@@ -102,4 +102,26 @@ class AppConfigWindowOpacityTest {
                 .withCollapsedHostGroups(java.util.List.of("group:A")).windowBlur()).isTrue();
         assertThat(config.withWindowBlur(false).windowBlur()).isFalse();
     }
+
+    @Test
+    void windowSolidTextOptInDanConfigLamaMati(@TempDir Path dir) throws Exception {
+        assertThat(AppConfig.defaults().windowSolidText()).isFalse();
+        var file = dir.resolve("config.json");
+        Files.writeString(file, "{\"windowOpacity\": 76, \"windowBlur\": true}");
+        assertThat(new ConfigStore(file).load().windowSolidText()).isFalse();
+
+        var store = new ConfigStore(dir.resolve("solid.json"));
+        store.save(AppConfig.defaults().withWindowOpacity(70).withWindowSolidText(true));
+        var loaded = new ConfigStore(dir.resolve("solid.json")).load();
+        assertThat(loaded.windowSolidText()).isTrue();
+        assertThat(loaded.windowOpacity()).isEqualTo(70);
+    }
+
+    @Test
+    void otherWithersKeepWindowSolidText() {
+        var config = AppConfig.defaults().withWindowSolidText(true);
+        assertThat(config.withWindowOpacity(60).withWindowBlur(true).withTheme("x")
+                .withCollapsedHostGroups(java.util.List.of("group:A")).windowSolidText()).isTrue();
+        assertThat(config.withWindowSolidText(false).windowSolidText()).isFalse();
+    }
 }

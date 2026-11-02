@@ -74,6 +74,8 @@ import dev.egateza.termul.core.Os;
  *                          grup lain terbuka (null di config lama = semua terbuka)
  * @param windowBlur        blur apa pun yang ada di belakang window (desktop, window lain) selama transparansi aktif;
  *                          hanya berlaku di Windows (null di config lama = mati)
+ * @param windowSolidText   teks tidak ikut dipudarkan slider "Jendela": hanya latar bagian selain terminal yang tembus
+ *                          (null di config lama = mati, teks ikut pudar)
  */
 public record AppConfig(EditorConfig editors, float terminalFontSize, String iconSet, int hostButtonOpacity,
                         String hostPanelMode, String theme, String themeMode, String language, Boolean bellSound,
@@ -88,7 +90,7 @@ public record AppConfig(EditorConfig editors, float terminalFontSize, String ico
                         String sftpLayout, String cursorShape, Boolean cursorBlink, TrayConfig tray,
                         StreakWidgetConfig streakWidget, java.util.List<String> sftpHiddenColumns,
                         Boolean sftpFollowTerminal, java.util.List<String> collapsedHostGroups,
-                        Boolean windowBlur) {
+                        Boolean windowBlur, Boolean windowSolidText) {
 
     /** Sudut tombol snippet di atas terminal (lihat {@link #snippetCorner}). */
     public static final String SNIPPET_TOP_LEFT = "top-left";
@@ -235,6 +237,7 @@ public record AppConfig(EditorConfig editors, float terminalFontSize, String ico
         collapsedHostGroups = collapsedHostGroups == null ? java.util.List.of()
                 : collapsedHostGroups.stream().filter(java.util.Objects::nonNull).distinct().sorted().toList();
         windowBlur = windowBlur != null && windowBlur; // opt-in: config lama = mati
+        windowSolidText = windowSolidText != null && windowSolidText; // opt-in: config lama = teks ikut pudar
     }
 
     /** Gaya Windows (console, PuTTY) di Windows; di macOS menu, sesuai kebiasaan Terminal/iTerm. */
@@ -245,87 +248,97 @@ public record AppConfig(EditorConfig editors, float terminalFontSize, String ico
     public static AppConfig defaults() {
         return new AppConfig(EditorConfig.defaults(), 14f, DEFAULT_ICON_SET, DEFAULT_OPACITY, HOST_DOCKED,
                 DEFAULT_THEME, MODE_DARK, DEFAULT_LANGUAGE, true, true, null, null, true, null, DEFAULT_OPACITY, DEFAULT_OPACITY, ValidationHooks.defaults(),
-                SPLIT_HORIZONTAL, true, true, DEFAULT_ANIMATION, DEFAULT_ANIMATION, HOST_STATUS_ALL, MEMORY_SAVER, DEFAULT_HOST_TOGGLE, DEFAULT_IDLE_MINUTES, ANIMATION_RANDOM, PANEL_ROUNDED, TAB_CARD, defaultRightClick(Os.current()), true, SNIPPET_TOP_RIGHT, true, SFTP_SINGLE, CURSOR_BLOCK, true, TrayConfig.defaults(), StreakWidgetConfig.defaults(), java.util.List.of(), false, java.util.List.of(), false);
+                SPLIT_HORIZONTAL, true, true, DEFAULT_ANIMATION, DEFAULT_ANIMATION, HOST_STATUS_ALL, MEMORY_SAVER, DEFAULT_HOST_TOGGLE, DEFAULT_IDLE_MINUTES, ANIMATION_RANDOM, PANEL_ROUNDED, TAB_CARD, defaultRightClick(Os.current()), true, SNIPPET_TOP_RIGHT, true, SFTP_SINGLE, CURSOR_BLOCK, true, TrayConfig.defaults(), StreakWidgetConfig.defaults(), java.util.List.of(), false, java.util.List.of(), false, false);
     }
 
     public AppConfig withEditors(EditorConfig e) {
         return new AppConfig(e, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
-                language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme, windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation, statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur);
+                language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme, windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation, statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur, windowSolidText);
     }
 
     public AppConfig withIconSet(String id) {
         return new AppConfig(editors, terminalFontSize, id, hostButtonOpacity, hostPanelMode, theme, themeMode,
-                language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme, windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation, statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur);
+                language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme, windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation, statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur, windowSolidText);
     }
 
     public AppConfig withHostButtonOpacity(int percent) {
         return new AppConfig(editors, terminalFontSize, iconSet, percent, hostPanelMode, theme, themeMode,
-                language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme, windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation, statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur);
+                language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme, windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation, statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur, windowSolidText);
     }
 
     public AppConfig withHostPanelMode(String mode) {
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, mode, theme, themeMode,
-                language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme, windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation, statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur);
+                language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme, windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation, statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur, windowSolidText);
     }
 
     public AppConfig withTheme(String id) {
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, id, themeMode,
-                language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme, windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation, statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur);
+                language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme, windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation, statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur, windowSolidText);
     }
 
     public AppConfig withThemeMode(String mode) {
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, mode,
-                language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme, windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation, statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur);
+                language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme, windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation, statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur, windowSolidText);
     }
 
     public AppConfig withLanguage(String tag) {
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
-                tag, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme, windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation, statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur);
+                tag, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme, windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation, statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur, windowSolidText);
     }
 
     public AppConfig withBellSound(boolean on) {
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
-                language, on, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme, windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation, statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur);
+                language, on, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme, windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation, statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur, windowSolidText);
     }
 
     public AppConfig withBellShake(boolean on) {
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
-                language, bellSound, on, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme, windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation, statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur);
+                language, bellSound, on, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme, windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation, statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur, windowSolidText);
     }
 
     /** @param family nama font aplikasi, atau null untuk font bawaan tema */
     public AppConfig withUiFontFamily(String family) {
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
-                language, bellSound, bellShake, family, terminalFontFamily, terminalThemeLinked, terminalTheme, windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation, statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur);
+                language, bellSound, bellShake, family, terminalFontFamily, terminalThemeLinked, terminalTheme, windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation, statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur, windowSolidText);
     }
 
     /** @param family nama font terminal, atau null untuk pilihan otomatis */
     public AppConfig withTerminalFontFamily(String family) {
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
-                language, bellSound, bellShake, uiFontFamily, family, terminalThemeLinked, terminalTheme, windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation, statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur);
+                language, bellSound, bellShake, uiFontFamily, family, terminalThemeLinked, terminalTheme, windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation, statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur, windowSolidText);
     }
 
     public AppConfig withTerminalThemeLinked(boolean linked) {
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
-                language, bellSound, bellShake, uiFontFamily, terminalFontFamily, linked, terminalTheme, windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation, statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur);
+                language, bellSound, bellShake, uiFontFamily, terminalFontFamily, linked, terminalTheme, windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation, statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur, windowSolidText);
     }
 
     /** @param id id tema custom untuk warna terminal, atau null untuk warna bawaan */
     public AppConfig withTerminalTheme(String id) {
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
-                language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, id, windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation, statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur);
+                language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, id, windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation, statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur, windowSolidText);
     }
 
     public AppConfig withWindowOpacity(int percent) {
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
                 language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme,
-                percent, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation, statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur);
+                percent, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation, statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur, windowSolidText);
     }
 
     public AppConfig withTerminalOpacity(int percent) {
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
                 language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme,
-                windowOpacity, percent, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation, statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur);
+                windowOpacity, percent, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation, statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur, windowSolidText);
+    }
+
+    /** Teks tetap pekat saat bagian selain terminal dipudarkan (lihat {@link #windowSolidText}). */
+    public AppConfig withWindowSolidText(boolean on) {
+        return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
+                language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme,
+                windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation,
+                statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners,
+                tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray,
+                streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur, on);
     }
 
     /** Blur di belakang window selama transparansi aktif (lihat {@link #windowBlur}). */
@@ -335,7 +348,7 @@ public record AppConfig(EditorConfig editors, float terminalFontSize, String ico
                 windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation,
                 statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners,
                 tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray,
-                streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, on);
+                streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, on, windowSolidText);
     }
 
     /** @return true kalau salah satu transparansi aktif (window perlu alpha per piksel) */
@@ -346,40 +359,40 @@ public record AppConfig(EditorConfig editors, float terminalFontSize, String ico
     public AppConfig withValidationHooks(ValidationHooks hooks) {
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
                 language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme,
-                windowOpacity, terminalOpacity, hooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation, statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur);
+                windowOpacity, terminalOpacity, hooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation, statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur, windowSolidText);
     }
 
     /** @param mode {@value #SPLIT_HORIZONTAL} (menyamping) atau {@value #SPLIT_VERTICAL} (atas-bawah) */
     public AppConfig withSplitMode(String mode) {
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
                 language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme,
-                windowOpacity, terminalOpacity, validationHooks, mode, hostStatusBar, autoUpdateCheck, loadingAnimation, statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur);
+                windowOpacity, terminalOpacity, validationHooks, mode, hostStatusBar, autoUpdateCheck, loadingAnimation, statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur, windowSolidText);
     }
 
     public AppConfig withHostStatusBar(boolean on) {
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
                 language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme,
-                windowOpacity, terminalOpacity, validationHooks, splitMode, on, autoUpdateCheck, loadingAnimation, statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur);
+                windowOpacity, terminalOpacity, validationHooks, splitMode, on, autoUpdateCheck, loadingAnimation, statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur, windowSolidText);
     }
 
     public AppConfig withAutoUpdateCheck(boolean on) {
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
                 language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme,
-                windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, on, loadingAnimation, statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur);
+                windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, on, loadingAnimation, statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur, windowSolidText);
     }
 
     /** @param id id animasi layar "Menghubungkan…", atau {@value #ANIMATION_OFF} */
     public AppConfig withLoadingAnimation(String id) {
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
                 language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme,
-                windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, id, statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur);
+                windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, id, statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur, windowSolidText);
     }
 
     /** @param id id animasi panel bawah, atau {@value #ANIMATION_OFF} / {@value #ANIMATION_RANDOM} */
     public AppConfig withStatusAnimation(String id) {
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
                 language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme,
-                windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation, id, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur);
+                windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation, id, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur, windowSolidText);
     }
 
     /** @param mode {@value #HOST_STATUS_ALL}, {@value #HOST_STATUS_GRAPH} atau {@value #HOST_STATUS_TEXT} */
@@ -387,7 +400,7 @@ public record AppConfig(EditorConfig editors, float terminalFontSize, String ico
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
                 language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme,
                 windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation,
-                statusAnimation, mode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur);
+                statusAnimation, mode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur, windowSolidText);
     }
 
     /** @param mode {@value #MEMORY_SAVER} atau {@value #MEMORY_NORMAL} */
@@ -395,7 +408,7 @@ public record AppConfig(EditorConfig editors, float terminalFontSize, String ico
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
                 language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme,
                 windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation,
-                statusAnimation, hostStatusMode, mode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur);
+                statusAnimation, hostStatusMode, mode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur, windowSolidText);
     }
 
     /** @param id id gaya tombol panel host */
@@ -403,7 +416,7 @@ public record AppConfig(EditorConfig editors, float terminalFontSize, String ico
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
                 language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme,
                 windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation,
-                statusAnimation, hostStatusMode, memoryMode, id, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur);
+                statusAnimation, hostStatusMode, memoryMode, id, idleMinutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur, windowSolidText);
     }
 
     /** @param minutes menit tanpa input sebelum layar idle tampil; 0 = mati */
@@ -411,7 +424,7 @@ public record AppConfig(EditorConfig editors, float terminalFontSize, String ico
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
                 language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme,
                 windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation,
-                statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, minutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur);
+                statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, minutes, idleAnimation, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur, windowSolidText);
     }
 
     /** @param id id animasi layar idle, atau {@value #ANIMATION_OFF} / {@value #ANIMATION_RANDOM} */
@@ -419,7 +432,7 @@ public record AppConfig(EditorConfig editors, float terminalFontSize, String ico
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
                 language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme,
                 windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation,
-                statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, id, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur);
+                statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, id, panelCorners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur, windowSolidText);
     }
 
     /** @param corners {@value #PANEL_ROUNDED} atau {@value #PANEL_SQUARE} */
@@ -427,7 +440,7 @@ public record AppConfig(EditorConfig editors, float terminalFontSize, String ico
         return new AppConfig(editors, terminalFontSize, iconSet, hostButtonOpacity, hostPanelMode, theme, themeMode,
                 language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme,
                 windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation,
-                statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, corners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur);
+                statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, corners, tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur, windowSolidText);
     }
 
     /** @param style {@value #TAB_CARD} atau {@value #TAB_UNDERLINED} */
@@ -436,7 +449,7 @@ public record AppConfig(EditorConfig editors, float terminalFontSize, String ico
                 language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme,
                 windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation,
                 statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners,
-                style, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur);
+                style, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur, windowSolidText);
     }
 
     /** @param mode {@value #RIGHT_CLICK_COPY_PASTE} atau {@value #RIGHT_CLICK_MENU} */
@@ -445,7 +458,7 @@ public record AppConfig(EditorConfig editors, float terminalFontSize, String ico
                 language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme,
                 windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation,
                 statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners,
-                tabStyle, mode, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur);
+                tabStyle, mode, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur, windowSolidText);
     }
 
 
@@ -455,7 +468,7 @@ public record AppConfig(EditorConfig editors, float terminalFontSize, String ico
                 language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme,
                 windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation,
                 statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners,
-                tabStyle, rightClick, on, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur);
+                tabStyle, rightClick, on, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur, windowSolidText);
     }
 
     /** Sudut tombol snippet; nilai tidak dikenal kembali ke kanan atas. */
@@ -464,7 +477,7 @@ public record AppConfig(EditorConfig editors, float terminalFontSize, String ico
                 language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme,
                 windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation,
                 statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners,
-                tabStyle, rightClick, snippetButton, corner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur);
+                tabStyle, rightClick, snippetButton, corner, streak, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur, windowSolidText);
     }
 
     /** Tampilkan/sembunyikan api streak dan animasinya. */
@@ -473,7 +486,7 @@ public record AppConfig(EditorConfig editors, float terminalFontSize, String ico
                 language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme,
                 windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation,
                 statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners,
-                tabStyle, rightClick, snippetButton, snippetCorner, on, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur);
+                tabStyle, rightClick, snippetButton, snippetCorner, on, sftpLayout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur, windowSolidText);
     }
 
     /** Tampilan panel SFTP; nilai tidak dikenal kembali ke satu panel. */
@@ -482,7 +495,7 @@ public record AppConfig(EditorConfig editors, float terminalFontSize, String ico
                 language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme,
                 windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation,
                 statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners,
-                tabStyle, rightClick, snippetButton, snippetCorner, streak, layout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur);
+                tabStyle, rightClick, snippetButton, snippetCorner, streak, layout, cursorShape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur, windowSolidText);
     }
 
     /** Bentuk kursor terminal; nilai tidak dikenal kembali ke blok. */
@@ -491,7 +504,7 @@ public record AppConfig(EditorConfig editors, float terminalFontSize, String ico
                 language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme,
                 windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation,
                 statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners,
-                tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, shape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur);
+                tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, shape, cursorBlink, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur, windowSolidText);
     }
 
     public AppConfig withCursorBlink(boolean on) {
@@ -499,7 +512,7 @@ public record AppConfig(EditorConfig editors, float terminalFontSize, String ico
                 language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme,
                 windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation,
                 statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners,
-                tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, on, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur);
+                tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, on, tray, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur, windowSolidText);
     }
 
     /** Ikon tray dan perilaku window terhadapnya. */
@@ -508,7 +521,7 @@ public record AppConfig(EditorConfig editors, float terminalFontSize, String ico
                 language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme,
                 windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation,
                 statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners,
-                tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, t, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur);
+                tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, t, streakWidget, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur, windowSolidText);
     }
 
     /** Widget streak mengambang (tampil, posisi). */
@@ -517,7 +530,7 @@ public record AppConfig(EditorConfig editors, float terminalFontSize, String ico
                 language, bellSound, bellShake, uiFontFamily, terminalFontFamily, terminalThemeLinked, terminalTheme,
                 windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation,
                 statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners,
-                tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, w, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur);
+                tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray, w, sftpHiddenColumns, sftpFollowTerminal, collapsedHostGroups, windowBlur, windowSolidText);
     }
 
     /** Kolom tabel SFTP yang disembunyikan (id kolom, lihat {@link #sftpHiddenColumns}). */
@@ -527,7 +540,7 @@ public record AppConfig(EditorConfig editors, float terminalFontSize, String ico
                 windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation,
                 statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners,
                 tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray,
-                streakWidget, hidden, sftpFollowTerminal, collapsedHostGroups, windowBlur);
+                streakWidget, hidden, sftpFollowTerminal, collapsedHostGroups, windowBlur, windowSolidText);
     }
 
     /** Panel SFTP ikut folder kerja shell terminal (lihat {@link #sftpFollowTerminal}). */
@@ -537,7 +550,7 @@ public record AppConfig(EditorConfig editors, float terminalFontSize, String ico
                 windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation,
                 statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners,
                 tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray,
-                streakWidget, sftpHiddenColumns, on, collapsedHostGroups, windowBlur);
+                streakWidget, sftpHiddenColumns, on, collapsedHostGroups, windowBlur, windowSolidText);
     }
 
     /** Grup panel host yang ditutup (lihat {@link #collapsedHostGroups}). */
@@ -547,6 +560,6 @@ public record AppConfig(EditorConfig editors, float terminalFontSize, String ico
                 windowOpacity, terminalOpacity, validationHooks, splitMode, hostStatusBar, autoUpdateCheck, loadingAnimation,
                 statusAnimation, hostStatusMode, memoryMode, hostToggleStyle, idleMinutes, idleAnimation, panelCorners,
                 tabStyle, rightClick, snippetButton, snippetCorner, streak, sftpLayout, cursorShape, cursorBlink, tray,
-                streakWidget, sftpHiddenColumns, sftpFollowTerminal, java.util.List.copyOf(groups), windowBlur);
+                streakWidget, sftpHiddenColumns, sftpFollowTerminal, java.util.List.copyOf(groups), windowBlur, windowSolidText);
     }
 }

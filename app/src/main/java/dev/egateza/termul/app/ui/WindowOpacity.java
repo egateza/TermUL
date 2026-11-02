@@ -104,6 +104,13 @@ final class WindowOpacity {
         return true;
     }
 
+    /** Teks tetap pekat walau bagian selain terminal dipudarkan; hanya latarnya yang tembus. EDT. */
+    static void setSolidText(JFrame frame, boolean on) {
+        if (frame.getRootPane() instanceof TranslucentRootPane root) {
+            root.setSolidText(on);
+        }
+    }
+
     /** Pasang ulang blur di HWND baru (dipanggil dari {@code addNotify}; HWND belum ada saat {@link #apply} pertama). */
     static void reapplyBlur(JFrame frame) {
         if (blurActive) {

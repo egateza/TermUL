@@ -24,11 +24,19 @@ final class WindowBlur {
     static final int ACCENT_ENABLE_BLURBEHIND = 3;
     private static final int ACCENT_POLICY_SIZE = 16; // AccentState, AccentFlags, GradientColor, AnimationId (int)
 
+    /** {@code DWMWA_TRANSITIONS_FORCEDISABLED}: tanpa animasi minimize/maximize/restore dari DWM. */
+    private static final int DWMWA_TRANSITIONS_FORCEDISABLED = 3;
+
     interface User32 extends Library {
         boolean SetWindowCompositionAttribute(Pointer hwnd, Pointer data);
     }
 
+    interface Dwm extends Library {
+        int DwmSetWindowAttribute(Pointer hwnd, int attribute, int[] value, int size);
+    }
+
     private static User32 user32; // EDT
+    private static Dwm dwm; // EDT
     private static boolean failed; // EDT
 
     private WindowBlur() {
@@ -52,11 +60,15 @@ final class WindowBlur {
         try {
             if (user32 == null) {
                 user32 = Native.load("user32", User32.class);
+                dwm = Native.load("dwmapi", Dwm.class);
             }
             Pointer hwnd = Native.getWindowPointer(window);
             if (hwnd == null) {
                 return false;
             }
+            // Animasi maximize/restore DWM menganimasikan gambar window tanpa blur: isi di belakang window tampil
+            // tajam sesaat, baru ter-blur setelah animasi selesai. Selama blur menyala, animasinya dimatikan.
+            dwm.DwmSetWindowAttribute(hwnd, DWMWA_TRANSITIONS_FORCEDISABLED, new int[] {on ? 1 : 0}, 4);
             try (var policy = new Memory(ACCENT_POLICY_SIZE); var data = new Memory(dataSize(Native.POINTER_SIZE))) {
                 policy.clear();
                 policy.setInt(0, on ? ACCENT_ENABLE_BLURBEHIND : ACCENT_DISABLED);

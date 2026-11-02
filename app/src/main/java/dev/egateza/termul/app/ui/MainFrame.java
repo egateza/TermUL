@@ -304,6 +304,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             }
             WindowOpacity.apply(this, startConfig.windowOpacity(), startConfig.terminalOpacity(),
                     startConfig.windowBlur());
+            WindowOpacity.setSolidText(this, startConfig.windowSolidText());
         }
 
         // pindah ke monitor dengan scaling lain: lebar teks ikut berubah (hinting per skala), tapi ukuran logis window
@@ -1818,6 +1819,9 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         var terminalLabel = new JLabel(I18n.t("window.opacity.terminalLabel", originalTerminal));
         var blurBox = new javax.swing.JCheckBox(I18n.t("window.opacity.blur"), originalBlur);
         blurBox.setToolTipText(I18n.t("window.opacity.blurTip"));
+        boolean originalSolidText = config.windowSolidText();
+        var solidTextBox = new javax.swing.JCheckBox(I18n.t("window.opacity.solidText"), originalSolidText);
+        solidTextBox.addActionListener(e -> WindowOpacity.setSolidText(this, solidTextBox.isSelected())); // pratinjau
         Runnable preview = () -> {
             windowLabel.setText(I18n.t("window.opacity.label", windowSlider.getValue()));
             terminalLabel.setText(I18n.t("window.opacity.terminalLabel", terminalSlider.getValue()));
@@ -1832,6 +1836,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         var sliders = new JPanel(new java.awt.GridLayout(0, 1, 0, 4));
         sliders.add(windowLabel);
         sliders.add(windowSlider);
+        sliders.add(solidTextBox);
         sliders.add(terminalLabel);
         sliders.add(terminalSlider);
         if (WindowBlur.supported()) {
@@ -1846,12 +1851,16 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         int window = ok ? windowSlider.getValue() : originalWindow;
         int terminal = ok ? terminalSlider.getValue() : originalTerminal;
         boolean blur = ok ? blurBox.isSelected() : originalBlur;
+        boolean solidText = ok ? solidTextBox.isSelected() : originalSolidText;
         boolean applied = WindowOpacity.apply(this, window, terminal, blur); // batal: kembali ke nilai semula
-        if (window == originalWindow && terminal == originalTerminal && blur == originalBlur) {
+        WindowOpacity.setSolidText(this, solidText);
+        if (window == originalWindow && terminal == originalTerminal && blur == originalBlur
+                && solidText == originalSolidText) {
             return;
         }
         mutate(I18n.t("error.saveSettings"), () -> ctx.config().save(ctx.config().current()
-                .withWindowOpacity(window).withTerminalOpacity(terminal).withWindowBlur(blur)));
+                .withWindowOpacity(window).withTerminalOpacity(terminal).withWindowBlur(blur)
+                .withWindowSolidText(solidText)));
         if (!applied) {
             JOptionPane.showMessageDialog(this, I18n.t("window.opacity.restart"),
                     I18n.t("window.opacity.title"), JOptionPane.INFORMATION_MESSAGE);

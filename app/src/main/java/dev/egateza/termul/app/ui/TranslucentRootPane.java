@@ -8,6 +8,7 @@ import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
+import java.awt.image.DataBufferInt;
 import java.util.ArrayList;
 import java.util.List;
 import javax.swing.JLayeredPane;
@@ -26,8 +27,19 @@ import javax.swing.SwingUtilities;
 final class TranslucentRootPane extends JRootPane {
 
     private float chromeAlpha = 1f;
+    private boolean solidText; // teks tidak ikut dipudarkan, lihat setSolidText; EDT
     private BufferedImage buffer; // dipakai ulang antar-paint; EDT
+    private BufferedImage mask; // mask teks untuk solidText; EDT
+    private BufferedImage faded; // hasil pudar dengan teks solid; EDT
     private BufferedImage cover; // tangkapan isi window selama berganti mode, lihat setCover; EDT
+
+    /** Teks tetap pekat walau latar bagian selain terminal dipudarkan (seperti Windows Terminal). */
+    void setSolidText(boolean on) {
+        if (on != solidText) {
+            solidText = on;
+            repaint();
+        }
+    }
 
     /** @param percent opasitas bagian selain terminal; 100 = tidak dipudarkan */
     void setChromeOpacity(int percent) {
@@ -137,8 +149,13 @@ final class TranslucentRootPane extends JRootPane {
             out.setTransform(AffineTransform.getTranslateInstance(tx.getTranslateX(), tx.getTranslateY()));
             Rectangle device = deviceBounds(clip, sx, sy);
             out.setClip(device);
-            out.setComposite(AlphaComposite.Src.derive(chromeAlpha));
-            blit(out, img, device, bx, by);
+            if (solidText) {
+                out.setComposite(AlphaComposite.Src);
+                blit(out, fadeKeepingText(img, w, h, bx, by, sx, sy, painted), device, bx, by);
+            } else {
+                out.setComposite(AlphaComposite.Src.derive(chromeAlpha));
+                blit(out, img, device, bx, by);
+            }
             out.setComposite(AlphaComposite.Src); // terminal & popup: alpha apa adanya (terminal mengatur sendiri)
             for (Rectangle area : solidAreas()) {
                 Rectangle part = area.intersection(clip);
@@ -149,6 +166,59 @@ final class TranslucentRootPane extends JRootPane {
         } finally {
             out.dispose();
         }
+    }
+
+    /**
+     * Isi {@code img} (w×h, pojok di piksel perangkat bx, by) yang dipudarkan dengan alpha jendela, kecuali piksel
+     * teks: alpha tiap piksel = max(alpha jendela, cakupan teks). Cakupan teks dari gambar ulang area yang sama lewat
+     * {@link TextMaskGraphics2D}.
+     */
+    private BufferedImage fadeKeepingText(BufferedImage img, int w, int h, int bx, int by, double sx, double sy,
+                                          Rectangle painted) {
+        mask = sized(mask, w, h);
+        var mg = mask.createGraphics();
+        try {
+            mg.setComposite(AlphaComposite.Clear);
+            mg.fillRect(0, 0, w, h);
+            mg.setComposite(AlphaComposite.SrcOver);
+            mg.translate(-bx, -by);
+            mg.scale(sx, sy);
+            mg.setClip(painted);
+            super.paint(new TextMaskGraphics2D(mg));
+        } finally {
+            mg.dispose();
+        }
+        faded = sized(faded, w, h);
+        int[] src = ((DataBufferInt) img.getRaster().getDataBuffer()).getData();
+        int[] text = ((DataBufferInt) mask.getRaster().getDataBuffer()).getData();
+        int[] dst = ((DataBufferInt) faded.getRaster().getDataBuffer()).getData();
+        int srcStride = img.getWidth();
+        int textStride = mask.getWidth();
+        int dstStride = faded.getWidth();
+        int base = Math.round(chromeAlpha * 255);
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                int p = src[y * srcStride + x];
+                int k = Math.max(base, text[y * textStride + x] >>> 24); // 0..255
+                dst[y * dstStride + x] = scale(p >>> 24, k) << 24 | scale(p >> 16 & 0xFF, k) << 16
+                        | scale(p >> 8 & 0xFF, k) << 8 | scale(p & 0xFF, k);
+            }
+        }
+        return faded;
+    }
+
+    /** {@code v × k / 255}, dibulatkan (piksel premultiplied). */
+    private static int scale(int v, int k) {
+        return (v * k + 127) / 255;
+    }
+
+    private static BufferedImage sized(BufferedImage img, int w, int h) {
+        if (img != null && img.getWidth() >= w && img.getHeight() >= h) {
+            return img;
+        }
+        int bw = Math.max(w, img == null ? 0 : img.getWidth());
+        int bh = Math.max(h, img == null ? 0 : img.getHeight());
+        return new BufferedImage(bw, bh, BufferedImage.TYPE_INT_ARGB_PRE);
     }
 
     /** Piksel perangkat (relatif ke root pane) yang tersentuh {@code r}: dibulatkan keluar. */

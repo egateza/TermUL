@@ -96,4 +96,52 @@ class TranslucentRootPaneTest {
         assertThat(TranslucentRootPane.deviceBounds(new Rectangle(10, 10, 30, 17), 1, 1))
                 .isEqualTo(new Rectangle(10, 10, 30, 17));
     }
+
+    /**
+     * "Teks tetap solid": latar dipudarkan seperti biasa, tetapi piksel yang tertutup teks tetap pekat. Garis bukan
+     * teks (mis. border) tetap ikut pudar.
+     */
+    @Test
+    void teksTetapSolidSaatLatarDipudarkan() throws Exception {
+        var root = new TranslucentRootPane[1];
+        SwingUtilities.invokeAndWait(() -> {
+            var r = new TranslucentRootPane();
+            var content = new JPanel(null) {
+                @Override
+                protected void paintComponent(java.awt.Graphics g) {
+                    g.setColor(Color.DARK_GRAY);
+                    g.fillRect(0, 0, getWidth(), getHeight());
+                    g.setColor(Color.WHITE);
+                    g.fillRect(0, 70, 100, 10); // bukan teks
+                    g.setFont(new java.awt.Font(java.awt.Font.DIALOG, java.awt.Font.BOLD, 40));
+                    g.drawString("█", 10, 50); // blok penuh: piksel teks yang pasti tertutup
+                }
+            };
+            r.setContentPane(content);
+            r.setSize(100, 80);
+            r.doLayout();
+            r.getLayeredPane().setSize(100, 80);
+            content.setBounds(0, 0, 100, 80);
+            r.setChromeOpacity(50);
+            r.setSolidText(true);
+            root[0] = r;
+        });
+        var img = new BufferedImage(100, 80, BufferedImage.TYPE_INT_ARGB);
+        SwingUtilities.invokeAndWait(() -> {
+            var g = img.createGraphics();
+            root[0].paint(g);
+            g.dispose();
+        });
+
+        assertThat(img.getRGB(90, 5) >>> 24).as("latar").isBetween(125, 130);
+        assertThat(img.getRGB(50, 75) >>> 24).as("garis bukan teks").isBetween(125, 130);
+        int textX = -1;
+        for (int x = 10; x < 40 && textX < 0; x++) {
+            if ((img.getRGB(x, 35) & 0xFFFFFF) == 0xFFFFFF) {
+                textX = x;
+            }
+        }
+        assertThat(textX).as("piksel teks putih ditemukan").isPositive();
+        assertThat(img.getRGB(textX, 35) >>> 24).as("teks").isEqualTo(255);
+    }
 }
