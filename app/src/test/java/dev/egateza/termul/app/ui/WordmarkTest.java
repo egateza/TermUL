@@ -21,12 +21,23 @@ class WordmarkTest {
     }
 
     @Test
-    void fontMonoSatuLebihBesarDariFontAplikasiDenganTracking() {
+    void fontBawaanJarSamaDenganTermulMobile() {
+        var font = Wordmark.bundled();
+        assertThat(font).as("JetBrains Mono Medium ada di jar").isNotNull();
+        assertThat(font.getFontName()).isEqualTo("JetBrains Mono Medium");
+        assertThat(font.canDisplayUpTo(Wordmark.NAME + Wordmark.CURSOR)).isEqualTo(-1);
+        assertThat(Wordmark.class.getResource("/dev/egateza/termul/app/fonts/LICENSE.txt")).as("lisensi OFL ikut")
+                .isNotNull();
+    }
+
+    @Test
+    void statisTidakIkutPengaturanFont() {
         var old = UIManager.getFont("Label.font");
         try {
-            UIManager.put("Label.font", new javax.swing.plaf.FontUIResource("Dialog", java.awt.Font.PLAIN, 12));
+            UIManager.put("Label.font", new javax.swing.plaf.FontUIResource("Serif", java.awt.Font.BOLD, 20));
             var font = Wordmark.font();
-            assertThat(font.getSize2D()).isEqualTo(13f);
+            assertThat(font.getFontName()).isEqualTo("JetBrains Mono Medium");
+            assertThat(font.getSize2D()).isEqualTo(Wordmark.SIZE).isEqualTo(13f);
             assertThat(font.getAttributes().get(TextAttribute.TRACKING)).isEqualTo(0.04f);
             assertThat(new Wordmark().getAccessibleContext().getAccessibleName()).isEqualTo("TermUL");
         } finally {

@@ -4,20 +4,23 @@ import com.formdev.flatlaf.FlatLaf;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
+import java.awt.FontFormatException;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.font.TextAttribute;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.Map;
 import java.util.Set;
 import javax.swing.JComponent;
 import javax.swing.UIManager;
 
 /**
- * Wordmark {@code termul_} di title bar (prototipe "TermUL Desktop" → Ikon, opsi B, sama dengan TermUL Mobile): font
- * mono huruf kecil dengan garis bawah amber. Font mono pertama yang terpasang (JetBrains Mono, Cascadia Mono, ...),
- * ukuran Font aplikasi + 1, tracking .04em. Bukan tombol: ikut area seret title bar.
+ * Wordmark {@code termul_} di title bar (prototipe "TermUL Desktop" → Ikon, opsi B; sama dengan TermUL Mobile): huruf
+ * kecil JetBrains Mono Medium dengan garis bawah amber, 13 px, tracking .04em. Statis: font dibundel di jar dan tidak
+ * mengikuti Pengaturan font, supaya sama di semua mesin. Bukan tombol: ikut area seret title bar.
  */
 public final class Wordmark extends JComponent {
 
@@ -29,9 +32,13 @@ public final class Wordmark extends JComponent {
     /** Amber yang tetap terbaca di title bar terang (kontras ≥ 3:1 terhadap putih). */
     static final Color LIGHT_CURSOR = new Color(0xA86A00);
 
-    private static final String[] MONO = {"JetBrains Mono", "Cascadia Mono", "Consolas", "Menlo", "SF Mono",
-            "DejaVu Sans Mono"};
-    private static String monoFamily; // EDT; dicari sekali
+    /** Ukuran tetap di title bar 30 px (prototipe desktop); tidak ikut Pengaturan font. */
+    static final float SIZE = 13f;
+    /** JetBrains Mono Medium (OFL, lisensi di folder yang sama), font wordmark TermUL Mobile. */
+    static final String FONT = "/dev/egateza/termul/app/fonts/JetBrainsMono-Medium.ttf";
+    private static final String[] FALLBACK = {"JetBrains Mono Medium", "JetBrains Mono", "Cascadia Mono", "Consolas",
+            "Menlo", "SF Mono", "DejaVu Sans Mono"};
+    private static Font base; // EDT; dimuat sekali
 
     public Wordmark() {
         setOpaque(false);
@@ -61,26 +68,41 @@ public final class Wordmark extends JComponent {
         revalidate();
     }
 
-    /** Font mono terpasang, ukuran Font aplikasi + 1 (13 px pada ukuran bawaan 12), tracking .04em. */
+    /**
+     * Font wordmark: tetap, tidak mengikuti Pengaturan font. JetBrains Mono Medium 13 px (bobot 500 seperti
+     * TermUL Mobile) dari jar, tracking .04em; kalau gagal dimuat, font mono terpasang.
+     */
     static Font font() {
-        Font base = UIManager.getFont("Label.font");
-        float size = (base != null ? base.getSize2D() : 12f) + 1;
-        return new Font(Map.of(TextAttribute.FAMILY, family(), TextAttribute.SIZE, size,
-                TextAttribute.TRACKING, 0.04f));
+        return base().deriveFont(Map.of(TextAttribute.SIZE, SIZE, TextAttribute.TRACKING, 0.04f));
     }
 
-    private static String family() {
-        if (monoFamily == null) {
-            monoFamily = Font.MONOSPACED;
-            var installed = Set.of(FontCatalog.allFamilies());
-            for (String f : MONO) {
-                if (installed.contains(f)) {
-                    monoFamily = f;
-                    break;
-                }
+    /** Font bawaan jar, dimuat sekali; fallback ke font terpasang (Medium dulu, supaya bobotnya tetap 500). */
+    static Font base() {
+        if (base == null) {
+            base = bundled();
+            if (base == null) {
+                base = installedFallback();
             }
         }
-        return monoFamily;
+        return base;
+    }
+
+    static Font bundled() {
+        try (InputStream in = Wordmark.class.getResourceAsStream(FONT)) {
+            return in == null ? null : Font.createFont(Font.TRUETYPE_FONT, in);
+        } catch (IOException | FontFormatException e) {
+            return null;
+        }
+    }
+
+    private static Font installedFallback() {
+        var installed = Set.of(FontCatalog.allFamilies());
+        for (String f : FALLBACK) {
+            if (installed.contains(f)) {
+                return new Font(f, Font.PLAIN, 1);
+            }
+        }
+        return new Font(Font.MONOSPACED, Font.PLAIN, 1);
     }
 
     /** Warna huruf dan garis bawah untuk tema aktif: persis prototipe di tema gelap, warna teks tema di tema terang. */
