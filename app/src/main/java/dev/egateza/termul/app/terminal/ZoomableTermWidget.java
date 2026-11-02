@@ -37,6 +37,13 @@ public final class ZoomableTermWidget extends JediTermWidget {
         return new ZoomPanel(settings, buffer, styleState);
     }
 
+    /** Kursor tersimpan per layar (utama/alternate) seperti xterm, supaya kursor kembali ke prompt setelah nano. */
+    @Override
+    protected com.jediterm.terminal.model.JediTerminal createTerminal(com.jediterm.terminal.TerminalDisplay display,
+                                                                      TerminalTextBuffer buffer, StyleState styleState) {
+        return new XtermCursorTerminal(display, buffer, styleState);
+    }
+
     /**
      * Scrollbar bergaya FlatLaf seperti panel lain (bawaan JediTerm memakai {@code BasicScrollBarUI} polos), tetap
      * dengan penanda hasil cari. Dipanggil dari constructor JediTermWidget: semua yang dibaca di sini dibaca saat
