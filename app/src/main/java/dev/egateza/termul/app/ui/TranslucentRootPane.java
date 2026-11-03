@@ -457,6 +457,10 @@ final class TranslucentRootPane extends JRootPane {
 
     /** Area yang tidak dipudarkan: panel terminal yang terlihat dan popup ringan (menu, tooltip). */
     private List<Rectangle> solidAreas() {
+        Component glass = getGlassPane();
+        if (glass != null && glass.isVisible() && glass.isOpaque()) { // layar idle: menutupi seluruh window
+            return List.of(SwingUtilities.convertRectangle(glass.getParent(), glass.getBounds(), this));
+        }
         var areas = new ArrayList<>(TerminalTranslucency.visibleAreasIn(this));
         JLayeredPane layers = getLayeredPane();
         for (Component c : layers.getComponentsInLayer(JLayeredPane.POPUP_LAYER)) {

@@ -281,4 +281,24 @@ class TranslucentRootPaneTest {
         SwingUtilities.invokeAndWait(() -> root.setShake(null, 0));
         assertThat(alphaAt(root, 5, 40)).as("selesai: isi digambar lagi").isBetween(125, 130);
     }
+
+    /**
+     * Glass pane pekat yang tampil (layar idle) menutupi seluruh window: tidak ikut dipudarkan slider Jendela, supaya
+     * tidak ada bagian yang tembus di luar area terminal.
+     */
+    @Test
+    void glassPanePekatTidakIkutDipudarkan() throws Exception {
+        var root = rootWithSolidContent();
+        SwingUtilities.invokeAndWait(() -> {
+            var glass = new JPanel();
+            glass.setBackground(Color.BLUE);
+            glass.setOpaque(true);
+            root.setGlassPane(glass);
+            glass.setBounds(0, 0, 100, 80);
+            glass.setVisible(true);
+            root.setChromeOpacity(30);
+        });
+
+        assertThat(alphaAt(root, 50, 40)).isEqualTo(255);
+    }
 }

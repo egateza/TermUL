@@ -76,4 +76,26 @@ class GlyphFallbackTest {
 
         assertThat(fallback.fontFor(ASCII_ONLY, text, 0, 1)).isSameAs(ASCII_ONLY);
     }
+
+    private static final int FOLDER = 0xF07C; // ikon folder Nerd Font (Private Use Area), dipakai oh-my-posh
+
+    @Test
+    void ikonPrivateUseAreaMemakaiNerdFontWalauFontSimbolPunyaGlyphDiSana() {
+        var fallback = new GlyphFallback(List.of(font("Segoe UI Symbol", cp -> cp == FOLDER || cp == CHECK)),
+                List.of(font("JetBrainsMono NFM", cp -> cp == FOLDER || cp == CHECK)));
+
+        assertThat(fallback.fontFor(ASCII_ONLY, Character.toChars(FOLDER), 0, 1).getName())
+                .isEqualTo("JetBrainsMono NFM");
+        assertThat(fallback.fontFor(ASCII_ONLY, Character.toChars(CHECK), 0, 1).getName())
+                .as("simbol biasa tetap dari font simbol").isEqualTo("Segoe UI Symbol");
+    }
+
+    @Test
+    void nerdFontMonoDulu_TanpaPropoDanFamilyKetebalan() {
+        var available = List.of("Arial", "JetBrainsMono NF", "JetBrainsMono NFM", "JetBrainsMono NFM Light",
+                "JetBrainsMono NFP", "MesloLGS Nerd Font", "MesloLGS Nerd Font Mono", "MesloLGS Nerd Font Propo");
+
+        assertThat(GlyphFallback.nerdFamilies(available)).containsExactly("JetBrainsMono NFM",
+                "MesloLGS Nerd Font Mono", "JetBrainsMono NF", "MesloLGS Nerd Font");
+    }
 }
