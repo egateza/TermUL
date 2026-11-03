@@ -30,4 +30,46 @@ class ClearBufferTest {
             assertThat(widget.getTerminalTextBuffer().getLine(0).getText()).startsWith("user@host:~$ ls");
         });
     }
+
+    /**
+     * Clear Buffer mengubah storage layar ({@code clearScreenBuffer}, {@code addLine}); itu harus terjadi selagi lock
+     * buffer dipegang, supaya thread emulator tidak menulis ke storage (ArrayDeque) yang sama pada saat bersamaan.
+     * Tanpa itu storage bisa rusak dan setiap paint gagal dengan NPE.
+     */
+    @Test
+    void storageLayarDiubahSelagiLockBufferDipegang() throws Exception {
+        var freeDuringChange = new java.util.concurrent.atomic.AtomicBoolean();
+        var changes = new java.util.concurrent.atomic.AtomicInteger();
+        SwingUtilities.invokeAndWait(() -> {
+            var widget = new ZoomableTermWidget(new TerminalSettings(14f));
+            var terminal = widget.getTerminal();
+            for (int i = 0; i < 3; i++) {
+                terminal.writeCharacters("baris " + i);
+                terminal.carriageReturn();
+                terminal.newLine();
+            }
+            terminal.writeCharacters("user@host:~$ ");
+            var buffer = widget.getTerminalTextBuffer();
+            buffer.addModelListener(() -> { // dipanggil saat storage layar berubah
+                changes.incrementAndGet();
+                var other = new Thread(() -> { // seperti thread emulator yang mau menulis
+                    if (buffer.tryLock()) {
+                        freeDuringChange.set(true);
+                        buffer.unlock();
+                    }
+                });
+                other.start();
+                try {
+                    other.join();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+
+            widget.getTerminalPanel().clearBuffer();
+        });
+
+        assertThat(changes).hasPositiveValue();
+        assertThat(freeDuringChange).as("thread lain bisa masuk selagi storage diubah").isFalse();
+    }
 }

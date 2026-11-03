@@ -144,4 +144,141 @@ class TranslucentRootPaneTest {
         assertThat(textX).as("piksel teks putih ditemukan").isPositive();
         assertThat(img.getRGB(textX, 35) >>> 24).as("teks").isEqualTo(255);
     }
+
+    /**
+     * Window beralpha per piksel: teks tetap ClearType (LCD, piksel berwarna di tepi huruf). Java hanya menggambar
+     * teks LCD ke permukaan pekat; tanpa buffer pekat, teks jatuh ke antialiasing abu-abu dan tampak berpiksel.
+     */
+    @Test
+    void teksTetapClearTypeSaatWindowTembus() throws Exception {
+        var root = new TranslucentRootPane[1];
+        SwingUtilities.invokeAndWait(() -> {
+            var r = new TranslucentRootPane();
+            var content = new JPanel(null) {
+                @Override
+                protected void paintComponent(java.awt.Graphics g) {
+                    var g2 = (java.awt.Graphics2D) g;
+                    g2.setColor(new Color(60, 63, 65));
+                    g2.fillRect(0, 0, getWidth(), getHeight());
+                    g2.setRenderingHint(java.awt.RenderingHints.KEY_TEXT_ANTIALIASING,
+                            java.awt.RenderingHints.VALUE_TEXT_ANTIALIAS_LCD_HRGB);
+                    g2.setColor(new Color(220, 220, 220));
+                    g2.setFont(new java.awt.Font(java.awt.Font.DIALOG, java.awt.Font.PLAIN, 14));
+                    g2.drawString("Terminal lokal", 5, 25);
+                }
+            };
+            r.setContentPane(content);
+            r.setSize(140, 40);
+            r.doLayout();
+            r.getLayeredPane().setSize(140, 40);
+            content.setBounds(0, 0, 140, 40);
+            r.setChromeOpacity(85);
+            r.setLayered(true);
+            root[0] = r;
+        });
+        var img = new BufferedImage(140, 40, BufferedImage.TYPE_INT_ARGB);
+        SwingUtilities.invokeAndWait(() -> {
+            var g = img.createGraphics();
+            root[0].paint(g);
+            g.dispose();
+        });
+
+        int colored = 0;
+        for (int y = 0; y < 40; y++) {
+            for (int x = 0; x < 140; x++) {
+                int c = img.getRGB(x, y);
+                int r = c >> 16 & 0xFF, gr = c >> 8 & 0xFF, b = c & 0xFF;
+                if (Math.max(Math.abs(r - gr), Math.abs(gr - b)) > 25) {
+                    colored++;
+                }
+            }
+        }
+        assertThat(colored).as("piksel subpiksel (ClearType) di tepi huruf").isGreaterThan(20);
+        assertThat(img.getRGB(135, 35) >>> 24).as("latar tetap dipudarkan").isBetween(214, 219);
+    }
+
+    /**
+     * Blur Windows: lapisan warna latar setengah tembus di bawah isi window, supaya bagian tembus tidak tampak
+     * abu-abu. Alpha akhir = isi di atas lapisan: 0,3 + 0,45 × 0,7 = 0,615; tanpa lapisan tetap 0,3.
+     */
+    @Test
+    void lapisanGelapDiBawahIsiSaatBlurMenyala() throws Exception {
+        var root = rootWithSolidContent();
+        SwingUtilities.invokeAndWait(() -> {
+            root.setChromeOpacity(30);
+            root.setLayered(true);
+        });
+        assertThat(alphaAt(root, 50, 40)).isBetween(74, 79);
+
+        SwingUtilities.invokeAndWait(() -> root.setBackdropTint(true));
+        assertThat(alphaAt(root, 50, 40)).isBetween(154, 160);
+
+        SwingUtilities.invokeAndWait(() -> root.setBackdropTint(false));
+        assertThat(alphaAt(root, 50, 40)).isBetween(74, 79);
+    }
+
+    /**
+     * Teks solid: tepi huruf (cakupan sebagian) tetap berintensitas penuh, hanya bagian latarnya yang dipudarkan. Teks
+     * putih 50% di atas latar (60,60,60), jendela 30% (alpha 77): bagian teks 127,5 + latar 30 × 0,3 ≈ 137, alpha
+     * 77 + 178 × 0,5 ≈ 166. Cara lama (p × max(base, c)) hanya ≈ 79 per kanal.
+     */
+    @Test
+    void tepiHurufTidakMenipisSaatLatarDipudarkan() {
+        int bg = 0xFF3C3C3C;
+        int p = 0xFF000000 | 158 << 16 | 158 << 8 | 158; // putih 50% di atas latar 60
+        int out = TranslucentRootPane.fadeKeepingText(p, 128, bg & 0xFFFFFF, 77);
+        assertThat(out >>> 24).isBetween(164, 168);
+        assertThat(out >> 16 & 0xFF).isBetween(133, 141);
+
+        int none = TranslucentRootPane.fadeKeepingText(bg, 0, bg & 0xFFFFFF, 77); // latar tanpa teks: pudar ke 30%
+        assertThat(none >>> 24).isEqualTo(77);
+        assertThat(none >> 16 & 0xFF).isBetween(17, 19);
+
+        int full = TranslucentRootPane.fadeKeepingText(0xFFF0F0F0, 255, bg & 0xFFFFFF, 77); // tertutup penuh: utuh
+        assertThat(full).isEqualTo(0xFFF0F0F0);
+
+        // ClearType: selisih kanal merah dan biru di tepi huruf (90) tetap terasa setelah dipudarkan; cara lama ≈ 45
+        int clearType = 0xFF000000 | 200 << 16 | 158 << 8 | 110;
+        int ct = TranslucentRootPane.fadeKeepingText(clearType, 128, bg & 0xFFFFFF, 77);
+        assertThat((ct >> 16 & 0xFF) - (ct & 0xFF)).isGreaterThan(70);
+    }
+
+    /** Tema gelap: warna lapisan digelapkan supaya tidak abu-abu; tema terang memakai warna latar apa adanya. */
+    @Test
+    void warnaLapisanLebihGelapDiTemaGelap() {
+        var dark = TranslucentRootPane.tintColor(new java.awt.Color(60, 63, 65), true);
+        assertThat(dark).isEqualTo(new java.awt.Color(30, 32, 33, 115));
+        var light = TranslucentRootPane.tintColor(new java.awt.Color(240, 240, 240), false);
+        assertThat(light).isEqualTo(new java.awt.Color(240, 240, 240, 115));
+        assertThat(TranslucentRootPane.tintColor(null, true)).isEqualTo(new java.awt.Color(0, 0, 0, 115));
+    }
+
+    /**
+     * Saat bergetar, window transparan hanya menempel tangkapan isinya yang digeser (menggambar ulang seluruh window di
+     * tiap langkah terlalu lambat): isinya tidak digambar ulang, dan celah di sisi yang ditinggalkan tembus.
+     */
+    @Test
+    void getarMenggeserTangkapanTanpaMenggambarUlangIsi() throws Exception {
+        var root = rootWithSolidContent();
+        SwingUtilities.invokeAndWait(() -> root.setChromeOpacity(50));
+        var snapshot = new BufferedImage(100, 80, BufferedImage.TYPE_INT_ARGB_PRE);
+        var sg = snapshot.createGraphics();
+        sg.setColor(Color.BLUE);
+        sg.fillRect(0, 0, 100, 80);
+        sg.dispose();
+        assertThat(root.buffered()).isTrue();
+
+        SwingUtilities.invokeAndWait(() -> root.setShake(snapshot, 10));
+        var img = new BufferedImage(100, 80, BufferedImage.TYPE_INT_ARGB);
+        SwingUtilities.invokeAndWait(() -> {
+            var g = img.createGraphics();
+            root.paint(g);
+            g.dispose();
+        });
+        assertThat(img.getRGB(5, 40) >>> 24).as("celah kiri").isZero();
+        assertThat(img.getRGB(50, 40)).as("tangkapan, bukan isi merah").isEqualTo(Color.BLUE.getRGB());
+
+        SwingUtilities.invokeAndWait(() -> root.setShake(null, 0));
+        assertThat(alphaAt(root, 5, 40)).as("selesai: isi digambar lagi").isBetween(125, 130);
+    }
 }

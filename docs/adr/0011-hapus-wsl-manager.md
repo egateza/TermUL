@@ -33,6 +33,10 @@ Daftar distro untuk terminal lokal juga ikut bergantung pada WSL Manager: kalau 
 3. **Data lama tetap terbaca.** Semua store mengabaikan properti JSON yang tidak dikenal. Profil dengan `wslDistro`
    menjadi profil SSH biasa ke `localhost` (tetap bisa dipakai kalau sshd di distro dijalankan sendiri), dan
    `wslManager` di `config.json` diabaikan. Kedua field hilang dengan sendirinya saat file disimpan berikutnya.
+4. **Direktori awal distro WSL dalam bentuk Linux** (tambahan 2026-11-02). Untuk perintah `wsl.exe`, direktori kosong,
+   `~`, `~/...`, dan `/...` dikirim sebagai `wsl.exe --cd <dir>` (`LocalShells.build`). Sebelumnya `~` dipakai sebagai
+   working directory proses seperti shell lain, yaitu home Windows, sehingga distro mulai di `/mnt/c/Users/<user>`,
+   bukan `/home/<user>`. Path Windows (`D:\proyek`) tetap menjadi working directory, dan WSL menerjemahkannya sendiri.
 
 ## Konsekuensi
 - (+) Kode, UI, dan pengaturan lebih sedikit. Tidak ada proses `wsl.exe` yang ditahan atau di-polling di background.

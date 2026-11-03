@@ -2,7 +2,6 @@ package dev.egateza.termul.app.monitor;
 
 import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.core.config.AppConfig;
-import java.awt.Color;
 import java.awt.Dimension;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
@@ -52,10 +51,6 @@ public final class HostStatusPanel extends JPanel {
             return ALL;
         }
     }
-
-    /** Warna teks persen / MB saat tinggi dan kritis, sama dengan meter (prototipe). */
-    private static final Color TEXT_WARN = Meter.Palette.of(Level.WARN).fill();
-    private static final Color TEXT_CRITICAL = Meter.Palette.of(Level.CRITICAL).fill();
 
     private final Meter cpuGraph = new Meter(I18n.t("monitor.cpu"));
     private final Meter heapGraph = new Meter(I18n.t("monitor.heap"));
@@ -179,8 +174,7 @@ public final class HostStatusPanel extends JPanel {
         label.setText(text);
         label.setForeground(switch (level) {
             case NORMAL -> null;
-            case WARN -> TEXT_WARN;
-            case CRITICAL -> TEXT_CRITICAL;
+            case WARN, CRITICAL -> Meter.Palette.current(level).fill(); // terbaca di tema gelap maupun terang
         });
     }
 

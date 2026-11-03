@@ -31,6 +31,12 @@ class WindowBlurTest {
         }
     }
 
+    /** Tanpa window, blur tidak dianggap menyala: lapisan gelap tidak dipasang. */
+    @Test
+    void blurBelumMenyala() {
+        assertThat(WindowBlur.isOn(null)).isFalse();
+    }
+
     /** Blur hanya menyala selama window tembus: window solid tidak punya piksel untuk memperlihatkan blur. */
     @Test
     void blurHanyaSelamaTransparansiAktif() {

@@ -2,6 +2,7 @@ package dev.egateza.termul.app.ui;
 
 import java.awt.Component;
 import java.awt.Point;
+import java.util.function.IntConsumer;
 import javax.swing.JComponent;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
@@ -9,6 +10,7 @@ import javax.swing.Timer;
 /**
  * Efek layar bergetar singkat (mis. saat terminal menerima BEL). Yang digeser adalah layered pane window
  * (menu + konten), bukan window-nya, jadi tetap bekerja saat maximized dan tidak mengganggu window manager.
+ * Window transparan menggeser satu tangkapan isinya saja (lihat {@link TranslucentRootPane#setShake}).
  */
 public final class ShakeEffect {
 
@@ -46,18 +48,29 @@ public final class ShakeEffect {
         if (root == null || !root.isShowing()) {
             return;
         }
-        JComponent target = root.getLayeredPane();
-        Point origin = target.getLocation();
+        IntConsumer move;
+        Runnable finish;
+        if (root instanceof TranslucentRootPane translucent && translucent.buffered()) {
+            // menggambar ulang seluruh window di tiap langkah terlalu lambat: geser tangkapannya saja
+            var image = translucent.capture();
+            move = dx -> translucent.setShake(image, dx);
+            finish = () -> translucent.setShake(null, 0);
+        } else {
+            JComponent target = root.getLayeredPane();
+            Point origin = target.getLocation();
+            move = dx -> target.setLocation(origin.x + dx, origin.y);
+            finish = () -> target.setLocation(origin);
+        }
         step = 0;
         running = new Timer(STEP_DELAY_MS, null);
         running.addActionListener(e -> {
             if (++step >= STEPS) {
-                target.setLocation(origin);
+                finish.run();
                 running.stop();
                 running = null;
                 return;
             }
-            target.setLocation(origin.x + offset(step), origin.y);
+            move.accept(offset(step));
         });
         running.start();
     }

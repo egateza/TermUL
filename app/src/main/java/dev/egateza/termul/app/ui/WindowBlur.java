@@ -11,9 +11,11 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Blur dari Windows untuk apa pun yang ada di belakang window (desktop, window lain), terlihat di piksel window yang
- * tembus. Lewat {@code SetWindowCompositionAttribute} + {@code ACCENT_ENABLE_BLURBEHIND}: API Windows yang tidak
- * terdokumentasi tetapi dipakai luas, dan bekerja di window beralpha per piksel (layered) milik Java, tidak seperti
- * backdrop DWM (ADR 0008). Kekuatan blur diatur Windows. Hanya Windows; di OS lain tidak melakukan apa-apa. EDT.
+ * tembus (ADR 0008). Lewat {@code SetWindowCompositionAttribute} + {@code ACCENT_ENABLE_BLURBEHIND}: API Windows yang
+ * tidak terdokumentasi tetapi dipakai luas, dan bekerja di window beralpha per piksel (layered) milik Java. Animasi
+ * maximize/restore/Snap DWM tetap jalan: selama animasi latar tampil tembus tanpa blur, lalu blur muncul di tempat
+ * yang benar. Backdrop acrylic sistem ({@code DWMWA_SYSTEMBACKDROP_TYPE}) tidak dipakai, lihat ADR. Kekuatan blur diatur
+ * Windows. Hanya Windows; di OS lain tidak melakukan apa-apa. EDT.
  */
 final class WindowBlur {
 
@@ -24,20 +26,13 @@ final class WindowBlur {
     static final int ACCENT_ENABLE_BLURBEHIND = 3;
     private static final int ACCENT_POLICY_SIZE = 16; // AccentState, AccentFlags, GradientColor, AnimationId (int)
 
-    /** {@code DWMWA_TRANSITIONS_FORCEDISABLED}: tanpa animasi minimize/maximize/restore dari DWM. */
-    private static final int DWMWA_TRANSITIONS_FORCEDISABLED = 3;
-
     interface User32 extends Library {
         boolean SetWindowCompositionAttribute(Pointer hwnd, Pointer data);
     }
 
-    interface Dwm extends Library {
-        int DwmSetWindowAttribute(Pointer hwnd, int attribute, int[] value, int size);
-    }
-
     private static User32 user32; // EDT
-    private static Dwm dwm; // EDT
     private static boolean failed; // EDT
+    private static Window blurred; // window yang blurnya menyala, lihat isOn; EDT
 
     private WindowBlur() {
     }
@@ -45,6 +40,11 @@ final class WindowBlur {
     /** @return true kalau OS ini bisa memakai blur di belakang window */
     static boolean supported() {
         return Os.current().isWindows();
+    }
+
+    /** @return true kalau blur sedang menyala di {@code window} */
+    static boolean isOn(Window window) {
+        return window != null && window == blurred;
     }
 
     /**
@@ -60,20 +60,20 @@ final class WindowBlur {
         try {
             if (user32 == null) {
                 user32 = Native.load("user32", User32.class);
-                dwm = Native.load("dwmapi", Dwm.class);
             }
             Pointer hwnd = Native.getWindowPointer(window);
             if (hwnd == null) {
                 return false;
             }
-            // Animasi maximize/restore DWM menganimasikan gambar window tanpa blur: isi di belakang window tampil
-            // tajam sesaat, baru ter-blur setelah animasi selesai. Selama blur menyala, animasinya dimatikan.
-            dwm.DwmSetWindowAttribute(hwnd, DWMWA_TRANSITIONS_FORCEDISABLED, new int[] {on ? 1 : 0}, 4);
             try (var policy = new Memory(ACCENT_POLICY_SIZE); var data = new Memory(dataSize(Native.POINTER_SIZE))) {
                 policy.clear();
                 policy.setInt(0, on ? ACCENT_ENABLE_BLURBEHIND : ACCENT_DISABLED);
                 writeData(data, Native.POINTER_SIZE, policy);
-                return user32.SetWindowCompositionAttribute(hwnd, data);
+                boolean ok = user32.SetWindowCompositionAttribute(hwnd, data);
+                if (ok) {
+                    blurred = on ? window : null;
+                }
+                return ok;
             }
         } catch (UnsatisfiedLinkError | RuntimeException e) {
             failed = true; // mis. Windows lama tanpa fungsi ini: transparansi tetap jalan, hanya tanpa blur

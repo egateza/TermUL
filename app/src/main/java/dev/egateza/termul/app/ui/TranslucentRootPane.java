@@ -28,10 +28,20 @@ final class TranslucentRootPane extends JRootPane {
 
     private float chromeAlpha = 1f;
     private boolean solidText; // teks tidak ikut dipudarkan, lihat setSolidText; EDT
+    private boolean layered; // window beralpha per piksel, lihat setLayered; EDT
+    private boolean backdropTint; // lapisan gelap di atas blur Windows, lihat setBackdropTint; EDT
+    /** Kepekatan lapisan di atas blur: cukup untuk menghapus kesan terang/abu-abu, blur tetap terlihat. */
+    static final float TINT_ALPHA = 0.45f;
+    /** Pengali warna lapisan di tema gelap (0 = hitam, 1 = warna latar tema apa adanya). */
+    static final float DARK_TINT_SHADE = 0.5f;
     private BufferedImage buffer; // dipakai ulang antar-paint; EDT
+    private BufferedImage opaque; // gambar yang sama di buffer pekat, untuk teks ClearType; EDT
     private BufferedImage mask; // mask teks untuk solidText; EDT
     private BufferedImage faded; // hasil pudar dengan teks solid; EDT
+    private BufferedImage back; // gambar yang sama tanpa teks: latar di bawah teks, untuk solidText; EDT
     private BufferedImage cover; // tangkapan isi window selama berganti mode, lihat setCover; EDT
+    private BufferedImage shaken; // tangkapan isi window selama bergetar, lihat setShake; EDT
+    private int shakeDx; // EDT
 
     /** Teks tetap pekat walau latar bagian selain terminal dipudarkan (seperti Windows Terminal). */
     void setSolidText(boolean on) {
@@ -53,13 +63,28 @@ final class TranslucentRootPane extends JRootPane {
         }
     }
 
+    /**
+     * Window sedang beralpha per piksel. Selama itu semua gambar lewat buffer di sini, supaya teks tetap ClearType
+     * (lihat {@link #withClearType}), juga saat hanya latar terminal yang tembus.
+     */
+    void setLayered(boolean on) {
+        if (on != layered) {
+            layered = on;
+            if (!on && !fading()) {
+                buffer = null;
+                opaque = null;
+            }
+            repaint();
+        }
+    }
+
     private boolean fading() {
         return chromeAlpha < 1f;
     }
 
     @Override
     protected boolean isPaintingOrigin() {
-        return fading() || super.isPaintingOrigin();
+        return fading() || layered || super.isPaintingOrigin();
     }
 
     /**
@@ -89,8 +114,38 @@ final class TranslucentRootPane extends JRootPane {
         cover = image;
     }
 
+    /** Semua gambar lewat buffer (pudar atau beralpha per piksel): satu paint penuh jauh lebih lambat dari 16 ms. */
+    boolean buffered() {
+        return fading() || layered;
+    }
+
+    /**
+     * Selama {@code image} tidak null, paint hanya menempel gambar itu digeser {@code dx} px, tanpa menggambar isi
+     * window. Dipakai {@link ShakeEffect} saat {@link #buffered()}: menggambar ulang seluruh window di setiap langkah
+     * getar terlalu lambat, sehingga getarannya patah-patah. Celah di sisi yang ditinggalkan diisi lapisan gelap (atau
+     * tembus).
+     */
+    void setShake(BufferedImage image, int dx) {
+        shaken = image;
+        shakeDx = dx;
+        repaint();
+    }
+
     @Override
     public void paint(Graphics g) {
+        if (shaken != null) {
+            var out = (Graphics2D) g.create();
+            try {
+                out.setComposite(AlphaComposite.Src);
+                java.awt.Color tint = backdropTint();
+                out.setColor(tint != null ? tint : new java.awt.Color(0, true));
+                out.fillRect(0, 0, getWidth(), getHeight());
+                out.drawImage(shaken, shakeDx, 0, getWidth(), getHeight(), null);
+            } finally {
+                out.dispose();
+            }
+            return;
+        }
         if (cover != null) {
             var out = (Graphics2D) g.create();
             try {
@@ -101,7 +156,7 @@ final class TranslucentRootPane extends JRootPane {
             }
             return;
         }
-        if (!fading()) {
+        if (!fading() && !layered) {
             super.paint(g);
             return;
         }
@@ -142,6 +197,8 @@ final class TranslucentRootPane extends JRootPane {
         } finally {
             bg.dispose();
         }
+        List<Rectangle> solid = solidAreas();
+        withClearType(img, w, h, bx, by, sx, sy, painted, solid);
 
         var out = (Graphics2D) g.create();
         try {
@@ -149,22 +206,85 @@ final class TranslucentRootPane extends JRootPane {
             out.setTransform(AffineTransform.getTranslateInstance(tx.getTranslateX(), tx.getTranslateY()));
             Rectangle device = deviceBounds(clip, sx, sy);
             out.setClip(device);
+            java.awt.Color tint = backdropTint();
+            // dengan lapisan gelap: isi ditumpuk di atasnya (SrcOver); tanpa: mengganti piksel (Src)
+            AlphaComposite place = tint != null ? AlphaComposite.SrcOver : AlphaComposite.Src;
+            fillTint(out, tint, device);
             if (solidText) {
-                out.setComposite(AlphaComposite.Src);
+                out.setComposite(place);
                 blit(out, fadeKeepingText(img, w, h, bx, by, sx, sy, painted), device, bx, by);
             } else {
-                out.setComposite(AlphaComposite.Src.derive(chromeAlpha));
+                out.setComposite(place.derive(chromeAlpha));
                 blit(out, img, device, bx, by);
             }
-            out.setComposite(AlphaComposite.Src); // terminal & popup: alpha apa adanya (terminal mengatur sendiri)
-            for (Rectangle area : solidAreas()) {
+            for (Rectangle area : solid) { // terminal & popup: alpha apa adanya (terminal mengatur sendiri)
                 Rectangle part = area.intersection(clip);
                 if (!part.isEmpty()) {
-                    blit(out, img, deviceBounds(part, sx, sy).intersection(device), bx, by);
+                    Rectangle d = deviceBounds(part, sx, sy).intersection(device);
+                    fillTint(out, tint, d);
+                    out.setComposite(place);
+                    blit(out, img, d, bx, by);
                 }
             }
         } finally {
             out.dispose();
+        }
+    }
+
+    /**
+     * Ganti warna {@code img} dengan gambar yang sama di buffer pekat, supaya teks tetap ClearType. Java hanya menggambar
+     * teks LCD (subpiksel) ke permukaan pekat; di buffer beralpha teks jatuh ke antialiasing abu-abu dan tampak
+     * berpiksel. Alpha tetap dari {@code img}:
+     * <ul>
+     *   <li>bagian selain terminal: piksel yang pekat di {@code img} memakai warna buffer pekat apa adanya;</li>
+     *   <li>terminal dan popup ({@code solid}): latarnya digambar dengan {@code AlphaComposite.Src} beralpha, yang di
+     *       buffer pekat tersimpan sebagai warna penuh, jadi warnanya dikalikan alpha {@code img} (premultiplied).</li>
+     * </ul>
+     */
+    private void withClearType(BufferedImage img, int w, int h, int bx, int by, double sx, double sy,
+                               Rectangle painted, List<Rectangle> solid) {
+        opaque = sized(opaque, w, h, BufferedImage.TYPE_INT_RGB);
+        var og = opaque.createGraphics();
+        try {
+            og.setComposite(AlphaComposite.Src);
+            og.setColor(java.awt.Color.BLACK);
+            og.fillRect(0, 0, w, h);
+            og.setComposite(AlphaComposite.SrcOver);
+            og.translate(-bx, -by);
+            og.scale(sx, sy);
+            og.setClip(painted);
+            super.paint(og);
+        } finally {
+            og.dispose();
+        }
+        int[] dst = ((DataBufferInt) img.getRaster().getDataBuffer()).getData();
+        int[] rgb = ((DataBufferInt) opaque.getRaster().getDataBuffer()).getData();
+        int dstStride = img.getWidth();
+        int rgbStride = opaque.getWidth();
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                int i = y * dstStride + x;
+                if (dst[i] >>> 24 == 0xFF) {
+                    dst[i] = 0xFF000000 | rgb[y * rgbStride + x];
+                }
+            }
+        }
+        var bufferBounds = new Rectangle(0, 0, w, h);
+        for (Rectangle area : solid) {
+            Rectangle d = deviceBounds(area, sx, sy);
+            d.translate(-bx, -by);
+            d = d.intersection(bufferBounds);
+            for (int y = d.y; y < d.y + d.height; y++) {
+                for (int x = d.x; x < d.x + d.width; x++) {
+                    int i = y * dstStride + x;
+                    int a = dst[i] >>> 24;
+                    if (a != 0xFF) {
+                        int c = rgb[y * rgbStride + x];
+                        dst[i] = a << 24 | scale(c >> 16 & 0xFF, a) << 16 | scale(c >> 8 & 0xFF, a) << 8
+                                | scale(c & 0xFF, a);
+                    }
+                }
+            }
         }
     }
 
@@ -188,23 +308,65 @@ final class TranslucentRootPane extends JRootPane {
         } finally {
             mg.dispose();
         }
+        back = sized(back, w, h, BufferedImage.TYPE_INT_RGB);
+        var gb = back.createGraphics();
+        try {
+            gb.setComposite(AlphaComposite.Src);
+            gb.setColor(java.awt.Color.BLACK);
+            gb.fillRect(0, 0, w, h);
+            gb.setComposite(AlphaComposite.SrcOver);
+            gb.translate(-bx, -by);
+            gb.scale(sx, sy);
+            gb.setClip(painted);
+            super.paint(TextMaskGraphics2D.withoutText(gb));
+        } finally {
+            gb.dispose();
+        }
         faded = sized(faded, w, h);
         int[] src = ((DataBufferInt) img.getRaster().getDataBuffer()).getData();
         int[] text = ((DataBufferInt) mask.getRaster().getDataBuffer()).getData();
+        int[] under = ((DataBufferInt) back.getRaster().getDataBuffer()).getData();
         int[] dst = ((DataBufferInt) faded.getRaster().getDataBuffer()).getData();
         int srcStride = img.getWidth();
         int textStride = mask.getWidth();
+        int backStride = back.getWidth();
         int dstStride = faded.getWidth();
         int base = Math.round(chromeAlpha * 255);
         for (int y = 0; y < h; y++) {
             for (int x = 0; x < w; x++) {
-                int p = src[y * srcStride + x];
-                int k = Math.max(base, text[y * textStride + x] >>> 24); // 0..255
-                dst[y * dstStride + x] = scale(p >>> 24, k) << 24 | scale(p >> 16 & 0xFF, k) << 16
-                        | scale(p >> 8 & 0xFF, k) << 8 | scale(p & 0xFF, k);
+                dst[y * dstStride + x] = fadeKeepingText(src[y * srcStride + x], text[y * textStride + x] >>> 24,
+                        under[y * backStride + x], base);
             }
         }
         return faded;
+    }
+
+    /**
+     * Satu piksel (premultiplied) yang dipudarkan ke {@code base} kecuali bagian teksnya. Di piksel pekat
+     * {@code p = teks × c + latar × (1 − c)}, dengan c = cakupan teks: yang dipudarkan hanya bagian latar, jadi
+     * {@code p − (1 − base) × (1 − c) × latar}, alpha {@code base + (1 − base) × c}. Warna subpiksel ClearType di tepi
+     * huruf tetap, dan tepi huruf tidak ikut menipis (cara lama {@code p × max(base, c)} menyisakan teks c² di tepi,
+     * sehingga huruf tampak tipis dan bergerigi). Piksel yang sudah tembus (bukan latar pekat) memakai cara lama.
+     *
+     * @param c     cakupan teks 0..255
+     * @param under warna latar tanpa teks (RGB)
+     * @param base  alpha bagian yang dipudarkan 0..255
+     */
+    static int fadeKeepingText(int p, int c, int under, int base) {
+        if (c == 0 || p >>> 24 != 0xFF) {
+            int k = Math.max(base, c);
+            return scale(p >>> 24, k) << 24 | scale(p >> 16 & 0xFF, k) << 16 | scale(p >> 8 & 0xFF, k) << 8
+                    | scale(p & 0xFF, k);
+        }
+        int a = base + scale(255 - base, c);
+        int f = scale(255 - base, 255 - c); // bagian latar yang dibuang
+        return a << 24 | keep(p >> 16 & 0xFF, under >> 16 & 0xFF, f, a) << 16
+                | keep(p >> 8 & 0xFF, under >> 8 & 0xFF, f, a) << 8 | keep(p & 0xFF, under & 0xFF, f, a);
+    }
+
+    /** {@code v − latar × f / 255}, dibatasi ke 0..a (premultiplied). */
+    private static int keep(int v, int under, int f, int a) {
+        return Math.clamp(v - scale(under, f), 0, a);
     }
 
     /** {@code v × k / 255}, dibulatkan (piksel premultiplied). */
@@ -213,12 +375,57 @@ final class TranslucentRootPane extends JRootPane {
     }
 
     private static BufferedImage sized(BufferedImage img, int w, int h) {
+        return sized(img, w, h, BufferedImage.TYPE_INT_ARGB_PRE);
+    }
+
+    private static BufferedImage sized(BufferedImage img, int w, int h, int type) {
         if (img != null && img.getWidth() >= w && img.getHeight() >= h) {
             return img;
         }
         int bw = Math.max(w, img == null ? 0 : img.getWidth());
         int bh = Math.max(h, img == null ? 0 : img.getHeight());
-        return new BufferedImage(bw, bh, BufferedImage.TYPE_INT_ARGB_PRE);
+        return new BufferedImage(bw, bh, type);
+    }
+
+    /**
+     * Lapisan warna latar tema setengah tembus di bawah isi window, selama blur Windows menyala. Tanpa lapisan ini
+     * bagian yang tembus tampak terang atau abu-abu (makin terasa saat slider Jendela rendah); lapisan ini
+     * menggelapkannya tanpa menutup blur di belakangnya.
+     */
+    void setBackdropTint(boolean on) {
+        if (on != backdropTint) {
+            backdropTint = on;
+            repaint();
+        }
+    }
+
+    /** @return warna lapisan di bawah isi window, atau null kalau tidak dipakai */
+    private java.awt.Color backdropTint() {
+        if (!backdropTint) {
+            return null;
+        }
+        return tintColor(javax.swing.UIManager.getColor("Panel.background"), com.formdev.flatlaf.FlatLaf.isLafDark());
+    }
+
+    /**
+     * Warna latar tema dengan alpha {@link #TINT_ALPHA}. Tema gelap: warnanya juga digelapkan ({@link #DARK_TINT_SHADE}),
+     * karena latar tema gelap biasanya abu-abu tua, bukan hitam, sehingga lapisannya sendiri masih tampak abu-abu.
+     */
+    static java.awt.Color tintColor(java.awt.Color base, boolean dark) {
+        if (base == null) {
+            base = java.awt.Color.BLACK;
+        }
+        float k = dark ? DARK_TINT_SHADE : 1f;
+        return new java.awt.Color(Math.round(base.getRed() * k), Math.round(base.getGreen() * k),
+                Math.round(base.getBlue() * k), Math.round(TINT_ALPHA * 255));
+    }
+
+    private static void fillTint(Graphics2D out, java.awt.Color tint, Rectangle d) {
+        if (tint != null && !d.isEmpty()) {
+            out.setComposite(AlphaComposite.Src);
+            out.setColor(tint);
+            out.fill(d);
+        }
     }
 
     /** Piksel perangkat (relatif ke root pane) yang tersentuh {@code r}: dibulatkan keluar. */

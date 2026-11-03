@@ -128,6 +128,7 @@ public final class HostTreePanel extends JPanel {
 
         search.putClientProperty("JTextField.placeholderText", I18n.t("tree.search.placeholder"));
         search.putClientProperty("JTextField.showClearButton", true);
+        dev.egateza.termul.app.ui.TextCentering.install(search);
         search.getDocument().addDocumentListener(new DocumentListener() {
             @Override
             public void insertUpdate(DocumentEvent e) {

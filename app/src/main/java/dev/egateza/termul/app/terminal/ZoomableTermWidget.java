@@ -426,13 +426,24 @@ public final class ZoomableTermWidget extends JediTermWidget {
          * Bug JediTerm 3.76: "Clear Buffer" dengan baris terakhir dipertahankan memasang cursor Y terminal ke 0,
          * padahal 1-based. Akibatnya akses baris cursor jadi {@code getLine(-1)} ("Attempt to get line out of
          * bounds: -1 < 0"). Baris yang dipertahankan ada di baris pertama layar, jadi cursor dikembalikan ke Y=1.
+         *
+         * <p>JediTerm juga mengubah layar ({@code clearScreenBuffer}, {@code addLine}) dari EDT tanpa lock buffer,
+         * sementara thread emulator menulis ke storage yang sama. Storage-nya {@code ArrayDeque} yang tidak thread-safe:
+         * bisa rusak (slot null), lalu setiap paint gagal dengan NPE di {@code LinesStorage.processLines}. Jadi
+         * seluruhnya dijalankan sambil memegang lock (reentrant; {@code clearHistory} mengambilnya lagi).
          */
         @Override
         protected void clearBuffer(boolean keepLastLine) {
-            super.clearBuffer(keepLastLine);
-            var c = coords;
-            if (c != null && c.getY() < 1) {
-                c.setY(1);
+            var buffer = getTerminalTextBuffer();
+            buffer.lock();
+            try {
+                super.clearBuffer(keepLastLine);
+                var c = coords;
+                if (c != null && c.getY() < 1) {
+                    c.setY(1);
+                }
+            } finally {
+                buffer.unlock();
             }
         }
 
@@ -486,6 +497,18 @@ public final class ZoomableTermWidget extends JediTermWidget {
                     && wordAnchor != null) {
                 requestFocusInWindow();
                 e.consume(); // kata sudah dipilih saat ditekan; JediTerm akan memilih ulang sampai spasi
+                return;
+            }
+            if (e.getID() == MouseEvent.MOUSE_CLICKED && e.getClickCount() >= 2 && leftLocal) {
+                // pilih kata/baris JediTerm membaca baris lewat getLine tanpa lock; getLine bisa menambah baris ke
+                // storage layar (lihat clearBuffer), jadi dijalankan sambil memegang lock buffer
+                var buffer = getTerminalTextBuffer();
+                buffer.lock();
+                try {
+                    super.processMouseEvent(e);
+                } finally {
+                    buffer.unlock();
+                }
                 return;
             }
             super.processMouseEvent(e);

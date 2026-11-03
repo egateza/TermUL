@@ -31,22 +31,38 @@ import java.util.Objects;
  * warna putih pekat; semua gambar lain (latar, garis, ikon, gambar) dibuang, sedangkan state (transform, clip, font,
  * hint) diteruskan. Hasilnya mask teks: alpha tiap piksel = seberapa tertutup teks. Dipakai
  * {@link TranslucentRootPane} supaya teks tetap solid saat bagian window lain dipudarkan.
+ *
+ * <p>Kebalikannya, {@link #withoutText}: semua digambar kecuali teks, untuk latar di bawah teks.
  */
 final class TextMaskGraphics2D extends Graphics2D {
 
     private final Graphics2D delegate;
+    private final boolean textOnly; // true: hanya teks (putih); false: semua kecuali teks
 
     TextMaskGraphics2D(Graphics2D delegate) {
+        this(delegate, true);
+    }
+
+    private TextMaskGraphics2D(Graphics2D delegate, boolean textOnly) {
         this.delegate = Objects.requireNonNull(delegate);
+        this.textOnly = textOnly;
+    }
+
+    /** @return pembungkus yang menggambar semuanya apa adanya kecuali teks */
+    static TextMaskGraphics2D withoutText(Graphics2D delegate) {
+        return new TextMaskGraphics2D(delegate, false);
     }
 
     @Override
     public void fillRect(int x, int y, int width, int height) {
+        if (!textOnly) {
+            delegate.fillRect(x, y, width, height);
+        }
     }
 
     @Override
     public Graphics create() {
-        return new TextMaskGraphics2D((Graphics2D) delegate.create());
+        return new TextMaskGraphics2D((Graphics2D) delegate.create(), textOnly);
     }
 
     @Override
@@ -59,31 +75,46 @@ final class TextMaskGraphics2D extends Graphics2D {
         drawString(new String(data, offset, length, java.nio.charset.StandardCharsets.ISO_8859_1), x, y);
     }
 
-    // --- teks digambar putih, gambar lain dibuang, state diteruskan ---
+    // --- teks digambar putih, gambar lain dibuang (atau sebaliknya: withoutText), state diteruskan ---
 
     @Override
     public void draw(Shape s) {
+        if (!textOnly) {
+            delegate.draw(s);
+        }
     }
 
     @Override
     public boolean drawImage(Image img, AffineTransform xform, ImageObserver obs) {
-        return true;
+        return textOnly || delegate.drawImage(img, xform, obs);
     }
 
     @Override
     public void drawImage(BufferedImage img, BufferedImageOp op, int x, int y) {
+        if (!textOnly) {
+            delegate.drawImage(img, op, x, y);
+        }
     }
 
     @Override
     public void drawRenderedImage(RenderedImage img, AffineTransform xform) {
+        if (!textOnly) {
+            delegate.drawRenderedImage(img, xform);
+        }
     }
 
     @Override
     public void drawRenderableImage(RenderableImage img, AffineTransform xform) {
+        if (!textOnly) {
+            delegate.drawRenderableImage(img, xform);
+        }
     }
 
     @Override
     public void drawString(String str, int x, int y) {
+        if (!textOnly) {
+            return;
+        }
         Paint paint = delegate.getPaint();
         Composite composite = delegate.getComposite();
         delegate.setPaint(Color.WHITE);
@@ -95,6 +126,9 @@ final class TextMaskGraphics2D extends Graphics2D {
 
     @Override
     public void drawString(String str, float x, float y) {
+        if (!textOnly) {
+            return;
+        }
         Paint paint = delegate.getPaint();
         Composite composite = delegate.getComposite();
         delegate.setPaint(Color.WHITE);
@@ -106,6 +140,9 @@ final class TextMaskGraphics2D extends Graphics2D {
 
     @Override
     public void drawString(AttributedCharacterIterator iterator, int x, int y) {
+        if (!textOnly) {
+            return;
+        }
         Paint paint = delegate.getPaint();
         Composite composite = delegate.getComposite();
         delegate.setPaint(Color.WHITE);
@@ -117,6 +154,9 @@ final class TextMaskGraphics2D extends Graphics2D {
 
     @Override
     public void drawString(AttributedCharacterIterator iterator, float x, float y) {
+        if (!textOnly) {
+            return;
+        }
         Paint paint = delegate.getPaint();
         Composite composite = delegate.getComposite();
         delegate.setPaint(Color.WHITE);
@@ -128,6 +168,9 @@ final class TextMaskGraphics2D extends Graphics2D {
 
     @Override
     public void drawGlyphVector(GlyphVector g, float x, float y) {
+        if (!textOnly) {
+            return;
+        }
         Paint paint = delegate.getPaint();
         Composite composite = delegate.getComposite();
         delegate.setPaint(Color.WHITE);
@@ -139,6 +182,9 @@ final class TextMaskGraphics2D extends Graphics2D {
 
     @Override
     public void fill(Shape s) {
+        if (!textOnly) {
+            delegate.fill(s);
+        }
     }
 
     @Override
@@ -333,82 +379,118 @@ final class TextMaskGraphics2D extends Graphics2D {
 
     @Override
     public void copyArea(int x, int y, int width, int height, int dx, int dy) {
+        if (!textOnly) {
+            delegate.copyArea(x, y, width, height, dx, dy);
+        }
     }
 
     @Override
     public void drawLine(int x1, int y1, int x2, int y2) {
+        if (!textOnly) {
+            delegate.drawLine(x1, y1, x2, y2);
+        }
     }
 
     @Override
     public void clearRect(int x, int y, int width, int height) {
+        if (!textOnly) {
+            delegate.clearRect(x, y, width, height);
+        }
     }
 
     @Override
     public void drawRoundRect(int x, int y, int width, int height, int arcWidth, int arcHeight) {
+        if (!textOnly) {
+            delegate.drawRoundRect(x, y, width, height, arcWidth, arcHeight);
+        }
     }
 
     @Override
     public void fillRoundRect(int x, int y, int width, int height, int arcWidth, int arcHeight) {
+        if (!textOnly) {
+            delegate.fillRoundRect(x, y, width, height, arcWidth, arcHeight);
+        }
     }
 
     @Override
     public void drawOval(int x, int y, int width, int height) {
+        if (!textOnly) {
+            delegate.drawOval(x, y, width, height);
+        }
     }
 
     @Override
     public void fillOval(int x, int y, int width, int height) {
+        if (!textOnly) {
+            delegate.fillOval(x, y, width, height);
+        }
     }
 
     @Override
     public void drawArc(int x, int y, int width, int height, int startAngle, int arcAngle) {
+        if (!textOnly) {
+            delegate.drawArc(x, y, width, height, startAngle, arcAngle);
+        }
     }
 
     @Override
     public void fillArc(int x, int y, int width, int height, int startAngle, int arcAngle) {
+        if (!textOnly) {
+            delegate.fillArc(x, y, width, height, startAngle, arcAngle);
+        }
     }
 
     @Override
     public void drawPolyline(int[] xPoints, int[] yPoints, int nPoints) {
+        if (!textOnly) {
+            delegate.drawPolyline(xPoints, yPoints, nPoints);
+        }
     }
 
     @Override
     public void drawPolygon(int[] xPoints, int[] yPoints, int nPoints) {
+        if (!textOnly) {
+            delegate.drawPolygon(xPoints, yPoints, nPoints);
+        }
     }
 
     @Override
     public void fillPolygon(int[] xPoints, int[] yPoints, int nPoints) {
+        if (!textOnly) {
+            delegate.fillPolygon(xPoints, yPoints, nPoints);
+        }
     }
 
     @Override
     public boolean drawImage(Image img, int x, int y, ImageObserver observer) {
-        return true;
+        return textOnly || delegate.drawImage(img, x, y, observer);
     }
 
     @Override
     public boolean drawImage(Image img, int x, int y, int width, int height, ImageObserver observer) {
-        return true;
+        return textOnly || delegate.drawImage(img, x, y, width, height, observer);
     }
 
     @Override
     public boolean drawImage(Image img, int x, int y, Color bgcolor, ImageObserver observer) {
-        return true;
+        return textOnly || delegate.drawImage(img, x, y, bgcolor, observer);
     }
 
     @Override
     public boolean drawImage(Image img, int x, int y, int width, int height, Color bgcolor, ImageObserver observer) {
-        return true;
+        return textOnly || delegate.drawImage(img, x, y, width, height, bgcolor, observer);
     }
 
     @Override
     public boolean drawImage(Image img, int dx1, int dy1, int dx2, int dy2, int sx1, int sy1, int sx2, int sy2,
                              ImageObserver observer) {
-        return true;
+        return textOnly || delegate.drawImage(img, dx1, dy1, dx2, dy2, sx1, sy1, sx2, sy2, observer);
     }
 
     @Override
     public boolean drawImage(Image img, int dx1, int dy1, int dx2, int dy2, int sx1, int sy1, int sx2, int sy2,
                              Color bgcolor, ImageObserver observer) {
-        return true;
+        return textOnly || delegate.drawImage(img, dx1, dy1, dx2, dy2, sx1, sy1, sx2, sy2, bgcolor, observer);
     }
 
     @Override

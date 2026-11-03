@@ -306,7 +306,6 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                     startConfig.windowBlur());
             WindowOpacity.setSolidText(this, startConfig.windowSolidText());
         }
-
         // pindah ke monitor dengan scaling lain: lebar teks ikut berubah (hinting per skala), tapi ukuran logis window
         // tetap sehingga Swing tidak menyusun ulang; label yang tadinya pas jadi terpotong ("16:…"). Bisa datang dari
         // thread toolkit. Di EDT langsung, supaya tidak ada gambar sebagian di antaranya (lihat relayoutForScreen).

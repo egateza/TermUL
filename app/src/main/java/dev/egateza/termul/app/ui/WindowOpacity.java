@@ -24,7 +24,6 @@ final class WindowOpacity {
     private static Color solidBackground; // latar window sebelum dibuat tembus; EDT
     private static Boolean dynamicLayout; // nilai awal Toolkit.isDynamicLayoutActive(); EDT
     private static boolean blurActive; // blur di belakang window yang diminta terakhir (sudah memperhitungkan mode); EDT
-
     private WindowOpacity() {
     }
 
@@ -92,7 +91,9 @@ final class WindowOpacity {
         if (wantBlur) {
             WindowBlur.set(frame, true); // setelah window beralpha per piksel: blur terlihat di piksel yang tembus
         }
+        updateTint(frame, root);
         root.setChromeOpacity(translucent ? window : 100);
+        root.setLayered(translucent);
         TerminalTranslucency.setPercent(translucent ? terminal : 100);
         // window beralpha per piksel digambar ulang penuh tiap langkah resize: tata letak cukup disusun setelah selesai
         var toolkit = Toolkit.getDefaultToolkit();
@@ -116,6 +117,14 @@ final class WindowOpacity {
         if (blurActive) {
             WindowBlur.set(frame, true);
         }
+        if (frame.getRootPane() instanceof TranslucentRootPane root) {
+            updateTint(frame, root);
+        }
+    }
+
+    /** Lapisan gelap di bawah isi window hanya selama blur menyala, supaya blur tidak tampak terang/abu-abu. */
+    private static void updateTint(JFrame frame, TranslucentRootPane root) {
+        root.setBackdropTint(blurActive && WindowBlur.isOn(frame));
     }
 
     /**

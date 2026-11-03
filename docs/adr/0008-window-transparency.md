@@ -52,9 +52,22 @@ Batasan yang ditemukan lewat prototipe:
      `ACCENT_ENABLE_BLURBEHIND`. Berbeda dengan backdrop DWM (batasan 3), accent ini *terbukti* mem-blur isi di belakang
      piksel tembus window layered milik Java (prototipe dengan screenshot `Robot`, teks di depan tetap tajam). Hanya
      menyala selama transparansi aktif; kekuatan blur diatur Windows. `ACCENT_ENABLE_ACRYLICBLURBEHIND` tidak dipakai
-     karena dikenal patah-patah saat window diseret. Selama blur menyala, animasi transisi DWM dimatikan
-     (`DWMWA_TRANSITIONS_FORCEDISABLED`): animasi maximize/restore menggambar window tanpa blur, sehingga isi di
-     belakangnya tampil tajam sekitar 200–300 ms sebelum ter-blur. Maximize/restore jadi langsung, tanpa animasi.
+     karena dikenal patah-patah saat window diseret. Animasi maximize/restore/Snap DWM tetap menyala: selama animasi
+     window tampil tembus tanpa blur dengan latar yang benar, lalu blur muncul di tempat barunya (diukur, 2026-11-03).
+     Selama blur menyala, `TranslucentRootPane` menaruh lapisan warna latar tema (alpha 45%; di tema gelap warnanya
+     dikali 0,5) di bawah isi window, supaya bagian yang tembus tidak tampak terang/abu-abu; blur tetap terlihat.
+   - **Backdrop sistem acrylic dicoba lalu ditinggalkan (2026-11-02 s.d. 11-03).**
+     `DWMWA_SYSTEMBACKDROP_TYPE = DWMSBT_TRANSIENTWINDOW` (Windows 11 22H2+) juga terlihat di piksel tembus window
+     layered, tetapi (semua diukur dengan tangkapan layar beruntun):
+     - selama animasi maximize/restore/Snap (~250 ms) DWM menampilkan potret backdrop dari ukuran/posisi lama yang
+       diregangkan: blur salah tempat, terasa kaku seperti gambar tersisa;
+     - mematikan animasi (`DWMWA_TRANSITIONS_FORCEDISABLED`) menghilangkan sisa gambar, tetapi window melompat dan
+       berkedip (ditolak user);
+     - melepas acrylic sebelum animasi lalu memasangnya lagi menyisakan satu frame (5–20 ms) potret lama saat acrylic
+       dipasang kembali di posisi baru: kedip saat dock/undock;
+     - acrylic yang dinyalakan selagi window tidak aktif (pratinjau slider dari dialog, mulai dari 100%) tampil
+       abu-abu rata sampai maximize/restore; selama window tidak aktif backdrop sistem juga menampilkan warna solid.
+     Accent tidak punya satu pun masalah ini, jadi blur kembali hanya memakai accent.
    - **Blur gambar latar terminal** (`imageBlur` di palet tema, 0..100): dihitung di Java saat gambar disesuaikan ke
      ukuran panel, jadi jalan di semua OS dan tanpa transparansi.
 
@@ -79,6 +92,21 @@ Batasan yang ditemukan lewat prototipe:
     `TextMaskGraphics2D` (hanya `drawString`/`drawGlyphVector`, putih pekat) menjadi mask, lalu alpha tiap piksel =
     max(alpha jendela, cakupan teks). Ikon, garis, dan teks yang sudah berupa gambar tetap ikut pudar. Biaya: area
     yang digambar ulang digambar dua kali selama opsi aktif.
+    Perbaikan (2026-11-03): rumus `warna × max(alpha jendela, cakupan)` ikut memudarkan bagian teks di tepi huruf
+    (cakupan 50% hanya menyisakan 25% teks), sehingga huruf tampak tipis dan bergerigi dibanding saat solid. Sekarang
+    area itu digambar sekali lagi tanpa teks (`TextMaskGraphics2D.withoutText`) sebagai latar di bawah teks, dan yang
+    dipudarkan hanya bagian latar: `p − (1 − alpha) × (1 − cakupan) × latar`, alpha `alpha + (1 − alpha) × cakupan`.
+    Warna subpiksel ClearType di tepi huruf tetap (diukur: piksel ClearType 665 → 747, solid 948). Biaya: digambar
+    sekali lagi selama opsi aktif dan bagian selain terminal dipudarkan.
+
+11. **Teks tetap ClearType saat transparan (tambahan 2026-11-02).** Java hanya menggambar teks LCD (subpiksel) ke
+    permukaan pekat; di buffer beralpha teks jatuh ke antialiasing abu-abu dan tampak berpiksel dibanding saat solid.
+    Selama window beralpha per piksel, `TranslucentRootPane` selalu menjadi painting origin dan menggambar area yang
+    sama dua kali: ke buffer beralpha (sumber alpha) dan ke buffer pekat berlatar hitam (sumber warna, teks ClearType).
+    Piksel pekat di bagian selain terminal memakai warna buffer pekat apa adanya; di terminal dan popup, warnanya
+    dikalikan alpha (latar terminal digambar dengan `Src` beralpha, yang di buffer pekat tersimpan sebagai warna penuh).
+    Teks terminal sendiri tetap abu-abu, karena JediTerm selalu memakai antialiasing abu-abu, juga saat solid.
+    Biaya: setiap gambar ulang dikerjakan dua kali selama transparan aktif.
 
 ## Konsekuensi
 - (+) Dua slider transparansi, berlaku langsung tanpa restart dan tanpa kedipan, dengan Snap dan animasi docking tetap
@@ -87,7 +115,9 @@ Batasan yang ditemukan lewat prototipe:
 - (−) Window utama di Windows bergantung pada subclass window procedure lewat JNA. Kalau JNA gagal dimuat, window tetap
   jalan sebagai window tanpa dekorasi biasa (tanpa Snap), dan error dicatat di log.
 - (−) Saat transparansi aktif, window *layered*: resize dan docking kurang mulus (seluruh window digambar ulang lewat CPU),
-  dan CPU sedikit lebih tinggi saat output terminal deras.
+  dan CPU sedikit lebih tinggi saat output terminal deras. Karena itu getar layar (BEL) di window transparan menggeser
+  satu tangkapan isi window, bukan menggambar ulang seluruh window di tiap langkah (diukur 28–41 ms per langkah,
+  sementara timer getar 16 ms, sehingga getarannya patah-patah; dengan tangkapan 2–7 ms).
 - (−) Bagian title bar yang menerima mouse dikenali dari tipe dan listener-nya. Komponen baru di title bar yang bisa diklik
   tetapi tanpa listener perlu client property `JComponent.titleBarCaption = false`.
 - (−) macOS belum diuji. Multi-monitor beda DPI di Windows (100% ↔ 125%) diuji 2026-11-02 setelah keputusan 9.

@@ -132,4 +132,27 @@ class LocalShellsTest {
 
         assertThat(shell.environment()).containsEntry("PATH", "C:\\bin").doesNotContainKey("Path");
     }
+
+    /** Distro WSL: ~ adalah home Linux (lewat --cd), bukan home Windows yang terbuka sebagai /mnt/c/Users/... */
+    @Test
+    void wslMemakaiDirektoriLinuxLewatCd() {
+        var wsl = List.of("C:\\Windows\\System32\\wsl.exe", "-d", "Ubuntu");
+        assertThat(LocalShells.build(wsl, "~", Map.of(), Os.WINDOWS, Map.of(), HOME).command())
+                .containsExactly("C:\\Windows\\System32\\wsl.exe", "--cd", "~", "-d", "Ubuntu");
+        assertThat(LocalShells.build(wsl, "", Map.of(), Os.WINDOWS, Map.of(), HOME).command())
+                .containsSequence("--cd", "~");
+        assertThat(LocalShells.build(wsl, "~/proyek", Map.of(), Os.WINDOWS, Map.of(), HOME).command())
+                .containsSequence("--cd", "~/proyek");
+        assertThat(LocalShells.build(wsl, "/var/log", Map.of(), Os.WINDOWS, Map.of(), HOME).command())
+                .containsSequence("--cd", "/var/log");
+
+        var windowsPath = LocalShells.build(wsl, "D:\\proyek", Map.of(), Os.WINDOWS, Map.of(), HOME);
+        assertThat(windowsPath.command()).isEqualTo(wsl);
+        assertThat(windowsPath.directory()).isEqualTo(Path.of("D:\\proyek"));
+
+        var ownCd = List.of("wsl.exe", "--cd", "/srv");
+        assertThat(LocalShells.build(ownCd, "~", Map.of(), Os.WINDOWS, Map.of(), HOME).command()).isEqualTo(ownCd);
+        assertThat(LocalShells.build(List.of("cmd.exe"), "~", Map.of(), Os.WINDOWS, Map.of(), HOME).command())
+                .containsExactly("cmd.exe");
+    }
 }

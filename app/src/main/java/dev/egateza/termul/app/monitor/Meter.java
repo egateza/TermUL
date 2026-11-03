@@ -3,7 +3,6 @@ package dev.egateza.termul.app.monitor;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
-import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
@@ -20,16 +19,42 @@ final class Meter extends JComponent {
     static final int WIDTH = 78;
     static final int HEIGHT = 13;
     private static final int STRIPE = 2; // track: 2 px garis, 2 px kosong
-    private static final Color TEXT_IN_FILL = new Color(0x0F1117);
+    /**
+     * Warna isi, garis tepi, garis track, dan teks di dalam isi per level. Tema gelap: persis prototipe ({@code --m},
+     * {@code --mb}, {@code --mt}). Tema terang: hijau/amber/merah yang sama tetapi lebih tua, karena warna prototipe di
+     * atas title bar terang hanya berkontras 1,5–2,7:1 dan angkanya sulit dibaca; versi terang ≥ 4,5:1 terhadap
+     * latar putih sampai #E8E8E8, track-nya tint muda, dan teks di dalam isi putih.
+     */
+    record Palette(Color fill, Color border, Color track, Color textInFill) {
+        private static final Color DARK_TEXT_IN_FILL = new Color(0x0F1117);
 
-    /** Warna isi, garis tepi, dan garis track per level (prototipe {@code --m}, {@code --mb}, {@code --mt}). */
-    record Palette(Color fill, Color border, Color track) {
+        /** Palet tema gelap (prototipe). */
         static Palette of(Level level) {
+            return of(level, true);
+        }
+
+        static Palette of(Level level, boolean dark) {
+            if (dark) {
+                return switch (level) {
+                    case NORMAL -> new Palette(new Color(0x3DD68C), new Color(0x2E7D32), new Color(0x14361B),
+                            DARK_TEXT_IN_FILL);
+                    case WARN -> new Palette(new Color(0xE0AF68), new Color(0x8A6A2E), new Color(0x3A2E14),
+                            DARK_TEXT_IN_FILL);
+                    case CRITICAL -> new Palette(new Color(0xF7768E), new Color(0x9A3B4C), new Color(0x3D1820),
+                            DARK_TEXT_IN_FILL);
+                };
+            }
             return switch (level) {
-                case NORMAL -> new Palette(new Color(0x3DD68C), new Color(0x2E7D32), new Color(0x14361B));
-                case WARN -> new Palette(new Color(0xE0AF68), new Color(0x8A6A2E), new Color(0x3A2E14));
-                case CRITICAL -> new Palette(new Color(0xF7768E), new Color(0x9A3B4C), new Color(0x3D1820));
+                case NORMAL -> new Palette(new Color(0x146C3A), new Color(0x146C3A), new Color(0xCDE8D6), Color.WHITE);
+                case WARN -> new Palette(new Color(0x8C5A00), new Color(0x8C5A00), new Color(0xF0DFC0), Color.WHITE);
+                case CRITICAL -> new Palette(new Color(0xB02A43), new Color(0xB02A43), new Color(0xF5CED6),
+                        Color.WHITE);
             };
+        }
+
+        /** Palet untuk tema yang sedang aktif. */
+        static Palette current(Level level) {
+            return of(level, com.formdev.flatlaf.FlatLaf.isLafDark());
         }
     }
 
@@ -100,7 +125,7 @@ final class Meter extends JComponent {
         var g2 = (Graphics2D) g.create();
         int w = getWidth();
         int h = getHeight();
-        var p = Palette.of(level);
+        var p = Palette.current(level);
         int inner = w - 2;
         g2.setColor(p.track());
         for (int x = 1; x < w - 1; x += 2 * STRIPE) {
@@ -115,19 +140,29 @@ final class Meter extends JComponent {
         g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         Font base = font();
         g2.setFont(base);
-        FontMetrics fm = g2.getFontMetrics();
-        int y = (h - fm.getHeight()) / 2 + fm.getAscent();
+        int y = baseline(base, g2.getFontRenderContext(), h);
         g2.setColor(p.fill());
         g2.drawString(text, 3, y);
         if (fill > 0) {
             var inside = (Graphics2D) g2.create();
             inside.clipRect(1, 1, fill, h - 2);
             inside.setFont(base.deriveFont(Font.BOLD));
-            inside.setColor(TEXT_IN_FILL);
+            inside.setColor(p.textInFill());
             inside.drawString(text, 3, y);
             inside.dispose();
         }
         g2.dispose();
+    }
+
+    /**
+     * Baseline yang menaruh angka tepat di tengah tinggi {@code h}: dari batas visual {@code 0123456789%}, bukan dari
+     * metrik baris font. Metrik baris (ascent, descent, leading) berbeda-beda antarfont; mis. Bahnschrift punya leading
+     * 2 px dan ascent rapat, sehingga angka naik 2 px dan menempel di tepi atas. String acuan yang sama untuk semua nilai
+     * supaya angka tidak bergeser saat nilainya berubah.
+     */
+    static int baseline(Font font, java.awt.font.FontRenderContext frc, int h) {
+        var bounds = font.createGlyphVector(frc, "0123456789%").getVisualBounds();
+        return (int) Math.round(h / 2.0 - (bounds.getMinY() + bounds.getMaxY()) / 2);
     }
 
     /** Font aplikasi 2 px lebih kecil (10 px pada ukuran bawaan 12), angka sama lebar. */

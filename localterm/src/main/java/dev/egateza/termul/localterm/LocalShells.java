@@ -182,7 +182,41 @@ public final class LocalShells {
                 env.put(name, value);
             }
         });
+        if (os.isWindows() && isWsl(command)) {
+            var linuxDir = wslDirectory(directory);
+            if (linuxDir.isPresent() && !command.contains("--cd") && !command.contains("~")) {
+                var withCd = new ArrayList<String>();
+                withCd.add(command.getFirst());
+                withCd.add("--cd");
+                withCd.add(linuxDir.get());
+                withCd.addAll(command.subList(1, command.size()));
+                return new LocalShell(withCd, home, env);
+            }
+        }
         return new LocalShell(command, directory(directory, home), env);
+    }
+
+    /** @return true kalau perintahnya {@code wsl.exe} (distro WSL) */
+    static boolean isWsl(List<String> command) {
+        String exe = baseName(command.getFirst()).toLowerCase(java.util.Locale.ROOT);
+        return exe.equals("wsl.exe") || exe.equals("wsl");
+    }
+
+    /**
+     * Direktori awal distro WSL dalam bentuk Linux, untuk {@code wsl.exe --cd}: kosong / {@code ~} = home Linux,
+     * {@code ~/...} dan {@code /...} apa adanya. Kalau dipakai sebagai working directory proses (seperti shell lain),
+     * {@code ~} menjadi home Windows dan WSL mulai di {@code /mnt/c/Users/<user>}. Path Windows ({@code C:\...})
+     * kosong: tetap jadi working directory, WSL menerjemahkannya sendiri.
+     */
+    static Optional<String> wslDirectory(String directory) {
+        String d = directory == null ? "" : directory.strip();
+        if (d.isEmpty() || d.equals("~")) {
+            return Optional.of("~");
+        }
+        if (d.startsWith("~/") || d.startsWith("/")) {
+            return Optional.of(d);
+        }
+        return Optional.empty();
     }
 
     static Path directory(String directory, Path home) {
