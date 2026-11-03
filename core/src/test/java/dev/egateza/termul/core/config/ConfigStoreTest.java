@@ -64,6 +64,7 @@ class ConfigStoreTest {
         assertThat(config.hostPanelMode()).isEqualTo(AppConfig.HOST_DOCKED);
         assertThat(config.withPanelCorners("aneh").panelCorners()).isEqualTo(AppConfig.PANEL_ROUNDED);
         assertThat(config.withTabStyle("aneh").tabStyle()).isEqualTo(AppConfig.TAB_CARD);
+        assertThat(AppConfig.TAB_STYLES).allSatisfy(s -> assertThat(config.withTabStyle(s).tabStyle()).isEqualTo(s));
         assertThat(config.withHostButtonOpacity(500).hostButtonOpacity()).isEqualTo(AppConfig.DEFAULT_OPACITY);
     }
 }

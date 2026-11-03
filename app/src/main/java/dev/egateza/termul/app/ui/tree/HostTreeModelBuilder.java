@@ -77,7 +77,7 @@ public final class HostTreeModelBuilder {
                 }
             }
         }
-        sortGroupsFirst(root);
+        sortGroupsFirst(root, snapshot.groupComparator());
         int index = 0;
         for (BuiltinGroup b : BuiltinGroup.values()) {
             var node = new DefaultMutableTreeNode(b, true);
@@ -147,20 +147,23 @@ public final class HostTreeModelBuilder {
         return node;
     }
 
-    /** Grup di atas profil; grup terurut nama (profil sudah terurut dari snapshot). */
-    private static void sortGroupsFirst(DefaultMutableTreeNode node) {
+    /**
+     * Grup di atas profil. Grup terurut seperti di Profile manager (urutan yang diatur user, lalu nama); profil sudah
+     * terurut dari snapshot.
+     */
+    private static void sortGroupsFirst(DefaultMutableTreeNode node, java.util.Comparator<String> order) {
         var groups = new java.util.ArrayList<DefaultMutableTreeNode>();
         var hosts = new java.util.ArrayList<DefaultMutableTreeNode>();
         for (int i = 0; i < node.getChildCount(); i++) {
             var child = (DefaultMutableTreeNode) node.getChildAt(i);
             (child.getUserObject() instanceof GroupNode ? groups : hosts).add(child);
         }
-        groups.sort((a, b) -> String.CASE_INSENSITIVE_ORDER.compare(
-                ((GroupNode) a.getUserObject()).name(), ((GroupNode) b.getUserObject()).name()));
+        groups.sort((a, b) -> order.compare(((GroupNode) a.getUserObject()).path(),
+                ((GroupNode) b.getUserObject()).path()));
         node.removeAllChildren();
         groups.forEach(g -> {
             node.add(g);
-            sortGroupsFirst(g);
+            sortGroupsFirst(g, order);
         });
         hosts.forEach(node::add);
     }

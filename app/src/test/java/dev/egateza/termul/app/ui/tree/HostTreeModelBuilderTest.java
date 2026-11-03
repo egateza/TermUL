@@ -29,6 +29,19 @@ class HostTreeModelBuilderTest {
         assertThat(labels(produksi)).containsExactly("Backend", "db-1");
     }
 
+    /** Urutan folder dan profil yang diatur di Profile manager (Reorder / Manage folders) dipakai panel host. */
+    @Test
+    void urutanDariProfileManagerDipakaiDaftarHost() {
+        var db2 = HostProfile.create("db-2", "10.0.0.3", "dev").withGroup("Produksi");
+        var ordered = new ProfileSnapshot(1, List.of("Staging"), List.of(web, db, db2, lab), List.of(), List.of(),
+                List.of("Staging", "Produksi"), List.of(db2.id(), db.id()));
+
+        var root = HostTreeModelBuilder.build(ordered, "");
+
+        assertThat(labels(root)).containsExactly("INSTANCE", "FAVORITES", "RECENT", "Staging", "Produksi", "lab");
+        assertThat(labels((DefaultMutableTreeNode) root.getChildAt(4))).containsExactly("Backend", "db-2", "db-1");
+    }
+
     @Test
     void filterMenyembunyikanGrupTanpaHasil() {
         var root = HostTreeModelBuilder.build(snapshot, "10.0.0.1");

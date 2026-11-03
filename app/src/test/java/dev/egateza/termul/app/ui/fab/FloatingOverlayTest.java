@@ -123,4 +123,25 @@ class FloatingOverlayTest {
 
         assertThat(overlay.getComponents()).containsExactly(fab, terminal);
     }
+
+    /** Kotak cari terminal memakai pojok kanan atas: tombol di sana (Snippet) turun ke bawahnya, lalu kembali. */
+    @Test
+    void tombolKananAtasTurunDiBawahAreaYangDipakaiKonten() {
+        var overlay = new FloatingOverlay();
+        var snippet = box(90, 32);
+        var left = box(40, 32);
+        overlay.setBase(new JLabel("terminal"));
+        overlay.addFloating(snippet, FloatingOverlay.Anchor.TOP_RIGHT);
+        overlay.addFloating(left, FloatingOverlay.Anchor.TOP_LEFT);
+        overlay.setSize(800, 600);
+
+        overlay.setTopRightReserved(46);
+        overlay.doLayout();
+        assertThat(snippet.getY()).isEqualTo(46 + FloatingOverlay.GAP);
+        assertThat(left.getY()).as("pojok kiri tidak terpengaruh").isEqualTo(16);
+
+        overlay.setTopRightReserved(0);
+        overlay.doLayout();
+        assertThat(snippet.getY()).isEqualTo(16);
+    }
 }

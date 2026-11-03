@@ -352,6 +352,15 @@ public final class LocalTerminalTab extends TermPane {
         snippetButton.setShown(snippetHost.buttonVisible() && widget != null);
     }
 
+    @Override
+    public boolean openFind(java.awt.Component source) {
+        if (widget == null) {
+            return false;
+        }
+        widget.openFind();
+        return true;
+    }
+
     /** Zoom (Ctrl/⌘ +/-/0) dan Enter setelah shell berakhir (= jalankan ulang). */
     @Override
     public boolean interceptKey(KeyEvent e) {

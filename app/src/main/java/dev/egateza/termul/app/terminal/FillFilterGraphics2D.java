@@ -2,6 +2,7 @@ package dev.egateza.termul.app.terminal;
 
 import java.awt.Color;
 import java.awt.Composite;
+import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
@@ -24,33 +25,80 @@ import java.awt.image.renderable.RenderableImage;
 import java.text.AttributedCharacterIterator;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Consumer;
 
 /**
- * {@link Graphics2D} pembungkus yang membuang {@code fillRect} berwarna {@code skipColor}; semua operasi lain
- * diteruskan apa adanya. JediTerm mengisi latar setiap sel (dan seluruh panel) dengan warna latar default memakai
- * {@code fillRect}; dengan membuang isian itu, gambar yang sudah digambar lebih dulu tetap terlihat di antara
- * teks. Teks, cursor, seleksi, dan teks inverse tidak ikut terbuang karena digambar dengan warna dan operasi lain.
+ * {@link Graphics2D} pembungkus untuk menggambar terminal; semua operasi lain diteruskan apa adanya.
+ * <ul>
+ *   <li>Membuang {@code fillRect} berwarna {@code skipColor}. JediTerm mengisi latar setiap sel (dan seluruh panel)
+ *       dengan warna latar default memakai {@code fillRect}; dengan membuang isian itu, gambar yang sudah digambar
+ *       lebih dulu tetap terlihat di antara teks. Teks, cursor, seleksi, dan teks inverse tidak ikut terbuang karena
+ *       digambar dengan warna dan operasi lain.</li>
+ *   <li>Menggambar pemisah powerline sebagai bentuk seukuran sel penuh ({@link PowerlineGlyphs}), bukan glyph font.
+ *       Pemisah berwarna latar default (reverse video, dipakai oh-my-posh untuk lekukan antar-segmen) diisi latar
+ *       terminal yang sebenarnya ({@code backdrop}), bukan warna latar pekat.</li>
+ * </ul>
  */
 final class FillFilterGraphics2D extends Graphics2D {
 
     private final Graphics2D delegate;
-    private final Color skipColor;
+    private final Color skipColor; // null = tidak ada fillRect yang dibuang
+    private final Dimension cell; // ukuran sel terminal; null = pemisah powerline digambar dari font
+    private final Consumer<Shape> backdrop; // menggambar latar terminal di dalam bentuk; null = isi warna latar
 
     FillFilterGraphics2D(Graphics2D delegate, Color skipColor) {
+        this(delegate, Objects.requireNonNull(skipColor), null, null);
+    }
+
+    FillFilterGraphics2D(Graphics2D delegate, Color skipColor, Dimension cell, Consumer<Shape> backdrop) {
         this.delegate = Objects.requireNonNull(delegate);
-        this.skipColor = Objects.requireNonNull(skipColor);
+        this.skipColor = skipColor;
+        this.cell = cell == null ? null : new Dimension(cell);
+        this.backdrop = backdrop;
     }
 
     @Override
     public void fillRect(int x, int y, int width, int height) {
-        if (!skipColor.equals(delegate.getColor())) {
+        if (skipColor == null || !skipColor.equals(delegate.getColor())) {
             delegate.fillRect(x, y, width, height);
         }
     }
 
     @Override
     public Graphics create() {
-        return new FillFilterGraphics2D((Graphics2D) delegate.create(), skipColor);
+        return new FillFilterGraphics2D((Graphics2D) delegate.create(), skipColor, cell, backdrop);
+    }
+
+    /** {@code drawChars} JediTerm sampai ke sini (satu glyph per panggilan untuk simbol). */
+    @Override
+    public void drawString(String str, int x, int y) {
+        if (cell != null && cell.width > 0 && cell.height > 0 && str.length() == 1
+                && PowerlineGlyphs.handles(str.charAt(0))) {
+            drawPowerline(str.charAt(0), x, y);
+            return;
+        }
+        delegate.drawString(str, x, y);
+    }
+
+    /** @param baseline baris dasar teks; sel = baris terminal yang memuatnya */
+    private void drawPowerline(int cp, int x, int baseline) {
+        int top = Math.floorDiv(baseline, cell.height) * cell.height;
+        var bounds = new Rectangle(x, top, cell.width, cell.height);
+        Shape shape = PowerlineGlyphs.shape(cp, bounds);
+        Shape clip = delegate.getClip();
+        Object aa = delegate.getRenderingHint(RenderingHints.KEY_ANTIALIASING);
+        try {
+            delegate.setClip(bounds); // JediTerm memotong jarak antarbaris; bentuk ini memenuhi sel
+            delegate.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            if (backdrop != null && skipColor != null && skipColor.equals(delegate.getColor())) {
+                backdrop.accept(shape);
+            } else {
+                delegate.fill(shape);
+            }
+        } finally {
+            delegate.setRenderingHint(RenderingHints.KEY_ANTIALIASING, aa);
+            delegate.setClip(clip);
+        }
     }
 
     // --- sisanya diteruskan ---
@@ -78,11 +126,6 @@ final class FillFilterGraphics2D extends Graphics2D {
     @Override
     public void drawRenderableImage(RenderableImage img, AffineTransform xform) {
         delegate.drawRenderableImage(img, xform);
-    }
-
-    @Override
-    public void drawString(String str, int x, int y) {
-        delegate.drawString(str, x, y);
     }
 
     @Override

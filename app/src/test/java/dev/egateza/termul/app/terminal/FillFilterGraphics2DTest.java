@@ -82,4 +82,37 @@ class FillFilterGraphics2DTest {
         assertThat(image.getRGB(10, 10)).isEqualTo(SKIP.getRGB());
         assertThat(image.getRGB(1, 1)).isEqualTo(SKIP.getRGB());
     }
+
+    /** Pemisah powerline digambar sebagai bentuk setinggi sel penuh (sel 10x20 di baris kedua: y 20..39). */
+    @Test
+    void pemisahPowerlineMemenuhiSel() {
+        var image = new BufferedImage(40, 60, BufferedImage.TYPE_INT_RGB);
+        var raw = image.createGraphics();
+        var g = new FillFilterGraphics2D(raw, null, new java.awt.Dimension(10, 20), null);
+        g.setColor(Color.RED);
+
+        g.drawString("", 0, 35); // baseline di dalam baris kedua
+        g.dispose();
+
+        assertThat(image.getRGB(0, 21)).as("tepi atas sel").isEqualTo(Color.RED.getRGB());
+        assertThat(image.getRGB(0, 38)).as("tepi bawah sel").isEqualTo(Color.RED.getRGB());
+        assertThat(image.getRGB(1, 19)).as("baris lain tidak tersentuh").isEqualTo(Color.BLACK.getRGB());
+    }
+
+    /** Lekukan reverse video (warna latar default) diisi latar terminal yang sebenarnya, bukan warna pekat. */
+    @Test
+    void pemisahBerwarnaLatarDefaultMemakaiBackdrop() {
+        var image = canvas();
+        var raw = image.createGraphics();
+        var g = new FillFilterGraphics2D(raw, SKIP, new java.awt.Dimension(10, 20), shape -> {
+            raw.setColor(Color.GREEN);
+            raw.fill(shape);
+        });
+        g.setColor(SKIP);
+
+        g.drawString("", 0, 15);
+        g.dispose();
+
+        assertThat(image.getRGB(1, 10)).isEqualTo(Color.GREEN.getRGB());
+    }
 }

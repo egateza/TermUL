@@ -78,8 +78,129 @@ public final class ProfileStore {
         return mutate(s -> s.withProfile(profile));
     }
 
+    /**
+     * Menghapus profil. Profil lain yang memakainya sebagai jump host beralih ke koneksi langsung (bukan menunjuk ke
+     * profil yang sudah tidak ada).
+     */
     public ProfileSnapshot delete(UUID id) {
-        return mutate(s -> s.withoutProfile(id));
+        return deleteAll(List.of(id));
+    }
+
+    /** Menghapus beberapa profil sekaligus; jump host yang menunjuk ke profil itu dikosongkan. */
+    public ProfileSnapshot deleteAll(Collection<UUID> ids) {
+        var gone = Set.copyOf(ids);
+        return mutate(s -> {
+            if (s.profiles().stream().noneMatch(p -> gone.contains(p.id()))) {
+                return s;
+            }
+            return s.withProfiles(s.profiles().stream().filter(p -> !gone.contains(p.id()))
+                    .map(p -> p.jumpHostId() != null && gone.contains(p.jumpHostId()) ? p.withJumpHostId(null) : p)
+                    .toList());
+        });
+    }
+
+    /** Tambah atau ganti beberapa profil sekaligus (satu kali tulis), mis. hasil import. */
+    public ProfileSnapshot saveAll(Collection<HostProfile> profiles) {
+        return mutate(s -> {
+            var result = s;
+            for (HostProfile p : profiles) {
+                result = result.withProfile(Objects.requireNonNull(p, "profile"));
+            }
+            return result;
+        });
+    }
+
+    /**
+     * Menyimpan hasil import sekaligus (satu tulis file): folder baru, profil, favorit, dan urutan profil.
+     *
+     * @param order urutan profil yang ditambahkan; profil yang sudah ada di folder yang sama tetap di atas dengan
+     *              urutan tampilnya sekarang, profil yang diimpor menyusul. Kosong = urut nama seperti biasa
+     */
+    public ProfileSnapshot importProfiles(Collection<String> folders, Collection<HostProfile> profiles,
+                                          Collection<UUID> favorites, List<UUID> order) {
+        return mutate(s -> {
+            var groups = new ArrayList<>(s.groups());
+            groups.addAll(folders);
+            var result = s.withGroups(groups);
+            for (HostProfile p : profiles) {
+                result = result.withProfile(Objects.requireNonNull(p, "profile"));
+            }
+            for (UUID id : favorites) {
+                if (result.find(id).isPresent() && !result.isFavorite(id)) {
+                    result = result.withFavorite(id, true);
+                }
+            }
+            if (!order.isEmpty()) {
+                var touched = new java.util.LinkedHashSet<String>();
+                for (UUID id : order) {
+                    result.find(id).ifPresent(p -> touched.add(p.group()));
+                }
+                var newOrder = new ArrayList<>(result.profileOrder());
+                for (String g : touched) { // urutan tampil sekarang dikunci dulu, supaya yang lama tidak bergeser
+                    var shown = s.profilesIn(g).stream().map(HostProfile::id).toList();
+                    newOrder.removeAll(shown);
+                    newOrder.addAll(shown);
+                }
+                newOrder.removeAll(order);
+                newOrder.addAll(order);
+                result = result.withProfileOrder(newOrder);
+            }
+            return result;
+        });
+    }
+
+    /** Memindahkan beberapa profil ke grup {@code group} ({@code ""} = tanpa grup). */
+    public ProfileSnapshot moveProfiles(Collection<UUID> ids, String group) {
+        String g = HostProfile.normalizeGroup(group);
+        var moving = Set.copyOf(ids);
+        return mutate(s -> s.withProfiles(s.profiles().stream()
+                .map(p -> moving.contains(p.id()) && !p.group().equals(g) ? p.withGroup(g) : p).toList()));
+    }
+
+    /**
+     * Urutan baru profil di satu folder (mode Reorder). Hanya urutan relatif antarprofil di folder yang sama yang
+     * berpengaruh, jadi {@code ids} cukup berisi profil folder itu.
+     */
+    public ProfileSnapshot reorderProfiles(List<UUID> ids) {
+        return mutate(s -> {
+            var order = new ArrayList<>(s.profileOrder());
+            order.removeAll(ids);
+            order.addAll(ids);
+            return s.withProfileOrder(order);
+        });
+    }
+
+    /** Menggeser folder satu langkah ({@code delta} -1 / +1) di antara folder lain yang seinduk. */
+    public ProfileSnapshot moveGroup(String group, int delta) {
+        String g = HostProfile.normalizeGroup(group);
+        return mutate(s -> {
+            var siblings = new ArrayList<>(s.childGroups(ProfileSnapshot.parentOf(g)));
+            int i = siblings.indexOf(g);
+            int j = i + delta;
+            if (i < 0 || j < 0 || j >= siblings.size()) {
+                return s;
+            }
+            java.util.Collections.swap(siblings, i, j);
+            var order = new ArrayList<>(s.groupOrder());
+            order.removeAll(siblings);
+            order.addAll(siblings);
+            return s.withGroupOrder(order);
+        });
+    }
+
+    /**
+     * Menghapus folder beserta subfoldernya; profil di dalamnya pindah ke tanpa grup (Ungrouped), tidak ikut
+     * terhapus.
+     */
+    public ProfileSnapshot deleteGroupKeepProfiles(String group) {
+        String g = HostProfile.normalizeGroup(group);
+        if (g.isEmpty()) {
+            throw new IllegalArgumentException("Grup root tidak bisa dihapus");
+        }
+        return mutate(s -> s.withProfiles(s.profiles().stream()
+                        .map(p -> isSameOrChild(p.group(), g) ? p.withGroup("") : p).toList())
+                .withGroups(s.groups().stream().filter(x -> !isSameOrChild(x, g)).toList())
+                .withGroupOrder(s.groupOrder().stream().filter(x -> !isSameOrChild(x, g)).toList()));
     }
 
     /** Menambah/menghapus profil dari grup bawaan Favorites. */
@@ -163,7 +284,8 @@ public final class ProfileStore {
         }
         return mutate(s -> {
             var groups = s.groups().stream().map(g -> rebase(g, src, dst)).toList();
-            var result = s.withGroups(groups);
+            var result = s.withGroups(groups)
+                    .withGroupOrder(s.groupOrder().stream().map(g -> rebase(g, src, dst)).toList());
             for (HostProfile p : s.profiles()) {
                 if (isSameOrChild(p.group(), src)) {
                     result = result.withProfile(p.withGroup(rebase(p.group(), src, dst)));

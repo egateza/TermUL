@@ -860,6 +860,15 @@ public final class TerminalTab extends TermPane {
         autoReconnecting = false;
     }
 
+    @Override
+    public boolean openFind(java.awt.Component source) {
+        if (widget == null || sftp != null && SwingUtilities.isDescendingFrom(source, sftp)) {
+            return false;
+        }
+        widget.openFind();
+        return true;
+    }
+
     /**
      * Dipanggil dari dispatcher key global (EDT) sebelum JediTerm menerima key.
      * <ul>

@@ -42,105 +42,105 @@ import javax.swing.UIManager;
  * (palet Tokyo Night) dipetakan ke peran yang sama di tema aktif: latar, bar, panel, chip, border, bingkai, seleksi,
  * aksen. Warna semantik (merah berbahaya, kuning variabel, hijau sukses) tetap, versi lebih gelap di tema terang. EDT.
  */
-final class SnippetUi {
+public final class SnippetUi {
 
     private SnippetUi() {
     }
 
     // --- palet ---
 
-    static Color panel() {
+    public static Color panel() {
         return ui("Panel.background", new Color(0x1E1F2B));
     }
 
-    static boolean dark() {
+    public static boolean dark() {
         Color p = panel();
         return (0.299 * p.getRed() + 0.587 * p.getGreen() + 0.114 * p.getBlue()) < 128;
     }
 
     /** Header, footer, dan navigasi kiri (prototipe {@code --bar}). */
-    static Color bar() {
+    public static Color bar() {
         return mix(panel(), Color.BLACK, dark() ? 0.25f : 0.04f);
     }
 
     /** Latar input dan kotak kode (prototipe {@code --bg}). */
-    static Color field() {
+    public static Color field() {
         return dark() ? mix(panel(), Color.BLACK, 0.12f) : ui("TextField.background", Color.WHITE);
     }
 
     /** Tombol biasa dan chip (prototipe {@code --panel2} / {@code --chip}). */
-    static Color chip() {
+    public static Color chip() {
         return mix(panel(), accent(), dark() ? 0.08f : 0.06f);
     }
 
-    static Color hover() {
+    public static Color hover() {
         return mix(panel(), fg(), dark() ? 0.05f : 0.06f);
     }
 
-    static Color border() {
+    public static Color border() {
         return ui("Component.borderColor", new Color(0x2F3549));
     }
 
     /** Bingkai dialog dan menu (prototipe {@code --frame}). */
-    static Color frame() {
+    public static Color frame() {
         return mix(panel(), accent(), 0.32f);
     }
 
-    static Color selection() {
+    public static Color selection() {
         return mix(panel(), accent(), dark() ? 0.2f : 0.16f);
     }
 
-    static Color fg() {
+    public static Color fg() {
         return ui("Label.foreground", new Color(0xC0CAF5));
     }
 
     /** Teks item navigasi terpilih (prototipe: putih di atas {@code --sel}). */
-    static Color onSelection() {
+    public static Color onSelection() {
         return dark() ? Color.WHITE : fg();
     }
 
-    static Color muted() {
+    public static Color muted() {
         return mix(fg(), panel(), 0.32f);
     }
 
-    static Color accent() {
+    public static Color accent() {
         return ui("Component.accentColor", ui("Component.focusColor", new Color(0x7AA2F7)));
     }
 
     /** Teks di atas tombol beraksen / merah. */
-    static Color onAccent(Color background) {
+    public static Color onAccent(Color background) {
         return luminance(background) > 140 ? new Color(0x16161E) : Color.WHITE;
     }
 
-    static Color danger() {
+    public static Color danger() {
         return dark() ? new Color(0xF7768E) : new Color(0xC8344F);
     }
 
-    static Color variable() {
+    public static Color variable() {
         return dark() ? new Color(0xE0AF68) : new Color(0xA86B12);
     }
 
-    static Color favorite() {
+    public static Color favorite() {
         return dark() ? new Color(0xE0AF68) : new Color(0xD08C1A);
     }
 
-    static Color prompt() {
+    public static Color prompt() {
         return dark() ? new Color(0x9ECE6A) : new Color(0x3F7F1A);
     }
 
-    static Color success() {
+    public static Color success() {
         return dark() ? new Color(0x3DD68C) : new Color(0x168A52);
     }
 
-    static Color starOff() {
+    public static Color starOff() {
         return mix(muted(), panel(), 0.3f);
     }
 
-    static Color alpha(Color c, float a) {
+    public static Color alpha(Color c, float a) {
         return new Color(c.getRed(), c.getGreen(), c.getBlue(), Math.round(255 * a));
     }
 
-    static Color mix(Color a, Color b, float t) {
+    public static Color mix(Color a, Color b, float t) {
         return new Color(Math.round(a.getRed() + (b.getRed() - a.getRed()) * t),
                 Math.round(a.getGreen() + (b.getGreen() - a.getGreen()) * t),
                 Math.round(a.getBlue() + (b.getBlue() - a.getBlue()) * t));
@@ -155,13 +155,13 @@ final class SnippetUi {
         return c != null ? c : fallback;
     }
 
-    static String hex(Color c) {
+    public static String hex(Color c) {
         return String.format("#%02x%02x%02x", c.getRed(), c.getGreen(), c.getBlue());
     }
 
     // --- font ---
 
-    static Font base() {
+    public static Font base() {
         Font f = UIManager.getFont("Label.font");
         return f != null ? f : new Font(Font.SANS_SERIF, Font.PLAIN, 12);
     }
@@ -169,7 +169,7 @@ final class SnippetUi {
     private static volatile Supplier<Font> codeFont = () -> new Font(Font.MONOSPACED, Font.PLAIN, 14);
 
     /** Font perintah = Font terminal dari Pengaturan font, termasuk ukurannya (pilihan otomatis juga). */
-    static void useCodeFont(Supplier<Font> font) {
+    public static void useCodeFont(Supplier<Font> font) {
         codeFont = font;
     }
 
@@ -177,29 +177,29 @@ final class SnippetUi {
      * Font UI = Font aplikasi dari Pengaturan font ({@code Label.font}, diturunkan FlatLaf dari {@code defaultFont}),
      * seperti dialog TermUL lain: teks biasa ukuran default; Bold hanya untuk judul, badge sedikit lebih kecil.
      */
-    static Font font(float delta, int style) {
+    public static Font font(float delta, int style) {
         return base().deriveFont(style, Math.round(base().getSize2D() + delta));
     }
 
     /** Font perintah persis seperti di terminal: family dan ukuran Font terminal. */
-    static Font mono(float delta) {
+    public static Font mono(float delta) {
         Font f = codeFont.get();
         return f.deriveFont(Font.PLAIN, Math.round(f.getSize2D() + delta));
     }
 
-    static JLabel label(String text, Font font, Color color) {
+    public static JLabel label(String text, Font font, Color color) {
         var l = new JLabel(text);
         l.setFont(font);
         l.setForeground(color);
         return l;
     }
 
-    static JLabel mutedLabel(String text) {
+    public static JLabel mutedLabel(String text) {
         return label(text, font(0, Font.PLAIN), muted());
     }
 
     /** Judul bagian (Perintah, Variabel, ...): teks biasa abu-abu, seperti label di dialog TermUL lain. */
-    static JLabel section(String text) {
+    public static JLabel section(String text) {
         return label(text, font(0, Font.PLAIN), muted());
     }
 
@@ -207,8 +207,8 @@ final class SnippetUi {
      * Paragraf yang dibungkus mengikuti lebar wadahnya (bukan lebar HTML tetap), dengan potongan teks berwarna /
      * tebal / mono. Lebar yang diminta sengaja kecil, supaya layout memberi lebar wadah lalu tinggi mengikuti.
      */
-    static final class Paragraph extends javax.swing.JTextPane {
-        Paragraph(Font font, Color color) {
+    public static final class Paragraph extends javax.swing.JTextPane {
+        public Paragraph(Font font, Color color) {
             setEditable(false);
             setFocusable(false);
             setOpaque(false);
@@ -217,7 +217,7 @@ final class SnippetUi {
             setForeground(color);
         }
 
-        Paragraph add(String text, Color color, boolean bold, boolean mono) {
+        public Paragraph add(String text, Color color, boolean bold, boolean mono) {
             var a = new javax.swing.text.SimpleAttributeSet();
             javax.swing.text.StyleConstants.setForeground(a, color);
             javax.swing.text.StyleConstants.setBold(a, bold);
@@ -233,7 +233,7 @@ final class SnippetUi {
         }
 
         /** Teks dengan warna dan ketebalan font paragraf ini. */
-        Paragraph add(String text) {
+        public Paragraph add(String text) {
             return add(text, getForeground(), getFont().isBold(), false);
         }
 
@@ -249,56 +249,56 @@ final class SnippetUi {
         }
     }
 
-    static Paragraph text(String text, Font font, Color color) {
+    public static Paragraph text(String text, Font font, Color color) {
         return new Paragraph(font, color).add(text);
     }
 
     /** Teks HTML yang dibungkus sampai lebar {@code width}. */
-    static JLabel wrapped(String html, int width, Font font, Color color) {
+    public static JLabel wrapped(String html, int width, Font font, Color color) {
         return label("<html><div style='width:" + width + "px'>" + html + "</div></html>", font, color);
     }
 
-    static String esc(String text) {
+    public static String esc(String text) {
         return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
     // --- ikon (path SVG dari prototipe, viewBox 24×24) ---
 
-    static final String BOLT = "M13 2L4 14h7l-1 8 9-12h-7z";
-    static final String STAR = "M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z";
-    static final String CLOSE = "M6 6l12 12M18 6L6 18";
-    static final String PLUS = "M12 5v14M5 12h14";
-    static final String TRASH = "M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3";
-    static final String WARN = "M12 3l10 18H2z M12 10v5M12 18h.01";
-    static final String CHECK = "M5 12l5 5 9-10";
-    static final String CHEVRON = "M6 9l6 6 6-6";
-    static final String CLIPBOARD = "M8 5H6v15h12V5h-2 M8 3h8v4H8z";
-    static final String FOLDER16 = "M1 3h5l1 1h8v9H1z";
+    public static final String BOLT = "M13 2L4 14h7l-1 8 9-12h-7z";
+    public static final String STAR = "M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z";
+    public static final String CLOSE = "M6 6l12 12M18 6L6 18";
+    public static final String PLUS = "M12 5v14M5 12h14";
+    public static final String TRASH = "M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3";
+    public static final String WARN = "M12 3l10 18H2z M12 10v5M12 18h.01";
+    public static final String CHECK = "M5 12l5 5 9-10";
+    public static final String CHEVRON = "M6 9l6 6 6-6";
+    public static final String CLIPBOARD = "M8 5H6v15h12V5h-2 M8 3h8v4H8z";
+    public static final String FOLDER16 = "M1 3h5l1 1h8v9H1z";
 
-    static Icon stroke(String path, int size, Supplier<Color> color, float width) {
+    public static Icon stroke(String path, int size, Supplier<Color> color, float width) {
         return new PathIcon(List.of(parse(path)), size, 24, color, false, width);
     }
 
-    static Icon fill(String path, int size, Supplier<Color> color) {
+    public static Icon fill(String path, int size, Supplier<Color> color) {
         return new PathIcon(List.of(parse(path)), size, 24, color, true, 0);
     }
 
-    static Icon star(boolean on, int size) {
+    public static Icon star(boolean on, int size) {
         return new PathIcon(List.of(parse(STAR)), size, 24, on ? SnippetUi::favorite : SnippetUi::starOff, on, 1.8f);
     }
 
-    static Icon folder(int size, Supplier<Color> color) {
+    public static Icon folder(int size, Supplier<Color> color) {
         return new PathIcon(List.of(parse(FOLDER16)), size, 16, color, true, 0);
     }
 
-    static Icon search(int size) {
+    public static Icon search(int size) {
         var shapes = new ArrayList<Shape>();
         shapes.add(new Ellipse2D.Float(4, 4, 14, 14));
         shapes.add(parse("M20 20l-3.5-3.5"));
         return new PathIcon(shapes, size, 24, SnippetUi::muted, false, 2);
     }
 
-    static Icon sliders(int size) {
+    public static Icon sliders(int size) {
         var shapes = new ArrayList<Shape>();
         shapes.add(parse("M4 7h10M18 7h2M4 17h2M10 17h10"));
         shapes.add(new Ellipse2D.Float(14, 5, 4, 4));
@@ -307,14 +307,14 @@ final class SnippetUi {
     }
 
     /** Titik status bulat. */
-    static Icon dot(int size, Supplier<Color> color) {
+    public static Icon dot(int size, Supplier<Color> color) {
         return new PathIcon(List.of(new Ellipse2D.Float(0, 0, 24, 24)), size, 24, color, true, 0);
     }
 
     private static final Pattern TOKEN = Pattern.compile("[MmLlHhVvZz]|-?(?:\\d+\\.?\\d*|\\.\\d+)");
 
     /** Path SVG sederhana: M, L, H, V, Z (huruf kecil = relatif), angka berulang mengulang perintah terakhir. */
-    static Path2D parse(String d) {
+    public static Path2D parse(String d) {
         var path = new Path2D.Float();
         Matcher m = TOKEN.matcher(d);
         var tokens = new ArrayList<String>();
@@ -373,7 +373,7 @@ final class SnippetUi {
     }
 
     /** Ikon vektor dari bentuk di viewBox {@code view}×{@code view}; warna dibaca saat digambar. */
-    static final class PathIcon implements Icon {
+    public static final class PathIcon implements Icon {
         private final List<Shape> shapes;
         private final int size;
         private final float view;
@@ -381,7 +381,7 @@ final class SnippetUi {
         private final boolean filled;
         private final float strokeWidth;
 
-        PathIcon(List<Shape> shapes, int size, float view, Supplier<Color> color, boolean filled, float strokeWidth) {
+        public PathIcon(List<Shape> shapes, int size, float view, Supplier<Color> color, boolean filled, float strokeWidth) {
             this.shapes = shapes;
             this.size = size;
             this.view = view;
@@ -425,12 +425,12 @@ final class SnippetUi {
     // --- komponen ---
 
     /** Panel bersudut membulat dengan latar dan garis tepi (kotak kode, peringatan, chip, kartu). */
-    static class RoundPanel extends JPanel {
+    public static class RoundPanel extends JPanel {
         private final Supplier<Color> background;
         private final Supplier<Color> line;
         private final int arc;
 
-        RoundPanel(LayoutManager layout, Supplier<Color> background, Supplier<Color> line, int arc) {
+        public RoundPanel(LayoutManager layout, Supplier<Color> background, Supplier<Color> line, int arc) {
             super(layout);
             this.background = background;
             this.line = line;
@@ -457,7 +457,7 @@ final class SnippetUi {
     }
 
     /** Kotak kode: latar input, garis tepi, sudut 4 px, isi berjarak 8/10 px. */
-    static RoundPanel codeBox(JComponent content) {
+    public static RoundPanel codeBox(JComponent content) {
         var box = new RoundPanel(new BorderLayout(), SnippetUi::field, SnippetUi::border, 8);
         box.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
         content.setOpaque(false);
@@ -484,7 +484,7 @@ final class SnippetUi {
     }
 
     /** Perintah dengan {@code ${variabel}} kuning berlatar transparan (prototipe: kotak "Perintah"). */
-    static javax.swing.JTextPane commandPane(String command, float fontDelta) {
+    public static javax.swing.JTextPane commandPane(String command, float fontDelta) {
         var pane = pane(fontDelta);
         var doc = pane.getStyledDocument();
         var m = Pattern.compile("\\$\\{[A-Za-z_][A-Za-z0-9_]*}").matcher(command);
@@ -499,11 +499,11 @@ final class SnippetUi {
     }
 
     /** Kotak "Akan ditempel": setiap baris diawali {@code $ } hijau, ditambah baris "↵ Enter" kalau langsung jalan. */
-    static javax.swing.JTextPane promptPane(float fontDelta) {
+    public static javax.swing.JTextPane promptPane(float fontDelta) {
         return pane(fontDelta);
     }
 
-    static void setPrompt(javax.swing.JTextPane pane, String resolved, boolean enter) {
+    public static void setPrompt(javax.swing.JTextPane pane, String resolved, boolean enter) {
         var doc = pane.getStyledDocument();
         try {
             doc.remove(0, doc.getLength());
@@ -529,7 +529,7 @@ final class SnippetUi {
     }
 
     /** Kotak peringatan merah transparan (snippet berbahaya). */
-    static RoundPanel dangerBox(JComponent content, float borderAlpha) {
+    public static RoundPanel dangerBox(JComponent content, float borderAlpha) {
         var box = new RoundPanel(new BorderLayout(10, 0), () -> alpha(danger(), 0.10f),
                 () -> alpha(danger(), borderAlpha), 8);
         box.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
@@ -537,14 +537,14 @@ final class SnippetUi {
         return box;
     }
 
-    enum Variant { DEFAULT, PRIMARY, DANGER, DANGER_FILL, CHIP, ICON }
+    public enum Variant { DEFAULT, PRIMARY, DANGER, DANGER_FILL, CHIP, ICON }
 
     /** Tombol bergaya prototipe ({@code .btn}, {@code .btn.primary}, {@code .btn.danger}, {@code .icon-btn}). */
-    static final class Button extends JButton {
+    public static final class Button extends JButton {
         private final Variant variant;
         private int height = 30;
 
-        Button(String text, Icon icon, Variant variant) {
+        public Button(String text, Icon icon, Variant variant) {
             super(text, icon);
             this.variant = variant;
             setContentAreaFilled(false);
@@ -659,7 +659,7 @@ final class SnippetUi {
     }
 
     /** {@code text} yang dipotong dengan "…" supaya lebarnya paling banyak {@code width}. */
-    static String elide(String text, FontMetrics fm, int width) {
+    public static String elide(String text, FontMetrics fm, int width) {
         if (fm.stringWidth(text) <= width) {
             return text;
         }
@@ -675,7 +675,7 @@ final class SnippetUi {
      * Field bergaya prototipe: latar input, garis tepi, sudut 4 px, tinggi {@code height}. Lebar yang diminta kecil
      * (field mengisi lebar kolomnya), supaya isi yang panjang tidak membuat panel lebih lebar dari dialog.
      */
-    static <T extends JComponent> T styleField(T field, int height) {
+    public static <T extends JComponent> T styleField(T field, int height) {
         field.putClientProperty("FlatLaf.style", "background: " + hex(field()) + "; borderColor: " + hex(border())
                 + "; focusedBorderColor: " + hex(accent()) + "; arc: 8");
         field.putClientProperty("JComponent.minimumHeight", height);
@@ -684,11 +684,11 @@ final class SnippetUi {
     }
 
     /** Saklar + teks yang dibungkus; klik teks juga mengubah saklar. */
-    record Toggle(JComponent row, JCheckBox box) {
+    public record Toggle(JComponent row, JCheckBox box) {
     }
 
     /** Saklar geser (prototipe {@code .sw}): label tebal + keterangan abu-abu, warna saat aktif per saklar. */
-    static Toggle toggle(String label, String hint, boolean on, Supplier<Color> color) {
+    public static Toggle toggle(String label, String hint, boolean on, Supplier<Color> color) {
         var box = new JCheckBox((String) null, on);
         box.setIcon(new SwitchIcon(false, color));
         box.setSelectedIcon(new SwitchIcon(true, color));
@@ -741,7 +741,7 @@ final class SnippetUi {
     }
 
     /** Badge "berbahaya", "2 var", "↵ jalan" untuk {@code s}. */
-    static void addBadges(JPanel row, Snippet s) {
+    public static void addBadges(JPanel row, Snippet s) {
         if (s.isDangerous()) {
             row.add(new Badge(I18n.t("snippet.badge.dangerous"), SnippetUi::danger, 0.16f, false));
         }
@@ -757,11 +757,11 @@ final class SnippetUi {
     }
 
     /** Label pil kecil (tinggi 16, sudut 8) dengan latar warna transparan. */
-    static final class Badge extends JLabel {
+    public static final class Badge extends JLabel {
         private final Supplier<Color> color;
         private final float fillAlpha;
 
-        Badge(String text, Supplier<Color> color, float fillAlpha, boolean mono) {
+        public Badge(String text, Supplier<Color> color, float fillAlpha, boolean mono) {
             super(text);
             this.color = color;
             this.fillAlpha = fillAlpha;
@@ -793,8 +793,8 @@ final class SnippetUi {
     }
 
     /** Chip pil dengan garis tepi (target, folder host). */
-    static final class Chip extends JPanel {
-        Chip(int height, int padding, JComponent... parts) {
+    public static final class Chip extends JPanel {
+        public Chip(int height, int padding, JComponent... parts) {
             super(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 6, 0));
             setOpaque(false);
             setBorder(BorderFactory.createEmptyBorder((height - 16) / 2, padding, (height - 16) / 2, padding));
@@ -818,8 +818,8 @@ final class SnippetUi {
     }
 
     /** Panel di dalam scroll pane yang lebarnya selalu mengikuti viewport (teks dibungkus, tanpa scroll horizontal). */
-    static final class TrackingPanel extends JPanel implements Scrollable {
-        TrackingPanel(LayoutManager layout) {
+    public static final class TrackingPanel extends JPanel implements Scrollable {
+        public TrackingPanel(LayoutManager layout) {
             super(layout);
         }
 
@@ -850,7 +850,7 @@ final class SnippetUi {
     }
 
     /** Sudut window dialog snippet; sama dengan sudut kartu {@link RoundPanel} di dalamnya. */
-    static final int WINDOW_ARC = 16;
+    public static final int WINDOW_ARC = 16;
 
     /**
      * Sudut membulat untuk dialog snippet tanpa dekorasi.
@@ -862,7 +862,7 @@ final class SnippetUi {
      *
      * @return true kalau sudutnya membulat (kartu digambar dengan sudut), false = kotak biasa
      */
-    static boolean roundWindow(Window w) {
+    public static boolean roundWindow(Window w) {
         if (dev.egateza.termul.core.Os.current().isWindows()) {
             if (!shapeSupported(w)) {
                 return false;
@@ -897,7 +897,7 @@ final class SnippetUi {
      * mengembalikannya (dialog 1120×680 jadi 4271×2592), sehingga ukuran dikembalikan setiap kali layar atau ukuran
      * berubah. Panggil setelah ukuran akhir diset; dialog snippet tidak bisa di-resize user.
      */
-    static void keepSizeAcrossScreens(Window w) {
+    public static void keepSizeAcrossScreens(Window w) {
         if (!dev.egateza.termul.core.Os.current().isWindows()) {
             return;
         }
@@ -933,7 +933,7 @@ final class SnippetUi {
         }
     }
 
-    static Shape windowShape(int width, int height) {
+    public static Shape windowShape(int width, int height) {
         return new RoundRectangle2D.Double(0, 0, width, height, WINDOW_ARC, WINDOW_ARC);
     }
 
@@ -950,7 +950,7 @@ final class SnippetUi {
      *
      * @return pelepas latar
      */
-    static Runnable dim(Window owner) {
+    public static Runnable dim(Window owner) {
         if (!(owner instanceof RootPaneContainer rpc)) {
             return () -> { };
         }
@@ -965,21 +965,32 @@ final class SnippetUi {
         };
         shade.setBounds(0, 0, layered.getWidth(), layered.getHeight());
         layered.add(shade, JLayeredPane.MODAL_LAYER);
-        layered.repaint();
+        paintNow(layered);
         return () -> {
             layered.remove(shade);
-            layered.repaint();
+            paintNow(layered);
         };
     }
 
+    /**
+     * Gambar sekarang, bukan lewat antrean repaint: dialog modal tampil (dan digambar) lebih dulu, sehingga latar gelap
+     * baru menyusul setelah dialog terlihat. {@code paintImmediately} saja tidak cukup untuk window beralpha per piksel
+     * (bingkai sendiri, ADR 0008): ia hanya menggambar ke buffer, dan baru {@code paintDirtyRegions} yang mengirimnya
+     * ke layar.
+     */
+    private static void paintNow(JComponent c) {
+        c.repaint();
+        javax.swing.RepaintManager.currentManager(c).paintDirtyRegions();
+    }
+
     /** Baris pertama perintah, ditambah "(+N baris)" kalau lebih dari satu baris. */
-    static String preview(Snippet s) {
+    public static String preview(Snippet s) {
         var lines = s.lines();
         return lines.size() == 1 ? lines.getFirst() : I18n.t("snippet.preview.more", lines.getFirst(), lines.size() - 1);
     }
 
     /** Lebar teks, untuk memotong dengan elipsis. */
-    static String ellipsize(String text, FontMetrics fm, int width) {
+    public static String ellipsize(String text, FontMetrics fm, int width) {
         if (fm.stringWidth(text) <= width) {
             return text;
         }

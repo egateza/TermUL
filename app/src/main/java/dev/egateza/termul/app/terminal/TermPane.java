@@ -91,6 +91,14 @@ public abstract sealed class TermPane extends JPanel permits TerminalTab, LocalT
      */
     public abstract boolean interceptKey(KeyEvent e);
 
+    /**
+     * Shortcut cari (Ctrl/⌘+F, sama dengan Cari host) ditekan di {@code source} di dalam panel ini: buka atau fokuskan
+     * kotak cari terminal. EDT.
+     *
+     * @return false kalau tidak ada terminal, atau {@code source} punya pencarian sendiri (filter SFTP)
+     */
+    public abstract boolean openFind(java.awt.Component source);
+
     /** Menutup panel dan sesinya (tab ditutup). Idempotent. */
     public abstract void dispose();
 

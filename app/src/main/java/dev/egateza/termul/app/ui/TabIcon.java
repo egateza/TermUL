@@ -7,24 +7,20 @@ import java.util.List;
 import javax.swing.Icon;
 
 /**
- * Ikon tab sesi: logo OS host, lalu ikon terminal (ada shell) dan/atau ikon SFTP (panel SFTP terbuka atau tab SFTP
- * saja), berjajar dari kiri ke kanan.
+ * Ikon tab sesi: logo OS host, lalu ikon SFTP kalau panel SFTP terbuka (atau tab SFTP saja), berjajar dari kiri ke
+ * kanan. Terminal tidak diberi ikon sendiri: tab tanpa ikon SFTP berarti terminal.
  */
-public record TabIcon(Icon os, boolean terminal, boolean sftp) implements Icon {
+public record TabIcon(Icon os, boolean sftp) implements Icon {
 
     static final int GAP = 3;
-    /** Ikon terminal/SFTP sedikit lebih kecil dari ikon menu supaya tinggi tab tidak berubah. */
+    /** Ikon SFTP sedikit lebih kecil dari ikon menu supaya tinggi tab tidak berubah. */
     static final int PART_SIZE = 14;
-    private static final Icon TERMINAL_ICON = AppIcon.TERMINAL.icon(PART_SIZE);
     private static final Icon SFTP_ICON = AppIcon.SFTP.icon(PART_SIZE);
 
     /** Ikon yang digambar, urut dari kiri. */
     List<Icon> parts() {
-        var parts = new ArrayList<Icon>(3);
+        var parts = new ArrayList<Icon>(2);
         parts.add(os);
-        if (terminal) {
-            parts.add(TERMINAL_ICON);
-        }
         if (sftp && os != OsIcons.SFTP_ONLY) { // ikon host sudah ikon SFTP: jangan dobel
             parts.add(SFTP_ICON);
         }

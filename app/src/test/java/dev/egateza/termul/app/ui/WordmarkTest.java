@@ -45,6 +45,22 @@ class WordmarkTest {
         }
     }
 
+    /**
+     * Langsung saat dibuat, di dalam menu bar: JComponent polos tidak memanggil updateUI() di constructor, jadi tanpa
+     * font sendiri wordmark mewarisi font menu bar (Segoe UI) sampai tema diganti.
+     */
+    @Test
+    void komponenBaruDiMenuBarLangsungMemakaiFontWordmark() {
+        var bar = new javax.swing.JMenuBar();
+        bar.setFont(new java.awt.Font("Serif", java.awt.Font.PLAIN, 12));
+        var wordmark = new Wordmark();
+        bar.add(wordmark);
+
+        assertThat(wordmark.isFontSet()).isTrue();
+        assertThat(wordmark.getFont().getFontName()).isEqualTo("JetBrains Mono Medium");
+        assertThat(wordmark.getFont().getSize2D()).isEqualTo(13f);
+    }
+
     private static double contrast(Color a, Color b) {
         double la = luminance(a);
         double lb = luminance(b);

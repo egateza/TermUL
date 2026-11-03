@@ -12,6 +12,7 @@ public enum ShortcutAction {
     NEW_HOST("host.new", Category.HOST, "mod+N"),
     NEW_LOCAL("local.new", Category.HOST, "mod+shift+O"),
     FIND_HOST("host.find", Category.HOST, "mod+F"),
+    MANAGE_PROFILES("host.manage", Category.HOST, "mod+shift+H"),
     TOGGLE_HOST_LIST("host.toggleList", Category.HOST, "mod+shift+B"),
 
     DUPLICATE_TAB("tab.duplicate", Category.TAB, "mod+shift+D"),

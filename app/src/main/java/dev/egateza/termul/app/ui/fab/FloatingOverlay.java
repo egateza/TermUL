@@ -38,6 +38,7 @@ public final class FloatingOverlay extends JPanel {
     private int marginBottom = 16;
     private int marginLeft = 16;
     private int marginTop = 16;
+    private int topRightReserved; // tinggi area kanan atas yang dipakai konten (mis. kotak cari terminal), 0 = tidak ada
 
     public FloatingOverlay() {
         super(null);
@@ -145,6 +146,18 @@ public final class FloatingOverlay extends JPanel {
         revalidate();
     }
 
+    /**
+     * Konten memakai pojok kanan atas setinggi {@code height} px dari tepi atas (mis. kotak cari terminal): tombol di
+     * {@link Anchor#TOP_RIGHT} turun ke bawahnya selama itu, supaya tidak menimpanya. 0 = tidak ada.
+     */
+    public void setTopRightReserved(int height) {
+        if (height != topRightReserved) {
+            topRightReserved = Math.max(0, height);
+            revalidate();
+            repaint();
+        }
+    }
+
     /** Tombol bisa bertumpuk dengan konten: jangan pakai optimasi gambar yang mengandaikan anak tidak tumpang tindih. */
     @Override
     public boolean isOptimizedDrawingEnabled() {
@@ -190,7 +203,9 @@ public final class FloatingOverlay extends JPanel {
             case BOTTOM_LEFT, TOP_LEFT -> marginLeft;
             case BOTTOM_CENTER -> (w - size.width) / 2;
         };
-        int y = anchor.top() ? marginTop + stacked : h - marginBottom - stacked - size.height;
+        int top = anchor == Anchor.TOP_RIGHT && topRightReserved > 0
+                ? Math.max(marginTop, topRightReserved + GAP) : marginTop;
+        int y = anchor.top() ? top + stacked : h - marginBottom - stacked - size.height;
         return new Rectangle(Math.max(0, x), Math.max(0, y), size.width, size.height);
     }
 

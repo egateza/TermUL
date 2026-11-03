@@ -49,8 +49,9 @@ import dev.egateza.termul.core.Os;
  *                          {@code loadingAnimation} (null di config lama = acak)
  * @param panelCorners      bentuk sudut panel host, area terminal, dan panel log: {@value #PANEL_ROUNDED} atau
  *                          {@value #PANEL_SQUARE} (null di config lama / nilai tidak dikenal = membulat)
- * @param tabStyle          gaya tab terminal: {@value #TAB_CARD} (kotak per tab, ala VS Code) atau
- *                          {@value #TAB_UNDERLINED} (garis bawah); null di config lama / nilai tidak dikenal = kartu
+ * @param tabStyle          gaya tab terminal, salah satu {@link #TAB_STYLES}: {@value #TAB_CARD} (kotak per tab,
+ *                          ala VS Code), {@value #TAB_UNDERLINED} (garis bawah), dan gaya lain dari prototipe;
+ *                          null di config lama / nilai tidak dikenal = kartu
  * @param rightClick        klik kanan di terminal: {@value #RIGHT_CLICK_COPY_PASTE} (gaya Windows: copy selection, atau
  *                          paste kalau tidak ada selection) atau {@value #RIGHT_CLICK_MENU} (menu konteks); null di
  *                          config lama / nilai tidak dikenal = {@link #defaultRightClick(Os)}
@@ -141,6 +142,15 @@ public record AppConfig(EditorConfig editors, float terminalFontSize, String ico
     public static final String PANEL_SQUARE = "square";
     public static final String TAB_CARD = "card";
     public static final String TAB_UNDERLINED = "underlined";
+    public static final String TAB_TOPLINE = "topline";
+    public static final String TAB_PILL = "pill";
+    public static final String TAB_INDICATOR = "indicator";
+    public static final String TAB_SOLID = "solid";
+    public static final String TAB_BROWSER = "browser";
+    public static final String TAB_POWERLINE = "powerline";
+    /** Semua gaya tab, urut seperti di menu (prototipe "Gaya tab"). */
+    public static final java.util.List<String> TAB_STYLES = java.util.List.of(TAB_CARD, TAB_UNDERLINED, TAB_TOPLINE,
+            TAB_PILL, TAB_INDICATOR, TAB_SOLID, TAB_BROWSER, TAB_POWERLINE);
     public static final String RIGHT_CLICK_COPY_PASTE = "copyPaste";
     public static final String RIGHT_CLICK_MENU = "menu";
 
@@ -206,7 +216,7 @@ public record AppConfig(EditorConfig editors, float terminalFontSize, String ico
         if (!PANEL_SQUARE.equals(panelCorners)) {
             panelCorners = PANEL_ROUNDED;
         }
-        if (!TAB_UNDERLINED.equals(tabStyle)) {
+        if (tabStyle == null || !TAB_STYLES.contains(tabStyle)) { // List.of menolak contains(null)
             tabStyle = TAB_CARD;
         }
         if (!RIGHT_CLICK_COPY_PASTE.equals(rightClick) && !RIGHT_CLICK_MENU.equals(rightClick)) {

@@ -196,6 +196,25 @@ class SessionManagerTest {
         assertThat(manager.connectionCount()).isZero();
     }
 
+    /**
+     * Tombol Test di Profile manager: lease dilepas lalu manager langsung ditutup. Session harus sudah tertutup sebelum
+     * client dihentikan; kalau tidak, baca socket yang tertunda selesai di thread pool NIO2 yang sudah mati
+     * ("Executor has been shut down" sebagai uncaught exception).
+     */
+    @Test
+    void closeMenungguSessionTertutupSebelumClientBerhenti() throws Exception {
+        manager.close();
+        manager = new SessionManager(knownHosts, acceptAll, credentials, settings(Duration.ZERO));
+        SshConnection conn;
+        try (SshLease lease = manager.acquire(profile(AuthMethod.PASSWORD, null))) {
+            conn = lease.connection();
+        }
+
+        manager.close();
+
+        assertThat(conn.isOpen()).isFalse();
+    }
+
     @Test
     void graceMenahanKoneksiUntukReopenTab() throws Exception {
         manager.close();

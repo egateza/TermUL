@@ -41,6 +41,9 @@ public final class Wordmark extends JComponent {
     private static Font base; // EDT; dimuat sekali
 
     public Wordmark() {
+        // JComponent polos tidak memanggil updateUI() saat dibuat: tanpa ini font diwarisi dari menu bar (font UI,
+        // mis. Segoe UI) sampai tema/font aplikasi diganti
+        setFont(font());
         setOpaque(false);
         putClientProperty("JComponent.titleBarCaption", true); // seret window lewat wordmark tetap bisa
         getAccessibleContext().setAccessibleName("TermUL");

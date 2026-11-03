@@ -44,6 +44,21 @@ class HostTreePanelSearchArcTest {
         assertThat(search.getClientProperty("FlatLaf.style")).isEqualTo("arc: 0");
     }
 
+    /** Area di sekitar kolom cari berwarna sama dengan daftar host di bawahnya, juga setelah warna tree berubah. */
+    @Test
+    void latarKolomCariSamaDenganDaftarHost() {
+        var panel = new HostTreePanel(noActions());
+        var box = find(panel).getParent();
+        var tree = (javax.swing.JTree) ((javax.swing.JScrollPane) ((java.awt.BorderLayout) panel.getLayout())
+                .getLayoutComponent(java.awt.BorderLayout.CENTER)).getViewport().getView();
+
+        assertThat(box.isOpaque()).isTrue();
+        assertThat(box.getBackground()).isEqualTo(tree.getBackground());
+
+        tree.setBackground(java.awt.Color.MAGENTA); // mis. tema berganti
+        assertThat(box.getBackground()).isEqualTo(java.awt.Color.MAGENTA);
+    }
+
     private static HostTreePanel.Actions noActions() {
         return (HostTreePanel.Actions) Proxy.newProxyInstance(HostTreePanel.Actions.class.getClassLoader(),
                 new Class<?>[] {HostTreePanel.Actions.class}, (proxy, method, args) -> null);

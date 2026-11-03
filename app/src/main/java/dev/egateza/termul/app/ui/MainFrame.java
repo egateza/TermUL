@@ -107,7 +107,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private final SystemFileIcons fileIcons;
     private final dev.egateza.termul.app.sftp.SftpBookmarks sftpBookmarks;
     private final HostTreePanel hostTree;
-    private final JTabbedPane tabs = new JTabbedPane(JTabbedPane.TOP, JTabbedPane.SCROLL_TAB_LAYOUT);
+    private final JTabbedPane tabs = new TermTabbedPane();
     /** Tab yang dipilih dengan Ctrl+klik untuk digabung (Ctrl+G), urutan pilih. EDT. */
     private final java.util.Set<java.awt.Component> marked = new java.util.LinkedHashSet<>();
     private final LocalTerminalFactory localTerminals = new LocalTerminalFactory(Os.current());
@@ -591,6 +591,12 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         if (action == null || e.getComponent() == null || !isTabWindow(SwingUtilities.getWindowAncestor(e.getComponent()))) {
             return false;
         }
+        // Ctrl+F di dalam tab terminal (termasuk kotak cari dan tombol mengambangnya) selalu cari di terminal, tidak
+        // pernah pindah ke Cari host; sebelumnya hanya terminal yang sedang fokus yang menangkapnya lebih dulu
+        if (action == ShortcutAction.FIND_HOST && tab.isPresent() && tab.get().openFind(e.getComponent())) {
+            e.consume();
+            return true;
+        }
         // Gabung (Ctrl+G) diambil kalau ada tab yang dipilih untuk digabung; selain itu tetap ^G ke shell
         if (action == ShortcutAction.GROUP && marked.size() >= 2) {
             groupMarkedTabs();
@@ -605,6 +611,13 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                 selectTab(action.tabNumber() - 1);
             }
             e.consume(); // tab tidak ada: tetap tidak dikirim ke shell
+            return true;
+        }
+        if (action == ShortcutAction.MANAGE_PROFILES) { // tanpa item menu: baris Manage profiles di panel host
+            e.consume();
+            if (activeDetached == null) {
+                SwingUtilities.invokeLater(this::manageProfiles);
+            }
             return true;
         }
         updateTerminalMenu(); // status bisa berubah sejak menu terakhir dibuka
@@ -788,8 +801,6 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         file.add(actionItem(AppIcon.TERMINAL, I18n.t("main.menu.file.newLocal"), ShortcutAction.NEW_LOCAL,
                 this::openLocalTerminal));
         file.add(menuItem(AppIcon.FOLDER_PLUS, I18n.t("main.menu.file.newGroup"), null, () -> newGroup(hostTree.selectedGroup())));
-        file.add(menuItem(null, I18n.t("main.menu.file.importSshConfig"), null, this::importSshConfig));
-        file.add(menuItem(null, I18n.t("main.menu.file.exportProfiles"), null, this::exportProfiles));
         file.add(actionItem(null, I18n.t("main.menu.file.findHost"), ShortcutAction.FIND_HOST,
                 () -> {
                     showHostList();
@@ -1281,54 +1292,6 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         return images;
     }
 
-    /** Impor host dari {@code ~/.ssh/config}: baca file di io, pilih di dialog (EDT), simpan di io. */
-    private void importSshConfig() {
-        java.nio.file.Path home = java.nio.file.Path.of(System.getProperty("user.home"));
-        java.nio.file.Path sshDir = home.resolve(".ssh");
-        java.nio.file.Path file = sshDir.resolve("config");
-        UiAsync.run(io, () -> {
-            if (!java.nio.file.Files.isRegularFile(file)) {
-                return List.<dev.egateza.termul.core.sshconfig.SshConfigImport.Candidate>of();
-            }
-            List<dev.egateza.termul.core.sshconfig.SshConfigHost> hosts;
-            try {
-                hosts = dev.egateza.termul.core.sshconfig.SshConfigParser.parse(file, sshDir, home);
-            } catch (IOException e) {
-                throw new java.io.UncheckedIOException(I18n.t("sshconfig.readFailed", file.toString()), e);
-            }
-            return dev.egateza.termul.core.sshconfig.SshConfigImport.plan(hosts, store.snapshot(),
-                    System.getProperty("user.name"), I18n.t("sshconfig.group"));
-        }, plan -> {
-            var toSave = SshConfigImportDialog.show(this, file.toString(), plan);
-            if (!toSave.isEmpty()) {
-                mutate(I18n.t("main.error.saveProfile"), () -> toSave.forEach(store::save));
-            }
-        }, err -> Dialogs.error(this, I18n.t("sshconfig.title"), err));
-    }
-
-    /** Ekspor semua profil (tanpa secret) ke file JSON pilihan user: pilih file di EDT, tulis di io. */
-    private void exportProfiles() {
-        var chooser = new javax.swing.JFileChooser();
-        chooser.setDialogTitle(I18n.t("export.title"));
-        chooser.setSelectedFile(new java.io.File("termul-profiles.json"));
-        chooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("JSON (*.json)", "json"));
-        if (chooser.showSaveDialog(this) != javax.swing.JFileChooser.APPROVE_OPTION) {
-            return;
-        }
-        java.nio.file.Path target = chooser.getSelectedFile().toPath();
-        if (!target.getFileName().toString().toLowerCase(java.util.Locale.ROOT).endsWith(".json")) {
-            target = target.resolveSibling(target.getFileName() + ".json");
-        }
-        if (java.nio.file.Files.exists(target)
-                && !Dialogs.confirm(this, I18n.t("export.title"), I18n.t("export.overwrite", target.toString()))) {
-            return;
-        }
-        java.nio.file.Path out = target;
-        UiAsync.run(io, () -> store.exportTo(out),
-                count -> Dialogs.info(this, I18n.t("export.title"), I18n.t("export.done", count, out.toString())),
-                err -> Dialogs.error(this, I18n.t("export.title"), err));
-    }
-
     private void configureValidationHooks() {
         ValidationHooksDialog.show(this, ctx.config().current().validationHooks()).ifPresent(hooks ->
                 mutate(I18n.t("error.saveSettings"), () ->
@@ -1398,17 +1361,24 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         });
     }
 
-    /** Gaya tab terminal: {@link AppConfig#TAB_CARD} (kotak per tab, ala VS Code) atau garis bawah. EDT. */
+    /**
+     * Gaya tab terminal ({@link AppConfig#TAB_STYLES}). Card dan Underlined bawaan FlatLaf; gaya lain digambar
+     * {@link TermTabbedPaneUI} di atas tipe underlined (tanpa bingkai kartu). Browser tanpa garis pemisah, supaya
+     * tab aktif menyatu dengan terminal di bawahnya. EDT.
+     */
     private void applyTabStyle(String style) {
-        tabs.putClientProperty("JTabbedPane.tabType",
-                AppConfig.TAB_UNDERLINED.equals(style) ? "underlined" : "card");
+        tabs.putClientProperty(TermTabbedPaneUI.STYLE, style);
+        tabs.putClientProperty("JTabbedPane.tabType", AppConfig.TAB_CARD.equals(style) ? "card" : "underlined");
+        tabs.putClientProperty("JTabbedPane.showContentSeparator", !AppConfig.TAB_BROWSER.equals(style));
+        tabs.revalidate();
+        tabs.repaint();
     }
 
     private JMenu buildTabStyleMenu() {
         var menu = new JMenu(I18n.t("main.menu.settings.tabStyle"));
         var group = new ButtonGroup();
         String current = ctx.config().current().tabStyle();
-        for (var style : new String[] {AppConfig.TAB_CARD, AppConfig.TAB_UNDERLINED}) {
+        for (var style : AppConfig.TAB_STYLES) {
             var item = new JRadioButtonMenuItem(I18n.t("main.menu.settings.tabStyle." + style), style.equals(current));
             item.addActionListener(e -> {
                 applyTabStyle(style);
@@ -2811,10 +2781,9 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         return group.panes().stream().map(TermPane::displayAddress).collect(Collectors.joining(" | "));
     }
 
-    /** Ikon tab: logo OS host panel pertama + ikon terminal/SFTP yang sedang dipakai panel-panel di tab itu. */
+    /** Ikon tab: logo OS host panel pertama + ikon SFTP kalau ada panel di tab itu yang menampilkan SFTP. */
     private static TabIcon tabIcon(SplitPanes<TermPane> group, javax.swing.Icon os) {
-        var panes = group.panes();
-        return new TabIcon(os, panes.stream().anyMatch(TermPane::hasTerminal), panes.stream().anyMatch(TermPane::showsSftp));
+        return new TabIcon(os, group.panes().stream().anyMatch(TermPane::showsSftp));
     }
 
     /** Logo OS untuk ikon tab: OS host SSH (hasil deteksi tersimpan di profil), ikon terminal untuk tab lokal. */
@@ -2825,7 +2794,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         };
     }
 
-    /** Perbarui ikon terminal/SFTP semua tab (logo OS yang sudah tampil dipertahankan). EDT. */
+    /** Perbarui ikon SFTP semua tab (logo OS yang sudah tampil dipertahankan). EDT. */
     private void refreshTabIcons() {
         for (int i = 0; i < tabs.getTabCount(); i++) {
             var group = groupAt(i);
@@ -2893,6 +2862,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     }
 
     private void refreshShortcutTexts() {
+        hostTree.setManageShortcut(Shortcuts.text(ShortcutAction.MANAGE_PROFILES));
         miNextTab.setToolTipText(I18n.t("main.menu.terminal.tabNumber.tooltip",
                 Shortcuts.text(ShortcutAction.TAB_1), Shortcuts.text(ShortcutAction.TAB_9)));
         miPreviousTab.setToolTipText(miNextTab.getToolTipText());
@@ -3444,19 +3414,191 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         }
     };
 
+    /** Profil baru (Ctrl+N, tombol +): Profile manager langsung di form profil baru (prototipe "ProfileNew"). */
     @Override
     public void newHost(String group) {
-        ProfileDialog.create(this, group, store.snapshot(), HostTerminalColors.choices(customThemes))
-                .ifPresent(this::saveProfile);
+        openProfileManager(null, group == null ? "" : group);
     }
 
+    /** Baris Manage profiles di bawah panel host, atau Ctrl+Shift+H. */
+    @Override
+    public void manageProfiles() {
+        openProfileManager(null, null);
+    }
+
+    /** Edit profil: Profile manager dengan profil itu terbuka di form edit. */
     @Override
     public void edit(HostProfile profile) {
-        // baca metadata vault (disk I/O) di luar EDT, lalu buka dialog
-        UiAsync.run(io, () -> storedSecrets(profile), stored ->
-                        ProfileDialog.edit(this, profile, store.snapshot(), stored, HostTerminalColors.choices(customThemes))
-                                .ifPresent(this::saveProfile),
-                err -> Dialogs.error(this, I18n.t("main.error.readVault"), err));
+        openProfileManager(profile.id(), null);
+    }
+
+    /**
+     * Profile manager (baris Manage profiles, Ctrl+Shift+H, Ctrl+N, Edit). EDT.
+     *
+     * @param editId   profil yang langsung dibuka di form edit, null = tidak ada
+     * @param newGroup non-null = langsung membuat profil baru di grup ini
+     */
+    private void openProfileManager(java.util.UUID editId, String newGroup) {
+        new dev.egateza.termul.app.ui.profiles.ProfileManagerDialog(this, profileManagerHost(), editId, newGroup)
+                .setVisible(true);
+        currentTab().ifPresent(TermPane::focusTerminal);
+    }
+
+    private dev.egateza.termul.app.ui.profiles.ProfileManagerHost profileManagerHost() {
+        return new dev.egateza.termul.app.ui.profiles.ProfileManagerHost() {
+            @Override
+            public dev.egateza.termul.core.profile.ProfileStore store() {
+                return store;
+            }
+
+            @Override
+            public java.util.concurrent.Executor io() {
+                return io;
+            }
+
+            @Override
+            public java.util.concurrent.Executor network() {
+                return ctx.sshOps();
+            }
+
+            @Override
+            public Set<SecretType> storedSecrets(java.util.UUID profileId) {
+                var result = EnumSet.noneOf(SecretType.class);
+                for (SecretType t : SecretType.values()) {
+                    if (ctx.vault().vault().has(profileId, t)) {
+                        result.add(t);
+                    }
+                }
+                return result;
+            }
+
+            @Override
+            public void saveSecrets(HostProfile profile, java.util.Map<SecretType, SecretChange> changes,
+                                    boolean copyLoginToSudo) {
+                UiAsync.run(ctx.sshOps(), () -> {
+                    if (!ctx.vault().ensureUnlocked()) {
+                        SecretChange.discardAll(changes);
+                        return false;
+                    }
+                    var vault = ctx.vault().vault();
+                    if (copyLoginToSudo && vault.has(profile.id(), SecretType.LOGIN_PASSWORD)) {
+                        char[] login = vault.get(profile.id(), SecretType.LOGIN_PASSWORD);
+                        if (login != null) {
+                            vault.put(profile.id(), SecretType.SUDO_PASSWORD, login); // put men-zero array
+                        }
+                    }
+                    SecretChange.applyAll(vault, profile.id(), changes);
+                    return true;
+                }, saved -> {
+                    if (!saved) {
+                        Dialogs.info(MainFrame.this, I18n.t("main.vault.title"), I18n.t("main.vault.notUnlocked"));
+                    }
+                }, err -> {
+                    SecretChange.discardAll(changes);
+                    Dialogs.error(MainFrame.this, I18n.t("main.error.saveSecret"), err);
+                });
+            }
+
+            @Override
+            public void profilesDeleted(java.util.Collection<java.util.UUID> ids) {
+                UiAsync.run(io, () -> pruneBookmarks(store.snapshot()),
+                        err -> Dialogs.error(MainFrame.this, I18n.t("main.error.deleteProfile"), err));
+                UiAsync.run(ctx.sshOps(), () -> {
+                    var vault = ctx.vault().vault();
+                    var withSecrets = ids.stream().filter(id -> java.util.Arrays.stream(SecretType.values())
+                            .anyMatch(t -> vault.has(id, t))).toList();
+                    if (!withSecrets.isEmpty() && ctx.vault().ensureUnlocked()) {
+                        withSecrets.forEach(vault::removeProfile);
+                    }
+                }, err -> Dialogs.error(MainFrame.this, I18n.t("main.error.deleteSecret"), err));
+            }
+
+            @Override
+            public void connect(List<HostProfile> profiles) {
+                profiles.forEach(MainFrame.this::open);
+            }
+
+            @Override
+            public dev.egateza.termul.ssh.ConnectionTester.Result test(HostProfile profile, char[] password,
+                                                                         char[] passphrase) {
+                var gate = ctx.vault();
+                var creds = new dev.egateza.termul.ssh.auth.CredentialProvider() {
+                    @Override
+                    public char[] password(HostProfile p, int attempt) {
+                        if (p.id().equals(profile.id()) && password != null) {
+                            return password.clone();
+                        }
+                        return fromVault(p, SecretType.LOGIN_PASSWORD);
+                    }
+
+                    @Override
+                    public char[] keyPassphrase(HostProfile p, java.nio.file.Path keyFile, int attempt) {
+                        if (p.id().equals(profile.id()) && passphrase != null) {
+                            return passphrase.clone();
+                        }
+                        return fromVault(p, SecretType.KEY_PASSPHRASE);
+                    }
+
+                    private char[] fromVault(HostProfile p, SecretType type) {
+                        return gate.vault().has(p.id(), type) && gate.ensureUnlocked()
+                                ? gate.vault().get(p.id(), type) : null;
+                    }
+                };
+                try {
+                    return dev.egateza.termul.ssh.ConnectionTester.test(profile, id -> store.snapshot().find(id),
+                            ctx.knownHosts(), creds, java.time.Duration.ofSeconds(10));
+                } finally {
+                    if (password != null) {
+                        java.util.Arrays.fill(password, '\0');
+                    }
+                    if (passphrase != null) {
+                        java.util.Arrays.fill(passphrase, '\0');
+                    }
+                }
+            }
+
+            @Override
+            public List<dev.egateza.termul.core.snippet.Snippet> snippetsFor(HostProfile profile) {
+                return ctx.snippets().forHost(profile.name(), profile.group());
+            }
+
+            @Override
+            public void openSnippets() {
+                SwingUtilities.invokeLater(MainFrame.this::openSnippets);
+            }
+
+            @Override
+            public byte[] exportSnippets() {
+                var all = ctx.snippets().snapshot();
+                return all.isEmpty() ? null : ctx.snippets().export(all, true, true);
+            }
+
+            @Override
+            public int snippetCount() {
+                return ctx.snippets().snapshot().size();
+            }
+
+            @Override
+            public List<HostProfile> readSshConfig(java.nio.file.Path file) throws IOException {
+                java.nio.file.Path home = java.nio.file.Path.of(System.getProperty("user.home"));
+                java.nio.file.Path dir = file.toAbsolutePath().getParent();
+                var hosts = dev.egateza.termul.core.sshconfig.SshConfigParser.parse(file, dir, home);
+                return dev.egateza.termul.core.sshconfig.SshConfigImport.plan(hosts,
+                                dev.egateza.termul.core.profile.ProfileSnapshot.empty(), System.getProperty("user.name"),
+                                "").stream().map(dev.egateza.termul.core.sshconfig.SshConfigImport.Candidate::profile)
+                        .toList();
+            }
+
+            @Override
+            public java.nio.file.Path defaultSshConfig() {
+                return java.nio.file.Path.of(System.getProperty("user.home"), ".ssh", "config");
+            }
+
+            @Override
+            public List<HostTerminalColors.Choice> colorChoices() {
+                return HostTerminalColors.choices(customThemes);
+            }
+        };
     }
 
     private Set<SecretType> storedSecrets(HostProfile profile) {
@@ -3467,28 +3609,6 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
             }
         }
         return result;
-    }
-
-    private void saveProfile(ProfileDialog.Result result) {
-        mutate(I18n.t("main.error.saveProfile"), () -> store.save(result.profile()));
-        if (result.secrets().isEmpty()) {
-            return;
-        }
-        UiAsync.run(ctx.sshOps(), () -> {
-            if (!ctx.vault().ensureUnlocked()) {
-                SecretChange.discardAll(result.secrets());
-                return false;
-            }
-            SecretChange.applyAll(ctx.vault().vault(), result.profile().id(), result.secrets());
-            return true;
-        }, saved -> {
-            if (!saved) {
-                Dialogs.info(this, I18n.t("main.vault.title"), I18n.t("main.vault.notUnlocked"));
-            }
-        }, err -> {
-            SecretChange.discardAll(result.secrets());
-            Dialogs.error(this, I18n.t("main.error.saveSecret"), err);
-        });
     }
 
     @Override

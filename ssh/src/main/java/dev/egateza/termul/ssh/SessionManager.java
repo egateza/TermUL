@@ -122,6 +122,9 @@ public final class SessionManager implements AutoCloseable {
     private final Object lock = new Object();
     private final Map<UUID, Entry> entries = new HashMap<>(); // guarded by lock
     private final AtomicBoolean closed = new AtomicBoolean();
+    /** Session yang sedang ditutup dengan sopan; ditunggu di {@link #close()} sebelum client dihentikan. */
+    private final java.util.Set<org.apache.sshd.common.future.CloseFuture> closing =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     /** Tanpa jump host (profil dengan jump host ditolak dengan pesan jelas). */
     public SessionManager(KnownHostsStore knownHosts, HostKeyPrompt hostKeyPrompt, CredentialProvider credentials,
@@ -332,7 +335,9 @@ public final class SessionManager implements AutoCloseable {
         entries.remove(entry.profileId, entry);
         entry.future.thenAccept(c -> {
             log.info("Menutup koneksi ke {}", c.profile().address());
-            c.closeByManager();
+            var f = c.closeByManager();
+            closing.add(f);
+            f.addListener(closing::remove);
         });
     }
 
@@ -539,10 +544,31 @@ public final class SessionManager implements AutoCloseable {
             }
         }
         scheduler.shutdownNow();
+        awaitClosed();
         try {
             client.stop();
         } catch (RuntimeException e) {
             log.warn("Gagal menghentikan SshClient", e);
+        }
+    }
+
+    /** Batas tunggu session tertutup saat {@link #close()}. */
+    private static final Duration CLOSE_WAIT = Duration.ofSeconds(2);
+
+    /**
+     * Tunggu session yang sudah tersambung selesai ditutup sebelum {@code client.stop()}. Kalau client dihentikan lebih
+     * dulu, operasi baca socket yang masih tertunda (IOCP di Windows) selesai setelah thread pool NIO2 mati, dan JDK
+     * melempar {@code IllegalStateException: Executor has been shut down} di thread-nya sendiri (log ERROR). Koneksi
+     * yang masih dalam proses connect tidak ditunggu.
+     */
+    private void awaitClosed() {
+        long deadline = System.nanoTime() + CLOSE_WAIT.toNanos();
+        for (var close : closing.toArray(org.apache.sshd.common.future.CloseFuture[]::new)) {
+            long left = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime());
+            if (left <= 0) {
+                return;
+            }
+            close.awaitUninterruptibly(left);
         }
     }
 

@@ -1,6 +1,7 @@
 package dev.egateza.termul.app.ui.tree;
 
 import dev.egateza.termul.app.i18n.I18n;
+import dev.egateza.termul.app.snippet.SnippetUi;
 import dev.egateza.termul.app.ui.AppIcon;
 import dev.egateza.termul.app.ui.EnvColors;
 import dev.egateza.termul.app.ui.OsIcons;
@@ -67,6 +68,9 @@ public final class HostTreePanel extends JPanel {
 
         void newHost(String group);
 
+        /** Buka Profile manager (baris Manage profiles di bawah daftar, Ctrl+Shift+H). */
+        void manageProfiles();
+
         void edit(HostProfile profile);
 
         void duplicate(HostProfile profile);
@@ -119,6 +123,7 @@ public final class HostTreePanel extends JPanel {
     private final JTextField search = new JTextField();
     private final DefaultTreeModel model = new DefaultTreeModel(new DefaultMutableTreeNode());
     private final JTree tree = new JTree(model);
+    private final ManageRow manageRow = new ManageRow();
     private ProfileSnapshot snapshot = ProfileSnapshot.empty();
     private List<dev.egateza.termul.app.terminal.LocalProfiles.Choice> localChoices = List.of(); // default dulu
 
@@ -227,14 +232,146 @@ public final class HostTreePanel extends JPanel {
 
         // Jarak di pembungkus, bukan CompoundBorder di field: border FlatLaf harus tetap border langsung field
         // supaya style "arc" (sudut panel) bisa diterapkan.
-        var searchBox = new JPanel(new BorderLayout());
-        searchBox.setOpaque(false);
+        // Latar sama dengan daftar host di bawahnya (Tree.background), bukan Panel.background: di sebagian tema
+        // keduanya berbeda sehingga area kolom cari tampak seperti pita terpisah. Dibaca saat menggambar: ikut ganti tema.
+        var searchBox = new JPanel(new BorderLayout()) {
+            @Override
+            public java.awt.Color getBackground() {
+                return tree == null ? super.getBackground() : tree.getBackground();
+            }
+        };
+        searchBox.setOpaque(true);
         searchBox.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
         searchBox.add(search, BorderLayout.CENTER);
         add(searchBox, BorderLayout.NORTH);
         var scroll = new JScrollPane(tree);
         scroll.setBorder(BorderFactory.createEmptyBorder());
         add(scroll, BorderLayout.CENTER);
+        add(manageRow, BorderLayout.SOUTH);
+    }
+
+    /** Teks shortcut di baris Manage profiles; dipanggil saat shortcut diganti. */
+    public void setManageShortcut(String text) {
+        manageRow.shortcut.setText(text);
+    }
+
+    /** Baris Manage profiles di bawah daftar host, seperti prototipe (latar bar, garis atas, tinggi 32). */
+    private final class ManageRow extends JPanel {
+        final javax.swing.JLabel shortcut = new javax.swing.JLabel() {
+            @Override
+            public java.awt.Color getForeground() {
+                return SnippetUi.muted();
+            }
+        };
+        private boolean hover;
+        private boolean armed; // tombol kiri ditekan di dalam baris
+
+        ManageRow() {
+            super(new BorderLayout(8, 0));
+            setOpaque(true);
+            // border dipasang, bukan getBorder() di-override: getInsets() membaca field border langsung, sehingga
+            // override tidak memberi padding (ikon dan teks menempel di tepi panel)
+            setBorder(BorderFactory.createEmptyBorder(1, 10, 0, 10));
+            setFocusable(true);
+            setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+            var label = new javax.swing.JLabel(I18n.t("tree.manageProfiles"), SnippetUi.sliders(14),
+                    javax.swing.SwingConstants.LEADING) {
+                @Override
+                public java.awt.Color getForeground() {
+                    return SnippetUi.fg();
+                }
+            };
+            label.setIconTextGap(8);
+            var small = shortcut.getFont();
+            shortcut.setFont(small.deriveFont(Math.max(10f, small.getSize2D() - 1)));
+            add(label, BorderLayout.CENTER);
+            add(shortcut, BorderLayout.EAST);
+            getAccessibleContext().setAccessibleName(I18n.t("tree.manageProfiles"));
+            addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseEntered(MouseEvent e) {
+                    hover(true);
+                }
+
+                @Override
+                public void mouseExited(MouseEvent e) {
+                    hover(contains(e.getPoint()));
+                }
+
+                // Seperti tombol: ditekan lalu dilepas di dalam baris. Bukan mouseClicked: event itu tidak dikirim
+                // kalau kursor bergeser sedikit saja antara tekan dan lepas (klik cepat), sehingga dialog tidak terbuka
+                @Override
+                public void mousePressed(MouseEvent e) {
+                    armed = javax.swing.SwingUtilities.isLeftMouseButton(e);
+                }
+
+                @Override
+                public void mouseReleased(MouseEvent e) {
+                    boolean fire = armed && javax.swing.SwingUtilities.isLeftMouseButton(e) && contains(e.getPoint());
+                    armed = false;
+                    if (fire) {
+                        actions.manageProfiles();
+                    }
+                }
+            });
+            addFocusListener(new java.awt.event.FocusAdapter() {
+                @Override
+                public void focusGained(java.awt.event.FocusEvent e) {
+                    repaint();
+                }
+
+                @Override
+                public void focusLost(java.awt.event.FocusEvent e) {
+                    repaint();
+                }
+            });
+            getInputMap(WHEN_FOCUSED).put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "manage");
+            getInputMap(WHEN_FOCUSED).put(KeyStroke.getKeyStroke(KeyEvent.VK_SPACE, 0), "manage");
+            getActionMap().put("manage", new AbstractAction() {
+                @Override
+                public void actionPerformed(java.awt.event.ActionEvent e) {
+                    actions.manageProfiles();
+                }
+            });
+        }
+
+        private void hover(boolean on) {
+            if (hover != on) {
+                hover = on;
+                repaint();
+            }
+        }
+
+        @Override
+        public java.awt.Dimension getPreferredSize() {
+            return new java.awt.Dimension(super.getPreferredSize().width, 32);
+        }
+
+        // warna dibaca saat menggambar: ikut ganti tema
+        @Override
+        public java.awt.Color getBackground() {
+            return hover ? SnippetUi.hover() : SnippetUi.bar();
+        }
+
+        /** Prototipe: garis atas 1px (warnanya dibaca saat menggambar) + padding 0 10px. */
+        @Override
+        protected void paintComponent(java.awt.Graphics g) {
+            super.paintComponent(g);
+            g.setColor(SnippetUi.border());
+            g.fillRect(0, 0, getWidth(), 1);
+        }
+
+        @Override
+        protected void paintChildren(java.awt.Graphics g) {
+            super.paintChildren(g);
+            if (isFocusOwner()) { // prototipe: outline 2px aksen, ke dalam
+                var g2 = (java.awt.Graphics2D) g.create();
+                g2.setColor(SnippetUi.accent());
+                g2.setStroke(new java.awt.BasicStroke(2));
+                g2.drawRect(1, 1, getWidth() - 2, getHeight() - 2);
+                g2.dispose();
+            }
+        }
     }
 
     public void setSnapshot(ProfileSnapshot snapshot) {

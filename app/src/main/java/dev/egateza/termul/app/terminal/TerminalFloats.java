@@ -63,6 +63,8 @@ final class TerminalFloats {
     /** Satu pembaruan label tertunda di EDT; mencegah banjir invokeLater saat output deras. */
     private final AtomicBoolean refreshQueued = new AtomicBoolean();
     private final ChangeListener scrollListener = e -> onScroll();
+    /** Kotak cari terminal di pojok kanan atas: tombol mengambang di sana (Snippet) turun ke bawahnya. */
+    private final java.beans.PropertyChangeListener findBarListener = e -> reserveFindBar();
     private final TerminalHistoryBufferListener historyListener = this::queueRefresh;
     private final TextBufferChangesListener changesListener = new TextBufferChangesListener() {
         @Override
@@ -116,6 +118,7 @@ final class TerminalFloats {
         overlay.addFloating(toolbar, FloatingOverlay.Anchor.BOTTOM_CENTER); // paling bawah; "Ke bawah" di atasnya
         overlay.addFloating(toBottom, FloatingOverlay.Anchor.BOTTOM_CENTER);
         scroll.addChangeListener(scrollListener);
+        widget.addPropertyChangeListener(ZoomableTermWidget.FIND_BAR_BOTTOM_PROPERTY, findBarListener);
         buffer.addHistoryBufferListener(historyListener);
         buffer.addChangesListener(changesListener);
         buffer.addModelListener(modelListener);
@@ -251,8 +254,16 @@ final class TerminalFloats {
     }
 
     /** Lepas listener dan tombol; dipanggil saat widget ditutup. EDT. */
+    private void reserveFindBar() {
+        int bottom = widget.findBarBottom();
+        overlay.setTopRightReserved(bottom <= 0 ? 0
+                : SwingUtilities.convertPoint(widget, 0, bottom, overlay).y);
+    }
+
     void dispose() {
         scroll.removeChangeListener(scrollListener);
+        widget.removePropertyChangeListener(ZoomableTermWidget.FIND_BAR_BOTTOM_PROPERTY, findBarListener);
+        overlay.setTopRightReserved(0);
         buffer.removeHistoryBufferListener(historyListener);
         buffer.removeChangesListener(changesListener);
         buffer.removeModelListener(modelListener);

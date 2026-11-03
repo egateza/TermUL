@@ -110,8 +110,9 @@ public final class SshConnection {
         return channelOpenTimeout;
     }
 
-    void closeByManager() {
+    /** @return selesai saat session benar-benar tertutup (socket dilepas) */
+    org.apache.sshd.common.future.CloseFuture closeByManager() {
         closedByManager = true;
-        session.close(false);
+        return session.close(false);
     }
 }

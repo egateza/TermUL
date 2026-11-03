@@ -58,10 +58,40 @@ public final class ZoomableTermWidget extends JediTermWidget {
         }, () -> getTerminalPanel().getBackground());
     }
 
+    /** Property (int): batas bawah kotak cari dari tepi atas widget, 0 kalau kotak cari tidak tampil. */
+    public static final String FIND_BAR_BOTTOM_PROPERTY = "findBarBottom";
+    private int findBarBottom; // EDT
+
     /** Kotak cari membulat bergaya aplikasi, pengganti komponen bawaan JediTerm. */
     @Override
     protected com.jediterm.terminal.ui.JediTermSearchComponent createSearchComponent() {
-        return new TerminalSearchBar();
+        var bar = new TerminalSearchBar();
+        bar.addHierarchyListener(e -> updateFindBarBottom(bar)); // dibuka / ditutup
+        bar.addComponentListener(new java.awt.event.ComponentAdapter() {
+            @Override
+            public void componentResized(java.awt.event.ComponentEvent e) {
+                updateFindBarBottom(bar);
+            }
+
+            @Override
+            public void componentMoved(java.awt.event.ComponentEvent e) {
+                updateFindBarBottom(bar);
+            }
+        });
+        return bar;
+    }
+
+    /** @return batas bawah kotak cari dari tepi atas widget, 0 kalau tidak tampil. EDT. */
+    public int findBarBottom() {
+        return findBarBottom;
+    }
+
+    private void updateFindBarBottom(java.awt.Component bar) {
+        int bottom = bar.isShowing() && bar.getParent() != null
+                ? SwingUtilities.convertRectangle(bar.getParent(), bar.getBounds(), this).y + bar.getHeight() : 0;
+        int old = findBarBottom;
+        findBarBottom = Math.max(0, bottom);
+        firePropertyChange(FIND_BAR_BOTTOM_PROPERTY, old, findBarBottom);
     }
 
     /** true kalau ada teks yang diseleksi. EDT. */
@@ -198,7 +228,7 @@ public final class ZoomableTermWidget extends JediTermWidget {
                 return;
             }
             if (layer == null || getWidth() <= 0 || getHeight() <= 0) {
-                super.paintComponent(g);
+                super.paintComponent(new FillFilterGraphics2D((Graphics2D) g, null, myCharSize, null));
                 return;
             }
             var g2 = (Graphics2D) g;
@@ -214,7 +244,19 @@ public final class ZoomableTermWidget extends JediTermWidget {
             g2.setComposite(AlphaComposite.SrcOver.derive(layer.visibility() / 100f));
             g2.drawImage(scaled, 0, 0, null);
             g2.setComposite(previous);
-            super.paintComponent(new FillFilterGraphics2D(g2, layer.base()));
+            var image = scaled;
+            super.paintComponent(new FillFilterGraphics2D(g2, layer.base(), myCharSize, shape -> {
+                var paint = g2.getPaint();
+                var composite = g2.getComposite();
+                g2.setColor(layer.base());
+                g2.fill(shape);
+                g2.setComposite(AlphaComposite.SrcOver.derive(layer.visibility() / 100f));
+                g2.setPaint(new java.awt.TexturePaint(image, new java.awt.Rectangle(0, 0, image.getWidth(),
+                        image.getHeight())));
+                g2.fill(shape);
+                g2.setComposite(composite);
+                g2.setPaint(paint);
+            }));
         }
 
         private BufferedImage backdrop; // latar solid (warna dasar + gambar latar) untuk mode tembus; EDT
@@ -238,7 +280,18 @@ public final class ZoomableTermWidget extends JediTermWidget {
                 g2.drawImage(backdrop(layer, base), 0, 0, null);
             }
             g2.setComposite(previous);
-            super.paintComponent(new FillFilterGraphics2D(g2, base));
+            var image = layer == null ? null : backdrop(layer, base);
+            super.paintComponent(new FillFilterGraphics2D(g2, base, myCharSize, shape -> {
+                var paint = g2.getPaint();
+                var composite = g2.getComposite();
+                g2.setComposite(AlphaComposite.Src.derive(opacity / 100f)); // sama dengan latar di sekitarnya
+                g2.setPaint(image == null ? base
+                        : new java.awt.TexturePaint(image, new java.awt.Rectangle(0, 0, image.getWidth(),
+                                image.getHeight())));
+                g2.fill(shape);
+                g2.setComposite(composite);
+                g2.setPaint(paint);
+            }));
         }
 
         /** Warna dasar + gambar latar (sesuai keterlihatannya), solid, seukuran panel; dibuat ulang kalau berubah. */
