@@ -203,6 +203,8 @@ public final class ZoomableTermWidget extends JediTermWidget {
 
         private BufferedImage scaled; // gambar latar yang sudah disesuaikan dengan ukuran panel; EDT
         private BufferedImage scaledSource;
+        private boolean paintFailed; // EDT
+        private static final org.slf4j.Logger PAINT_LOG = org.slf4j.LoggerFactory.getLogger(ZoomableTermWidget.class);
         private int scaledBlur;
 
         void refreshColors() {
@@ -210,10 +212,24 @@ public final class ZoomableTermWidget extends JediTermWidget {
             repaint();
         }
 
+        /**
+         * Buffer yang rusak (bug JediTerm, lihat {@link #processFocusEvent}) membuat paint terminal melempar exception
+         * di setiap frame. Exception itu menghentikan paint seluruh window, sehingga daftar host dan panel lain ikut
+         * kosong. Terminalnya cukup digambar polos, dan kegagalannya dicatat sekali.
+         */
         @Override
         public void paintComponent(Graphics g) {
-            paintTerminal(g);
-            paintLineCursor((Graphics2D) g);
+            try {
+                paintTerminal(g);
+                paintLineCursor((Graphics2D) g);
+            } catch (RuntimeException e) {
+                if (!paintFailed) {
+                    paintFailed = true;
+                    PAINT_LOG.warn("Terminal tidak bisa digambar; buffer terminal rusak", e);
+                }
+                g.setColor(getBackground());
+                g.fillRect(0, 0, getWidth(), getHeight());
+            }
         }
 
         /**
@@ -706,6 +722,34 @@ public final class ZoomableTermWidget extends JediTermWidget {
          */
         @Override
         protected void processMouseMotionEvent(MouseEvent e) {
+            var buffer = getTerminalTextBuffer();
+            buffer.lock();
+            try {
+                motion(e);
+            } finally {
+                buffer.unlock();
+            }
+        }
+
+        /**
+         * JediTerm mencari hyperlink di bawah mouse ({@code getStyleAt}) di setiap gerakan mouse dan saat fokus hilang,
+         * tanpa lock buffer. Di terminal baru {@code getLine} menambah baris kosong ke storage layar, bersamaan dengan
+         * thread emulator yang menulis output pertama: {@code ArrayDeque}-nya rusak (slot null), tab mati dengan NPE
+         * dan setiap paint gagal. Event ini hanya membaca buffer dan mengirim input secara asinkron, jadi aman
+         * dijalankan sambil memegang lock.
+         */
+        @Override
+        protected void processFocusEvent(java.awt.event.FocusEvent e) {
+            var buffer = getTerminalTextBuffer();
+            buffer.lock();
+            try {
+                super.processFocusEvent(e);
+            } finally {
+                buffer.unlock();
+            }
+        }
+
+        private void motion(MouseEvent e) {
             if (e.getID() == MouseEvent.MOUSE_DRAGGED && extendsSelection(e)) {
                 if (!extendByWord(e.getPoint())) {
                     super.processMouseMotionEvent(asPlainDrag(e));
