@@ -979,8 +979,7 @@ public final class SnippetUi {
      * ke layar.
      */
     private static void paintNow(JComponent c) {
-        c.repaint();
-        javax.swing.RepaintManager.currentManager(c).paintDirtyRegions();
+        dev.egateza.termul.app.ui.PacedRepaintManager.paintNow(c);
     }
 
     /** Baris pertama perintah, ditambah "(+N baris)" kalau lebih dari satu baris. */

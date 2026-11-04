@@ -8,7 +8,6 @@ import java.awt.IllegalComponentStateException;
 import java.awt.Toolkit;
 import javax.swing.JFrame;
 import javax.swing.JRootPane;
-import javax.swing.RepaintManager;
 
 /**
  * Transparansi window utama, dua slider: bagian selain terminal ({@link TranslucentRootPane}, teks ikut pudar) dan
@@ -150,7 +149,6 @@ final class WindowOpacity {
 
     /** Gambar root pane sekarang (bukan nanti lewat antrean repaint), termasuk mengirimnya ke window beralpha. */
     private static void paintNow(JRootPane root) {
-        root.repaint();
-        RepaintManager.currentManager(root).paintDirtyRegions();
+        PacedRepaintManager.paintNow(root);
     }
 }

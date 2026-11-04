@@ -164,6 +164,7 @@ public final class TermULApp {
 
         SwingUtilities.invokeLater(() -> {
             UiFont.apply(config.current().uiFontFamily()); // sebelum tema dipasang
+            dev.egateza.termul.app.ui.PacedRepaintManager.install(); // window transparan: maks. ~60 gambar/detik
             startupTheme.install(startupMode);
             AppIcon.use(IconSet.fromId(config.current().iconSet()));
             LoadingPanel.use(AnimationChoice.fromId(config.current().loadingAnimation()));
