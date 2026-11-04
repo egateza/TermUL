@@ -2,6 +2,7 @@ package dev.egateza.termul.app.ui.streak;
 
 import dev.egateza.termul.app.i18n.I18n;
 import dev.egateza.termul.app.ui.DerivedFonts;
+import dev.egateza.termul.app.ui.anim.AnimationGate;
 import java.awt.Color;
 import java.awt.Cursor;
 import java.awt.Dimension;
@@ -23,7 +24,7 @@ import javax.swing.UIManager;
 /**
  * Ikon api streak di pojok kiri panel bawah: api kecil + jumlah hari ({@code 23x}, atau {@code 2/3} saat masih bara)
  * dan petunjuk singkat saat padam/beku. Klik kiri diteruskan ke controller. Animasi hanya berjalan selama terpasang
- * dan terlihat. EDT.
+ * dan terlihat (tidak di-minimize atau tertutup layar idle, lihat {@link AnimationGate}). EDT.
  */
 final class StreakChip extends JComponent {
 
@@ -35,7 +36,11 @@ final class StreakChip extends JComponent {
     private static final double ARRIVE_SECONDS = .5;
 
     private final FlameActor actor = new FlameActor();
-    private final Timer timer = new Timer(40, e -> repaint());
+    private final Timer timer = new Timer(40, e -> {
+        if (AnimationGate.shouldAnimate(this)) {
+            repaint();
+        }
+    });
     private FlameLook look = FlameLook.active(0);
     private boolean iconHidden;
     private long lastPaint = System.nanoTime();

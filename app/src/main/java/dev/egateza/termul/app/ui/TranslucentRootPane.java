@@ -209,13 +209,18 @@ final class TranslucentRootPane extends JRootPane {
             java.awt.Color tint = backdropTint();
             // dengan lapisan gelap: isi ditumpuk di atasnya (SrcOver); tanpa: mengganti piksel (Src)
             AlphaComposite place = tint != null ? AlphaComposite.SrcOver : AlphaComposite.Src;
-            fillTint(out, tint, device);
-            if (solidText) {
-                out.setComposite(place);
-                blit(out, fadeKeepingText(img, w, h, bx, by, sx, sy, painted), device, bx, by);
-            } else {
-                out.setComposite(place.derive(chromeAlpha));
-                blit(out, img, device, bx, by);
+            // Seluruh area di dalam terminal/popup/layar idle (mis. kursor berkedip, animasi layar idle): hasil pudar
+            // pasti ditimpa di bawah, jadi tidak perlu dibuat. Teks solid menggambar ulang hierarki dua kali lagi, dan
+            // tiap Graphics yang dibuat Swing punya finalizer: sampahnya lolos ke old gen dan heap terus membengkak.
+            if (!coveredBy(solid, clip)) {
+                fillTint(out, tint, device);
+                if (solidText) {
+                    out.setComposite(place);
+                    blit(out, fadeKeepingText(img, w, h, bx, by, sx, sy, painted), device, bx, by);
+                } else {
+                    out.setComposite(place.derive(chromeAlpha));
+                    blit(out, img, device, bx, by);
+                }
             }
             for (Rectangle area : solid) { // terminal & popup: alpha apa adanya (terminal mengatur sendiri)
                 Rectangle part = area.intersection(clip);
@@ -426,6 +431,16 @@ final class TranslucentRootPane extends JRootPane {
             out.setColor(tint);
             out.fill(d);
         }
+    }
+
+    /** @return true kalau {@code r} seluruhnya berada di dalam salah satu {@code areas} */
+    static boolean coveredBy(List<Rectangle> areas, Rectangle r) {
+        for (Rectangle area : areas) {
+            if (area.contains(r)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Piksel perangkat (relatif ke root pane) yang tersentuh {@code r}: dibulatkan keluar. */

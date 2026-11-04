@@ -301,4 +301,42 @@ class TranslucentRootPaneTest {
 
         assertThat(alphaAt(root, 50, 40)).isEqualTo(255);
     }
+
+    /**
+     * Area yang digambar ulang seluruhnya di dalam area solid (layar idle, terminal): hasil pudar dengan teks solid
+     * pasti ditimpa, jadi hierarki tidak digambar ulang untuk mask teks dan latarnya. Setiap gambar ulang membuat
+     * banyak Graphics ber-finalizer yang membuat heap membengkak saat ada animasi.
+     */
+    @Test
+    void areaSolidTidakDigambarUlangUntukTeksSolid() throws Exception {
+        var root = rootWithSolidContent();
+        int[] paints = new int[1];
+        SwingUtilities.invokeAndWait(() -> {
+            var glass = new JPanel() {
+                @Override
+                protected void paintComponent(java.awt.Graphics g) {
+                    paints[0]++;
+                    super.paintComponent(g);
+                }
+            };
+            glass.setBackground(Color.BLUE);
+            glass.setOpaque(true);
+            root.setGlassPane(glass);
+            glass.setBounds(0, 0, 100, 80);
+            glass.setVisible(true);
+            root.setChromeOpacity(30);
+            root.setSolidText(true);
+        });
+
+        assertThat(alphaAt(root, 50, 40)).isEqualTo(255);
+        assertThat(paints[0]).as("buffer + buffer pekat ClearType saja").isEqualTo(2);
+    }
+
+    @Test
+    void tertutupJikaSeluruhnyaDiDalamSatuArea() {
+        var areas = java.util.List.of(new Rectangle(0, 0, 50, 50), new Rectangle(50, 0, 50, 50));
+        assertThat(TranslucentRootPane.coveredBy(areas, new Rectangle(10, 10, 20, 20))).isTrue();
+        assertThat(TranslucentRootPane.coveredBy(areas, new Rectangle(40, 10, 20, 20))).isFalse();
+        assertThat(TranslucentRootPane.coveredBy(java.util.List.of(), new Rectangle(0, 0, 1, 1))).isFalse();
+    }
 }

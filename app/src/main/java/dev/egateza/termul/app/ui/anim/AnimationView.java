@@ -11,8 +11,8 @@ import javax.swing.Timer;
 
 /**
  * Komponen yang menjalankan satu {@link Animation} berukuran tetap. Timer hanya berjalan selama komponen terpasang
- * ({@link #addNotify}/{@link #removeNotify}) dan tidak memajukan frame saat tidak terlihat (mis. bar disembunyikan).
- * EDT.
+ * ({@link #addNotify}/{@link #removeNotify}) dan tidak memajukan frame saat tidak terlihat (mis. bar disembunyikan,
+ * window di-minimize, atau tertutup layar idle; lihat {@link AnimationGate}). EDT.
  */
 public final class AnimationView extends JComponent {
 
@@ -22,7 +22,7 @@ public final class AnimationView extends JComponent {
     private final int scale;
     private Animation animation; // EDT
     private final Timer timer = new Timer(FRAME_MS, e -> {
-        if (isShowing()) {
+        if (AnimationGate.shouldAnimate(this)) {
             animation.step();
             repaint();
         }
