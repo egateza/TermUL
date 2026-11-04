@@ -125,6 +125,8 @@ public final class SessionManager implements AutoCloseable {
     /** Session yang sedang ditutup dengan sopan; ditunggu di {@link #close()} sebelum client dihentikan. */
     private final java.util.Set<org.apache.sshd.common.future.CloseFuture> closing =
             java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private final java.util.List<java.util.function.Consumer<SshConnection>> connectListeners =
+            new java.util.concurrent.CopyOnWriteArrayList<>();
 
     /** Tanpa jump host (profil dengan jump host ditolak dengan pesan jelas). */
     public SessionManager(KnownHostsStore knownHosts, HostKeyPrompt hostKeyPrompt, CredentialProvider credentials,
@@ -145,6 +147,8 @@ public final class SessionManager implements AutoCloseable {
         client.setServerKeyVerifier(new AppServerKeyVerifier(knownHosts, hostKeyPrompt));
         client.setKeyIdentityProvider(KeyIdentityProvider.EMPTY_KEYS_PROVIDER);
         client.setPasswordIdentityProvider(PasswordIdentityProvider.EMPTY_PASSWORDS_PROVIDER);
+        // tunnel remote: server hanya boleh tersambung ke relay loopback tunnel yang diminta TermUL
+        client.setForwardingFilter(dev.egateza.termul.ssh.tunnel.ClientForwardingFilter.INSTANCE);
         CoreModuleProperties.PASSWORD_PROMPTS.set(client, AuthSetup.MAX_PASSWORD_ATTEMPTS);
         CoreModuleProperties.CLIENT_IDENTIFICATION.set(client, CLIENT_IDENTIFICATION);
         CoreModuleProperties.NIO_WORKERS.set(client, nioWorkers(Runtime.getRuntime().availableProcessors()));
@@ -232,7 +236,9 @@ public final class SessionManager implements AutoCloseable {
 
         if (owner) {
             try {
-                entry.future.complete(connect(profile, via, entry.abort));
+                SshConnection connected = connect(profile, via, entry.abort);
+                entry.future.complete(connected);
+                fireConnected(connected);
             } catch (SshConnectException | RuntimeException e) {
                 Exception failure = entry.abort.isCancelled() && !(e instanceof SshConnectCancelledException)
                         ? new SshConnectCancelledException(profile.address()) : e;
@@ -278,6 +284,29 @@ public final class SessionManager implements AutoCloseable {
                 throw sce;
             }
             throw new SshConnectException("Koneksi gagal", e.getCause());
+        }
+    }
+
+    /**
+     * Dipanggil setiap kali koneksi baru ke sebuah profil selesai terautentikasi (bukan saat koneksi yang ada dipakai
+     * ulang), di thread yang membuat koneksi. Listener tidak boleh blocking (mis. tunnel auto-start memindah kerjanya ke
+     * executor sendiri).
+     */
+    public void addConnectionListener(java.util.function.Consumer<SshConnection> listener) {
+        connectListeners.add(Objects.requireNonNull(listener));
+    }
+
+    public void removeConnectionListener(java.util.function.Consumer<SshConnection> listener) {
+        connectListeners.remove(listener);
+    }
+
+    private void fireConnected(SshConnection connection) {
+        for (var l : connectListeners) {
+            try {
+                l.accept(connection);
+            } catch (RuntimeException e) {
+                log.warn("Listener koneksi baru gagal", e);
+            }
         }
     }
 

@@ -76,7 +76,11 @@ Catatan implementasi: satu `sudo sh -c` per upload (backup ke `/var/backups/term
 - [x] Profile Maven `package-win`: `jlink` runtime yang di-trim + `jpackage` → app-image (default) atau installer `.msi` (`-Djpackage.type=msi`, butuh WiX; belum diuji karena WiX tidak terpasang)
 - [x] ~~WSL Manager opsional (ADR 0004)~~: dihapus 2026-11-02 (ADR 0011), WSL lewat terminal lokal saja
 - [x] Tray icon + run at startup + single instance (Pengaturan → Tray & startup)
-- [ ] (backlog) port forwarding, session log dengan masking
+- [x] Port forwarding local/remote/dynamic (ADR 0012, prototipe `Tunnels.dc.html`): dialog `Ctrl/Cmd+Shift+U` + chip
+  panah di panel bawah, auto-start saat host tersambung, jalan lagi setelah koneksi putus, saran port kosong
+- [ ] Acceptance manual port forwarding (local ke PostgreSQL/HTTP, remote dari server, SOCKS5 di browser, port bentrok,
+  host putus lalu tab reconnect, opsi bagi ke jaringan, lewat jump host)
+- [ ] (backlog) session log dengan masking
 
 ## Fase 7: Terminal lokal (ADR 0005)
 - [x] Tahap 0–1: tab terminal lokal dengan shell default (modul `localterm`, pty4j). Rincian dan progres di

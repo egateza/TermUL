@@ -193,6 +193,29 @@ Detail di `docs/adr/0003-self-update.md`.
 - Snippet beberapa baris dibungkus bracketed paste kalau shell memintanya (DECSET 2004), sehingga tidak ada baris yang
   berjalan sebelum Enter. Tanpa bracketed paste, baris awal akan langsung berjalan: user dikonfirmasi dulu.
 
+## Port forwarding (ADR 0012)
+
+- `tunnels.json` hanya berisi pengaturan (nama, jenis, id host, port, host tujuan, saklar). Tanpa secret; tunnel memakai
+  koneksi dan autentikasi profil host yang sama dengan tab (vault, host key `known_hosts`).
+- Port lokal (local/dynamic) default hanya di `127.0.0.1`. Opsi "Allow other devices on my network" mendengarkan di
+  `0.0.0.0` dan selalu disertai peringatan: siapa pun di jaringan bisa menjangkau server lewat port itu tanpa login.
+  Proxy SOCKS tidak punya autentikasi, jadi opsi itu membuka proxy ke jaringan server.
+- Port remote dibuka di loopback server (`localhost:<port>`), sama dengan default `ssh -R`.
+- Client hanya menerima channel `forwarded-tcpip` ke relay loopback tunnel yang diminta TermUL sendiri
+  (`ClientForwardingFilter`); agent forwarding dan X11 tetap ditolak. Relay `127.0.0.1:<acak>` bisa dihubungi proses
+  lain di PC yang sama, tapi hanya sampai ke layanan tujuan tunnel itu (yang memang ada di PC ini).
+- Tunnel jalan terus selama TermUL terbuka, juga setelah tab host ditutup. Tunnel `autoStart` jalan sendiri setiap kali
+  host tersambung. Status jalan tidak disimpan, jadi setelah TermUL dibuka ulang tidak ada port yang terbuka sampai host
+  tersambung.
+- Pesan error dan log hanya berisi alamat, port, dan pesan koneksi; tidak pernah isi data yang lewat tunnel.
+- Tunnel hanya Active kalau semua pengecekan lulus: port di PC ini dibuka dulu sebelum connect (gagal = tanpa login),
+  lalu tujuan diuji (local: dari server; remote: layanan di PC ini), lalu port di server (remote). Satu gagal = Error,
+  port yang sudah dibuka ditutup lagi.
+- Form tidak mengecek apa pun di background. Tombol **Test connection** menjalankan langkah yang sama tanpa membuka
+  tunnel; karena dipicu user, Test boleh connect dan meminta login. Port di server dicek dengan `ss -Hltn` /
+  `netstat -ltn` lewat exec (hanya membaca daftar port). Tujuan dicek dengan membuka lalu menutup channel
+  `direct-tcpip` (local) atau socket dari PC ini (remote): layanan tujuan melihat satu koneksi singkat tanpa data.
+
 ## WSL
 
 - Distro WSL hanya dibuka sebagai terminal lokal (ADR 0011): proses `wsl.exe -d <distro>` berjalan sebagai user yang

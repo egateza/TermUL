@@ -145,6 +145,10 @@ public final class TermULApp {
                 new SwingHostKeyPrompt(frameRef::get),
                 credentials,
                 SshSettings.defaults(), id -> store.snapshot().find(id));
+        var tunnelStore = new dev.egateza.termul.core.tunnel.TunnelStore(paths.tunnelsFile());
+        tunnelStore.load();
+        var tunnels = new dev.egateza.termul.ssh.tunnel.TunnelManager(sessions, id -> store.snapshot().find(id),
+                tunnelStore::snapshot, sshOps, SshSettings.defaults().channelOpenTimeout());
         var ftpsCerts = new FtpsCertStore(paths.ftpsCertsFile());
         var sftpLinks = new SftpLinks(sessions,
                 new FtpConnector(credentials, ftpsCerts, new SwingFtpsCertPrompt(frameRef::get)));
@@ -177,9 +181,9 @@ public final class TermULApp {
                     config.current().cursorBlink()));
             var ctx = new AppContext(paths, config, store, io, sshOps, sessions, new SshTerminalFactory(sessions),
                     terminalSettings, vault, edits, sftpLinks, themes, knownHosts, ftpsCerts, wsl, snippets, locals,
-                    highlights, shortcuts, bookmarks);
+                    highlights, shortcuts, bookmarks, tunnelStore, tunnels);
             var frame = new MainFrame(ctx, customThemes,
-                    () -> shutdown(io, sshOps, sessions, vault, edits, instance, log));
+                    () -> shutdown(io, sshOps, sessions, tunnels, vault, edits, instance, log));
             frameRef.set(frame);
             MacIntegration.install(frame);
             if (startHidden) {
@@ -233,10 +237,12 @@ public final class TermULApp {
         return null; // tidak tercapai
     }
 
-    private static void shutdown(ExecutorService io, ExecutorService sshOps, SessionManager sessions, VaultGate vault,
+    private static void shutdown(ExecutorService io, ExecutorService sshOps, SessionManager sessions,
+                                 dev.egateza.termul.ssh.tunnel.TunnelManager tunnels, VaultGate vault,
                                  EditManager edits, SingleInstance instance, Logger log) {
         log.info("TermUL keluar");
         edits.close();
+        tunnels.close(); // sebelum koneksi ditutup: tunnel tidak dianggap putus lalu dijalankan ulang
         sshOps.shutdownNow();
         sessions.close();
         vault.close();

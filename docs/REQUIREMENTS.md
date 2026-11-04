@@ -53,7 +53,7 @@ Pekerjaan harian melibatkan banyak server Linux (produksi & staging). Masalah ya
 - F5.8 Daftar "file yang sedang diedit", beserta status sinkronisasinya.
 
 ### F6. Lain-lain (backlog)
-- Port forwarding (local/remote/dynamic), X11 tidak diperlukan.
+- Port forwarding (local/remote/dynamic), X11 tidak diperlukan. (selesai, ADR 0012)
 - Snippet/command library per host.
 - Session logging ke file (dengan masking prompt password).
 - Shortcut bisa diganti per aksi (selesai, Fase 10; Pengaturan → Shortcut): default per OS, hanya override yang disimpan

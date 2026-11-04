@@ -114,6 +114,18 @@ class SessionManagerTest {
         assertThat(SessionManager.nioWorkers(0)).isEqualTo(1);
     }
 
+    @Test
+    void listenerHanyaUntukKoneksiBaru() throws Exception {
+        var p = profile(AuthMethod.PASSWORD, null);
+        var notified = new CopyOnWriteArrayList<SshConnection>();
+        manager.addConnectionListener(notified::add);
+
+        try (SshLease first = manager.acquire(p); SshLease second = manager.acquire(p)) {
+            assertThat(second.connection()).isSameAs(first.connection());
+            assertThat(notified).containsExactly(first.connection()); // memakai ulang tidak memicu listener
+        }
+    }
+
     /** Batas worker NIO tidak membatasi jumlah koneksi: 2x lipat MAX_NIO_WORKERS koneksi + shell berjalan bersamaan. */
     @Test
     void banyakKoneksiBersamaanDenganWorkerTerbatas() throws Exception {

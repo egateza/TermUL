@@ -153,6 +153,11 @@ public record AppPaths(Path configDir, Path cacheDir) {
         return configDir.resolve("snippets.json");
     }
 
+    /** Port forwarding tersimpan (local/remote/dynamic, per host); tanpa secret dan tanpa status jalan. */
+    public Path tunnelsFile() {
+        return configDir.resolve("tunnels.json");
+    }
+
     /** Profil terminal lokal buatan user + pilihan default (ADR 0005). Tanpa secret. */
     public Path localProfilesFile() {
         return configDir.resolve("local-profiles.json");

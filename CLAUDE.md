@@ -44,7 +44,7 @@ Sejak ADR 0007 profil juga bisa **FTP/FTPS** (browser file + remote edit saja, t
 termul/
 ├─ core/       domain model (HostProfile, Group), ProfileStore, event bus, utilities, WslDistros (daftar distro WSL)
 ├─ vault/      CredentialVault API + implementasi (DPAPI / AES-GCM)
-├─ ssh/        SessionManager, koneksi MINA, known_hosts, auth (key/agent/password), jump host
+├─ ssh/        SessionManager, koneksi MINA, known_hosts, auth (key/agent/password), jump host, port forwarding (tunnel/)
 ├─ terminal/   JediTerm TtyConnector, PromptResponder (sudo inject)
 ├─ localterm/  terminal lokal: shell default per OS, PTY lokal (pty4j), LocalTtyConnector (ADR 0005)
 ├─ sftp/       RemoteFileService (SFTP + ftp/ untuk FTP/FTPS), RemoteEditSession (download → watch → upload atomic)
@@ -129,5 +129,5 @@ Arah dependensi: `app → terminal, sftp → ssh → core`, `vault → core`, `a
 | `docs/SETUP.md` | Tools, dependensi, environment dev & test |
 | `docs/RELEASE.md` | Menerbitkan rilis baru ke GitHub Releases (update lewat menu); Windows: `tools/release.ps1`, Mac: `tools/release-mac.sh` |
 | `docs/RELEASE-CROSS-PLATFORM.md` | Satu tag rilis berisi aset Windows + macOS: draft dari satu mesin, aset dari mesin lain (`-AssetsOnly` / `--dmg-only`) |
-| `docs/adr/` | Architecture Decision Records (0003: update via GitHub Releases, 0004: WSL lewat SSH + WSL Manager (digantikan 0011), 0005: terminal lokal lewat pty4j, 0006: Ingat di Mac ini via Keychain, 0007: FTP/FTPS, 0008: transparansi + bingkai Windows sendiri, 0009: menu klik kanan Explorer, 0010: ikon shortcut ikut update menu, 0011: hapus WSL Manager) |
+| `docs/adr/` | Architecture Decision Records (0003: update via GitHub Releases, 0004: WSL lewat SSH + WSL Manager (digantikan 0011), 0005: terminal lokal lewat pty4j, 0006: Ingat di Mac ini via Keychain, 0007: FTP/FTPS, 0008: transparansi + bingkai Windows sendiri, 0009: menu klik kanan Explorer, 0010: ikon shortcut ikut update menu, 0011: hapus WSL Manager, 0012: port forwarding) |
 | `docs/local-terminal-plan.md` | Rencana & progres terminal lokal (ADR 0005) |

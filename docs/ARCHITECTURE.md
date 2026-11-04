@@ -111,6 +111,7 @@ Lokasi per OS (`AppPaths`): Windows `%APPDATA%` / `%LOCALAPPDATA%`; macOS `~/Lib
   highlight.json      profil highlight teks (keyword format Tabby) + penugasan host/grup/lokal/global; file rusak disisihkan ke .corrupt-<waktu>
   shortcuts.json      shortcut yang diganti user (id aksi → "mod+shift+T", kosong = tanpa shortcut); sisanya default; file rusak disisihkan ke .corrupt-<waktu>
   snippets.json       snippet perintah, format ekspor version 2 + nilai variabel per host (teks biasa, tanpa secret); file rusak disisihkan ke .corrupt-<waktu>
+  tunnels.json        port forwarding tersimpan (jenis, id host, port, tujuan, saklar; tanpa secret, tanpa status jalan; ADR 0012); entri tidak valid dilewati, file rusak disisihkan ke .corrupt-<waktu>
   streak.json         streak api harian (jumlah hari + tanggal terakhir dihitung); file rusak disisihkan ke .corrupt-<waktu>
   instance.lock       FileLock single instance (dipegang selama TermUL berjalan)
   instance.port       port loopback + token acak untuk instance kedua ("tampilkan window"); dihapus saat keluar

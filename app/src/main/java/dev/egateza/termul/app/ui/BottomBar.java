@@ -82,6 +82,16 @@ public final class BottomBar extends JPanel {
         }
     }
 
+    /** Komponen di kanan sebelum status internet (chip Port forwarding), dengan garis pemisah. Sekali saja. */
+    public void addTrailing(JComponent component) {
+        right.add(component, 0);
+        right.add(Box.createHorizontalStrut(8), 1);
+        right.add(HostStatusPanel.verticalDivider(16), 2);
+        right.add(Box.createHorizontalStrut(8), 3);
+        revalidate();
+        repaint();
+    }
+
     /** Komponen di pojok kiri (ikon streak); null untuk mengosongkan. */
     public void setLeading(JComponent component) {
         left.removeAll();

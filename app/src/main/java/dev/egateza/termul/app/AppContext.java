@@ -29,6 +29,8 @@ import java.util.concurrent.ExecutorService;
  * @param highlights profil highlight teks dan penugasannya ke host/grup/terminal lokal
  * @param shortcuts  shortcut yang diganti user (sisanya default)
  * @param bookmarks  bookmark folder panel SFTP/FTP (remote & lokal)
+ * @param tunnelStore port forwarding tersimpan
+ * @param tunnels    menjalankan port forwarding lewat {@code sessions}
  */
 public record AppContext(AppPaths paths, ConfigStore config, ProfileStore profiles, ExecutorService io,
                          ExecutorService sshOps,
@@ -38,5 +40,7 @@ public record AppContext(AppPaths paths, ConfigStore config, ProfileStore profil
                          dev.egateza.termul.app.terminal.LocalProfiles locals,
                          dev.egateza.termul.core.highlight.HighlightStore highlights,
                          dev.egateza.termul.core.shortcut.ShortcutStore shortcuts,
-                         dev.egateza.termul.core.bookmark.BookmarkStore bookmarks) {
+                         dev.egateza.termul.core.bookmark.BookmarkStore bookmarks,
+                         dev.egateza.termul.core.tunnel.TunnelStore tunnelStore,
+                         dev.egateza.termul.ssh.tunnel.TunnelManager tunnels) {
 }

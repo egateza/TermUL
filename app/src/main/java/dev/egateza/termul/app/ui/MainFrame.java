@@ -145,6 +145,7 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
     private final ResourceMonitor resourceMonitor;
     private final HostStatusPanel hostStatus;
     private final BottomBar bottomBar = new BottomBar();
+    private dev.egateza.termul.app.tunnel.TunnelChip tunnelChip;
     private final java.util.Map<HostStatusPanel.Mode, JRadioButtonMenuItem> hostStatusModes =
             new java.util.EnumMap<>(HostStatusPanel.Mode.class);
     private final JRadioButtonMenuItem hideHostStatus = new JRadioButtonMenuItem(I18n.t("main.menu.settings.hostStatus.hide"));
@@ -460,6 +461,8 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                 ctx.config().current().streak());
         bottomBar.setLeading(streak.chip());
         bottomBar.network().addStatusListener(streak::setNetworkStatus); // widget streak memakai probe yang sama
+        tunnelChip = new dev.egateza.termul.app.tunnel.TunnelChip(ctx.tunnels(), this::openTunnels);
+        bottomBar.addTrailing(tunnelChip);
         getContentPane().add(bottomBar, BorderLayout.SOUTH);
         roundedPanels = AppConfig.PANEL_ROUNDED.equals(ctx.config().current().panelCorners());
         applyHostMode(ctx.config().current().hostPanelMode());
@@ -843,6 +846,8 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
                 this::openSnippets));
         terminal.add(actionItem(null, I18n.t("main.menu.terminal.snippetQuick"), ShortcutAction.SNIPPET_QUICK,
                 () -> currentTab().ifPresent(TermPane::openSnippetMenu)));
+        terminal.add(actionItem(null, I18n.t("main.menu.terminal.tunnels"), ShortcutAction.TUNNELS,
+                this::openTunnels));
         terminal.addSeparator();
         terminal.add(miGroup = actionItem(null, I18n.t("main.menu.terminal.group"), ShortcutAction.GROUP,
                 this::groupMarkedTabs));
@@ -2863,6 +2868,9 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
 
     private void refreshShortcutTexts() {
         hostTree.setManageShortcut(Shortcuts.text(ShortcutAction.MANAGE_PROFILES));
+        if (tunnelChip != null) {
+            tunnelChip.refresh();
+        }
         miNextTab.setToolTipText(I18n.t("main.menu.terminal.tabNumber.tooltip",
                 Shortcuts.text(ShortcutAction.TAB_1), Shortcuts.text(ShortcutAction.TAB_9)));
         miPreviousTab.setToolTipText(miNextTab.getToolTipText());
@@ -3079,6 +3087,14 @@ public final class MainFrame extends JFrame implements HostTreePanel.Actions {
         var target = currentTab().filter(TermPane::hasTerminal).map(TermPane::snippetTarget).orElse(null);
         new dev.egateza.termul.app.snippet.SnippetManagerDialog(this, snippetHost.sender(), io, target,
                 store.snapshot().allGroups()).setVisible(true);
+        currentTab().ifPresent(TermPane::focusTerminal);
+    }
+
+    /** Port forwarding (chip panah di panel bawah / menu Terminal); tunnel baru memakai host tab aktif. EDT. */
+    private void openTunnels() {
+        var host = currentSsh().map(t -> t.profile().id()).orElse(null);
+        new dev.egateza.termul.app.tunnel.TunnelManagerDialog(this, ctx.tunnelStore(), ctx.tunnels(), store, io, host)
+                .setVisible(true);
         currentTab().ifPresent(TermPane::focusTerminal);
     }
 
